@@ -23,6 +23,19 @@
 **输入:** `dictId`（可选）、`page/size`、`description`（可选模糊匹配）、`status`（可选）
 **输出:** `PageResult<DictItemResp>`
 
+### GET /system/client
+**描述:** 客户端配置分页查询（SQL 层过滤与分页）
+**输入:**
+- `page/size`（可选；传入非法值返回 400）
+- `clientType`（可选；精确匹配）
+- `status`（可选；允许 `0`，传入非法值返回 400）
+- `authType`（可选，可重复传参；精确匹配 JSON 数组包含元素）
+**输出:** `PageResult<ClientResp>`
+
+**行为说明:**
+- `status=0` 会参与筛选（不再被当作“未传参”）
+- `authType` 筛选从文本模糊匹配调整为 `jsonb` 包含（语义更精确）
+
 ## 内部实现（字典模块）
 - HTTP 适配层：`backend-go/internal/interfaces/http/dict_handler.go`
 - 应用层：`backend-go/internal/application/dict`
@@ -35,3 +48,4 @@
 ## 变更历史
 - 202601120018_security-hardening-abc - 字典项分页下推到 SQL
 - 202601120110_dict-refactor-layering - 字典模块分层重构（Handler → Service → Repository）
+ - 202601122248_go1255_optimize_clienthandler - Go 1.25.5 升级与 /system/client 列表优化

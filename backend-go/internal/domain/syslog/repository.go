@@ -7,4 +7,3 @@ type Repository interface {
 	// Save 保存一条系统日志记录。
 	Save(ctx context.Context, rec *Record) error
 }
-

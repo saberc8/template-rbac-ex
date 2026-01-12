@@ -26,4 +26,3 @@ func Next() int64 {
 	}
 	return last
 }
-

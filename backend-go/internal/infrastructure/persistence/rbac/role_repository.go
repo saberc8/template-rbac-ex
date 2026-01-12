@@ -74,4 +74,3 @@ WHERE ur.user_id = $1;
 	}
 	return codes, nil
 }
-

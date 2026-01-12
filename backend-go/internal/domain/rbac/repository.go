@@ -17,4 +17,3 @@ type MenuRepository interface {
 	// ListPermissionsByUserID returns all permission strings for a user.
 	ListPermissionsByUserID(ctx context.Context, userID int64) ([]string, error)
 }
-

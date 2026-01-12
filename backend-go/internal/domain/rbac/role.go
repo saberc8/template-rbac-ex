@@ -7,4 +7,3 @@ type Role struct {
 	Code      string
 	DataScope int32
 }
-

@@ -67,4 +67,3 @@ func (s *TokenService) Parse(tokenStr string) (*Claims, error) {
 	}
 	return claims, nil
 }
-

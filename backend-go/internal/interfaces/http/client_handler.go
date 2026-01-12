@@ -62,24 +62,76 @@ func (h *ClientHandler) RegisterClientRoutes(r *gin.Engine) {
 	r.DELETE("/system/client", h.DeleteClient)
 }
 
+func parsePositiveQueryInt(c *gin.Context, key string, def int) (int, bool) {
+	raw, present := c.GetQuery(key)
+	if !present {
+		return def, true
+	}
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return def, true
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil || v <= 0 {
+		return 0, false
+	}
+	return v, true
+}
+
+func normalizeNonEmptyUnique(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 // ListClientPage 处理 GET /system/client（分页查询客户端）。
 func (h *ClientHandler) ListClientPage(c *gin.Context) {
-	page, _ := strconv.Atoi(c.Query("page"))
-	size, _ := strconv.Atoi(c.Query("size"))
-	if page <= 0 {
-		page = 1
+	page, ok := parsePositiveQueryInt(c, "page", 1)
+	if !ok {
+		Fail(c, "400", "page 参数不正确")
+		return
 	}
-	if size <= 0 {
-		size = 10
+	size, ok := parsePositiveQueryInt(c, "size", 10)
+	if !ok {
+		Fail(c, "400", "size 参数不正确")
+		return
 	}
 
 	clientType := strings.TrimSpace(c.Query("clientType"))
-	statusStr := strings.TrimSpace(c.Query("status"))
-	authTypes := c.QueryArray("authType")
+	authTypes := normalizeNonEmptyUnique(c.QueryArray("authType"))
 
-	var statusFilter int64
-	if statusStr != "" {
-		statusFilter, _ = strconv.ParseInt(statusStr, 10, 64)
+	var (
+		hasStatus    bool
+		statusFilter int64
+	)
+	if raw, present := c.GetQuery("status"); present {
+		raw = strings.TrimSpace(raw)
+		if raw != "" {
+			v, err := strconv.ParseInt(raw, 10, 64)
+			if err != nil || v < 0 {
+				Fail(c, "400", "status 参数不正确")
+				return
+			}
+			hasStatus = true
+			statusFilter = v
+		}
 	}
 
 	where := "WHERE 1=1"
@@ -91,18 +143,19 @@ func (h *ClientHandler) ListClientPage(c *gin.Context) {
 		args = append(args, clientType)
 		argPos++
 	}
-	if statusFilter != 0 {
+	if hasStatus {
 		where += fmt.Sprintf(" AND c.status = $%d", argPos)
 		args = append(args, statusFilter)
 		argPos++
 	}
 	if len(authTypes) > 0 {
-		// 简单实现：JSON 文本模糊匹配任意一个认证类型。
+		// 精确匹配：任意一个认证类型命中即可。
 		where += fmt.Sprintf(" AND (")
 		conds := make([]string, 0, len(authTypes))
 		for _, t := range authTypes {
-			conds = append(conds, fmt.Sprintf("c.auth_type::text ILIKE $%d", argPos))
-			args = append(args, `%`+t+`%`)
+			conds = append(conds, fmt.Sprintf("c.auth_type::jsonb @> $%d::jsonb", argPos))
+			b, _ := json.Marshal([]string{t})
+			args = append(args, string(b))
 			argPos++
 		}
 		where += strings.Join(conds, " OR ") + ")"

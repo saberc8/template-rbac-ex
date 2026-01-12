@@ -19,14 +19,13 @@ type User struct {
 	PwdResetTime *time.Time
 	DeptID       int64
 
-	CreateUser  *int64
-	CreateTime  time.Time
-	UpdateUser  *int64
-	UpdateTime  *time.Time
+	CreateUser *int64
+	CreateTime time.Time
+	UpdateUser *int64
+	UpdateTime *time.Time
 }
 
 // IsEnabled returns true if the user status is "enabled" (1).
 func (u *User) IsEnabled() bool {
 	return u != nil && u.Status == 1
 }
-

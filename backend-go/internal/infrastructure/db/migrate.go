@@ -1155,6 +1155,15 @@ CREATE INDEX IF NOT EXISTS idx_client_update_user ON sys_client (update_user);
 		}
 	}
 
+	const authTypeGinIndex = `
+CREATE INDEX IF NOT EXISTS idx_client_auth_type_gin
+    ON sys_client
+    USING GIN ((auth_type::jsonb));
+`
+	if _, err := db.Exec(authTypeGinIndex); err != nil {
+		return err
+	}
+
 	// 默认客户端，行为与 Java 版保持一致（PC + ACCOUNT）。
 	const seed = `
 INSERT INTO sys_client (

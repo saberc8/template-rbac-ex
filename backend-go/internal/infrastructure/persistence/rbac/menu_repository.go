@@ -51,12 +51,12 @@ WHERE rm.role_id = $1;
 	var menus []domain.Menu
 	for rows.Next() {
 		var (
-			m                 domain.Menu
-			path, name        sql.NullString
-			component         sql.NullString
-			redirect          sql.NullString
-			icon              sql.NullString
-			permission        sql.NullString
+			m          domain.Menu
+			path, name sql.NullString
+			component  sql.NullString
+			redirect   sql.NullString
+			icon       sql.NullString
+			permission sql.NullString
 		)
 		if err := rows.Scan(
 			&m.ID,

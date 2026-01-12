@@ -8,28 +8,28 @@ import (
 
 // RouteItem matches the front-end RouteItem type.
 type RouteItem struct {
-	ID         int64        `json:"id"`
-	Title      string       `json:"title"`
-	ParentID   int64        `json:"parentId"`
-	Type       int16        `json:"type"`
-	Path       string       `json:"path"`
-	Name       string       `json:"name"`
-	Component  string       `json:"component"`
-	Redirect   string       `json:"redirect"`
-	Icon       string       `json:"icon"`
-	IsExternal bool         `json:"isExternal"`
-	IsHidden   bool         `json:"isHidden"`
-	IsCache    bool         `json:"isCache"`
-	Permission string       `json:"permission"`
-	Roles      []string     `json:"roles"`
-	Sort       int32        `json:"sort"`
-	Status     int16        `json:"status"`
-	Children   []RouteItem  `json:"children"`
-	ActiveMenu string       `json:"activeMenu"`
-	AlwaysShow bool         `json:"alwaysShow"`
-	Breadcrumb bool         `json:"breadcrumb"`
-	ShowInTabs bool         `json:"showInTabs"`
-	Affix      bool         `json:"affix"`
+	ID         int64       `json:"id"`
+	Title      string      `json:"title"`
+	ParentID   int64       `json:"parentId"`
+	Type       int16       `json:"type"`
+	Path       string      `json:"path"`
+	Name       string      `json:"name"`
+	Component  string      `json:"component"`
+	Redirect   string      `json:"redirect"`
+	Icon       string      `json:"icon"`
+	IsExternal bool        `json:"isExternal"`
+	IsHidden   bool        `json:"isHidden"`
+	IsCache    bool        `json:"isCache"`
+	Permission string      `json:"permission"`
+	Roles      []string    `json:"roles"`
+	Sort       int32       `json:"sort"`
+	Status     int16       `json:"status"`
+	Children   []RouteItem `json:"children"`
+	ActiveMenu string      `json:"activeMenu"`
+	AlwaysShow bool        `json:"alwaysShow"`
+	Breadcrumb bool        `json:"breadcrumb"`
+	ShowInTabs bool        `json:"showInTabs"`
+	Affix      bool        `json:"affix"`
 }
 
 // BuildRouteTree builds a simple parent/child tree from flat menus.

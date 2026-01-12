@@ -52,4 +52,3 @@ func (BcryptHasher) Hash(raw string) (string, error) {
 	}
 	return "{bcrypt}" + string(bytes), nil
 }
-

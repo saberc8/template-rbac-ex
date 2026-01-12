@@ -1,27 +1,27 @@
 package auth
 
 import (
-	domain "voc-go-backend/internal/domain/user"
 	rbac "voc-go-backend/internal/domain/rbac"
+	domain "voc-go-backend/internal/domain/user"
 )
 
 // UserInfo is the shape returned by /auth/user/info,
 // aligned with the front-end's UserInfo type.
 type UserInfo struct {
-	ID              int64    `json:"id"`
-	Username        string   `json:"username"`
-	Nickname        string   `json:"nickname"`
-	Gender          int16    `json:"gender"`
-	Email           string   `json:"email"`
-	Phone           string   `json:"phone"`
-	Avatar          string   `json:"avatar"`
-	Description     string   `json:"description"`
-	PwdResetTime    string   `json:"pwdResetTime"`
-	PwdExpired      bool     `json:"pwdExpired"`
-	RegistrationDate string  `json:"registrationDate"`
-	DeptName        string   `json:"deptName"`
-	Roles           []string `json:"roles"`
-	Permissions     []string `json:"permissions"`
+	ID               int64    `json:"id"`
+	Username         string   `json:"username"`
+	Nickname         string   `json:"nickname"`
+	Gender           int16    `json:"gender"`
+	Email            string   `json:"email"`
+	Phone            string   `json:"phone"`
+	Avatar           string   `json:"avatar"`
+	Description      string   `json:"description"`
+	PwdResetTime     string   `json:"pwdResetTime"`
+	PwdExpired       bool     `json:"pwdExpired"`
+	RegistrationDate string   `json:"registrationDate"`
+	DeptName         string   `json:"deptName"`
+	Roles            []string `json:"roles"`
+	Permissions      []string `json:"permissions"`
 }
 
 // BuildUserInfo maps a domain.User to UserInfo.

@@ -40,4 +40,3 @@ type Record struct {
 	CreateUser *int64
 	CreateTime time.Time
 }
-
