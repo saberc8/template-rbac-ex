@@ -21,33 +21,32 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 
 	"voc-go-backend/internal/infrastructure/id"
-	"voc-go-backend/internal/infrastructure/security"
 )
 
 // FileItem matches the front-end FileItem type in admin/src/apis/system/type.ts.
 type FileItem struct {
-	ID               int64   `json:"id"`
-	Name             string  `json:"name"`
-	OriginalName     string  `json:"originalName"`
-	Size             *int64  `json:"size"`
-	URL              string  `json:"url"`
-	ParentPath       string  `json:"parentPath"`
-	Path             string  `json:"path"`
-	Sha256           string  `json:"sha256"`
-	ContentType      string  `json:"contentType"`
-	Metadata         string  `json:"metadata"`
-	ThumbnailSize    *int64  `json:"thumbnailSize"`
-	ThumbnailName    string  `json:"thumbnailName"`
-	ThumbnailMeta    string  `json:"thumbnailMetadata"`
-	ThumbnailURL     string  `json:"thumbnailUrl"`
-	Extension        string  `json:"extension"`
-	Type             int16   `json:"type"`
-	StorageID        int64   `json:"storageId"`
-	StorageName      string  `json:"storageName"`
-	CreateUserString string  `json:"createUserString"`
-	CreateTime       string  `json:"createTime"`
-	UpdateUserString string  `json:"updateUserString"`
-	UpdateTime       string  `json:"updateTime"`
+	ID               int64  `json:"id"`
+	Name             string `json:"name"`
+	OriginalName     string `json:"originalName"`
+	Size             *int64 `json:"size"`
+	URL              string `json:"url"`
+	ParentPath       string `json:"parentPath"`
+	Path             string `json:"path"`
+	Sha256           string `json:"sha256"`
+	ContentType      string `json:"contentType"`
+	Metadata         string `json:"metadata"`
+	ThumbnailSize    *int64 `json:"thumbnailSize"`
+	ThumbnailName    string `json:"thumbnailName"`
+	ThumbnailMeta    string `json:"thumbnailMetadata"`
+	ThumbnailURL     string `json:"thumbnailUrl"`
+	Extension        string `json:"extension"`
+	Type             int16  `json:"type"`
+	StorageID        int64  `json:"storageId"`
+	StorageName      string `json:"storageName"`
+	CreateUserString string `json:"createUserString"`
+	CreateTime       string `json:"createTime"`
+	UpdateUserString string `json:"updateUserString"`
+	UpdateTime       string `json:"updateTime"`
 }
 
 // FileStatisticsResp represents aggregated file statistics.
@@ -73,14 +72,12 @@ type FileUploadResp struct {
 
 // fileHandler implements /system/file and /common/file APIs.
 type FileHandler struct {
-	db       *sql.DB
-	tokenSvc *security.TokenService
+	db *sql.DB
 }
 
-func NewFileHandler(db *sql.DB, tokenSvc *security.TokenService) *FileHandler {
+func NewFileHandler(db *sql.DB) *FileHandler {
 	return &FileHandler{
-		db:       db,
-		tokenSvc: tokenSvc,
+		db: db,
 	}
 }
 
@@ -98,16 +95,6 @@ func (h *FileHandler) RegisterFileRoutes(r *gin.Engine) {
 
 	// Common upload (avatar, editor, etc.)
 	r.POST("/common/file", h.UploadFile)
-}
-
-func (h *FileHandler) currentUserID(c *gin.Context) int64 {
-	authz := c.GetHeader("Authorization")
-	claims, err := h.tokenSvc.Parse(authz)
-	if err != nil {
-		Fail(c, "401", "未授权，请重新登录")
-		return 0
-	}
-	return claims.UserID
 }
 
 // StorageConfig 表示 sys_storage 中的一条存储配置。
@@ -447,8 +434,8 @@ func detectFileType(ext, contentType string) int16 {
 
 // UploadFile handles POST /system/file/upload and POST /common/file.
 func (h *FileHandler) UploadFile(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 
@@ -714,8 +701,8 @@ LIMIT $%d OFFSET $%d;
 
 // CreateDir handles POST /system/file/dir.
 func (h *FileHandler) CreateDir(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 
@@ -988,8 +975,8 @@ LIMIT 1;
 
 // UpdateFile handles PUT /system/file/:id (rename).
 func (h *FileHandler) UpdateFile(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 
@@ -1028,8 +1015,8 @@ UPDATE sys_file
 
 // DeleteFile handles DELETE /system/file.
 func (h *FileHandler) DeleteFile(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 	_ = userID

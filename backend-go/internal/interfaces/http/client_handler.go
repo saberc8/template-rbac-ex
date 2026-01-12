@@ -11,7 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"voc-go-backend/internal/infrastructure/id"
-	"voc-go-backend/internal/infrastructure/security"
 )
 
 // ClientResp 对应前端 ClientResp，用于列表展示。
@@ -45,14 +44,12 @@ type clientReq struct {
 
 // ClientHandler 提供 /system/client 相关接口。
 type ClientHandler struct {
-	db       *sql.DB
-	tokenSvc *security.TokenService
+	db *sql.DB
 }
 
-func NewClientHandler(db *sql.DB, tokenSvc *security.TokenService) *ClientHandler {
+func NewClientHandler(db *sql.DB) *ClientHandler {
 	return &ClientHandler{
-		db:       db,
-		tokenSvc: tokenSvc,
+		db: db,
 	}
 }
 
@@ -63,16 +60,6 @@ func (h *ClientHandler) RegisterClientRoutes(r *gin.Engine) {
 	r.POST("/system/client", h.CreateClient)
 	r.PUT("/system/client/:id", h.UpdateClient)
 	r.DELETE("/system/client", h.DeleteClient)
-}
-
-func (h *ClientHandler) currentUserID(c *gin.Context) int64 {
-	authz := c.GetHeader("Authorization")
-	claims, err := h.tokenSvc.Parse(authz)
-	if err != nil {
-		Fail(c, "401", "未授权，请重新登录")
-		return 0
-	}
-	return claims.UserID
 }
 
 // ListClientPage 处理 GET /system/client（分页查询客户端）。
@@ -299,8 +286,8 @@ WHERE c.id = $1;
 
 // CreateClient 处理 POST /system/client。
 func (h *ClientHandler) CreateClient(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 
@@ -367,8 +354,8 @@ INSERT INTO sys_client (
 
 // UpdateClient 处理 PUT /system/client/:id。
 func (h *ClientHandler) UpdateClient(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 	idVal, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -428,8 +415,8 @@ UPDATE sys_client
 
 // DeleteClient 处理 DELETE /system/client。
 func (h *ClientHandler) DeleteClient(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 	_ = userID
@@ -460,4 +447,3 @@ func (h *ClientHandler) DeleteClient(c *gin.Context) {
 	}
 	OK(c, true)
 }
-

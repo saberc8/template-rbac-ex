@@ -52,3 +52,7 @@ logs/
 .env.test.local
 .env.production.local
 
+# Secrets (do not commit)
+.env
+backend-go/*.pem
+backend-go/*.der

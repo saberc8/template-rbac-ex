@@ -11,7 +11,6 @@ import (
 	"github.com/lib/pq"
 
 	"voc-go-backend/internal/infrastructure/id"
-	"voc-go-backend/internal/infrastructure/security"
 )
 
 // DeptResp matches DeptResp in admin/src/apis/system/type.ts.
@@ -47,14 +46,12 @@ type deptReq struct {
 
 // DeptHandler provides /system/dept endpoints.
 type DeptHandler struct {
-	db       *sql.DB
-	tokenSvc *security.TokenService
+	db *sql.DB
 }
 
-func NewDeptHandler(db *sql.DB, tokenSvc *security.TokenService) *DeptHandler {
+func NewDeptHandler(db *sql.DB) *DeptHandler {
 	return &DeptHandler{
-		db:       db,
-		tokenSvc: tokenSvc,
+		db: db,
 	}
 }
 
@@ -66,17 +63,6 @@ func (h *DeptHandler) RegisterDeptRoutes(r *gin.Engine) {
 	r.PUT("/system/dept/:id", h.UpdateDept)
 	r.DELETE("/system/dept", h.DeleteDept)
 	r.GET("/system/dept/export", h.ExportDept)
-}
-
-// currentUserID extracts user id from JWT, similar to SystemUserHandler.currentUserID.
-func (h *DeptHandler) currentUserID(c *gin.Context) int64 {
-	authz := c.GetHeader("Authorization")
-	claims, err := h.tokenSvc.Parse(authz)
-	if err != nil {
-		Fail(c, "401", "未授权，请重新登录")
-		return 0
-	}
-	return claims.UserID
 }
 
 // ListDeptTree handles GET /system/dept/tree and returns a department tree list
@@ -354,8 +340,8 @@ LIMIT 1;
 	}
 
 	now := time.Now()
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 
@@ -464,8 +450,8 @@ LIMIT 1;
 	}
 
 	now := time.Now()
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 
@@ -632,14 +618,14 @@ ORDER BY d.sort ASC, d.id ASC;
 
 	for rows.Next() {
 		var (
-			id, parentID          int64
-			name, description     string
-			statusVal             int16
-			sortVal               int32
-			isSystem              bool
-			createTime            time.Time
+			id, parentID           int64
+			name, description      string
+			statusVal              int16
+			sortVal                int32
+			isSystem               bool
+			createTime             time.Time
 			createUser, updateUser string
-			updateTime            sql.NullTime
+			updateTime             sql.NullTime
 		)
 		if err := rows.Scan(
 			&id,

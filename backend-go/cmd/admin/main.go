@@ -3,18 +3,23 @@ package main
 import (
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
-	appauth "voc-go-backend/internal/application/auth"
 	docs "voc-go-backend/docs"
-	"voc-go-backend/internal/infrastructure/cache"
+	appauth "voc-go-backend/internal/application/auth"
+	appdict "voc-go-backend/internal/application/dict"
 	rbacdomain "voc-go-backend/internal/domain/rbac"
 	"voc-go-backend/internal/domain/user"
+	"voc-go-backend/internal/infrastructure/cache"
 	"voc-go-backend/internal/infrastructure/db"
+	"voc-go-backend/internal/infrastructure/id"
+	dictp "voc-go-backend/internal/infrastructure/persistence/dict"
 	rbacp "voc-go-backend/internal/infrastructure/persistence/rbac"
 	syslogp "voc-go-backend/internal/infrastructure/persistence/syslog"
 	persistence "voc-go-backend/internal/infrastructure/persistence/user"
@@ -32,6 +37,8 @@ import (
 // @name Authorization
 
 func main() {
+	loadDotenvForDev()
+
 	// 1. 初始化数据库连接（PostgreSQL）
 	dbCfg := db.LoadConfigFromEnv()
 	pg, err := db.NewPostgres(dbCfg)
@@ -54,17 +61,14 @@ func main() {
 	}
 
 	// 2. 初始化安全组件：RSA 解密器、BCrypt 密码校验、JWT 生成器
-	rsaKey := getenvDefault("AUTH_RSA_PRIVATE_KEY",
-		"MIIBVQIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEAznV2Bi0zIX61NC3zSx8U6lJXbtru325pRV4Wt0aJXGxy6LMTsfxIye1ip+f2WnxrkYfk/X8YZ6FWNQPaAX/iRwIDAQABAkEAk/VcAusrpIqA5Ac2P5Tj0VX3cOuXmyouaVcXonr7f+6y2YTjLQuAnkcfKKocQI/juIRQBFQIqqW/m1nmz1wGeQIhAO8XaA/KxzOIgU0l/4lm0A2Wne6RokJ9HLs1YpOzIUmVAiEA3Q9DQrpAlIuiT1yWAGSxA9RxcjUM/1kdVLTkv0avXWsCIE0X8woEjK7lOSwzMG6RpEx9YHdopjViOj1zPVH61KTxAiBmv/dlhqkJ4rV46fIXELZur0pj6WC3N7a4brR8a+CLLQIhAMQyerWl2cPNVtE/8tkziHKbwW3ZUiBXU24wFxedT9iV",
-	)
-	rsaDecryptor, err := security.NewRSADecryptorFromBase64(rsaKey)
+	rsaDecryptor, err := newRSADecryptorFromEnv()
 	if err != nil {
 		log.Fatalf("failed to init RSA decryptor: %v", err)
 	}
 	pwdVerifier := security.BcryptVerifier{}
 	pwdHasher := security.BcryptHasher{}
 
-	jwtSecret := getenvDefault("AUTH_JWT_SECRET", "asdasdasifhueuiwyurfewbfjsdafjk")
+	jwtSecret := mustGetenv("AUTH_JWT_SECRET")
 	tokenTTL := 24 * time.Hour
 	tokenSvc := security.NewTokenService(jwtSecret, tokenTTL)
 
@@ -73,6 +77,8 @@ func main() {
 	var roleRepo rbacdomain.RoleRepository = rbacp.NewPgRoleRepository(pg)
 	var menuRepo rbacdomain.MenuRepository = rbacp.NewPgMenuRepository(pg)
 	authSvc := appauth.NewService(userRepo, rsaDecryptor, pwdVerifier, tokenSvc)
+	dictRepo := dictp.NewPgRepository(pg)
+	dictSvc := appdict.NewService(dictRepo, id.Next)
 
 	// 4. 初始化 HTTP 服务（Gin）
 	r := gin.Default()
@@ -98,6 +104,9 @@ func main() {
 		c.Next()
 	})
 
+	// 全局鉴权上下文：如携带 token 且合法，则写入 userID 到 Gin Context。
+	r.Use(httpif.AuthContext(tokenSvc))
+
 	// 系统操作日志中间件：在业务处理前后统一记录 sys_log。
 	sysLogRepo := syslogp.NewPgRepository(pg)
 	r.Use(httpif.NewSysLogMiddleware(sysLogRepo, tokenSvc))
@@ -116,47 +125,47 @@ func main() {
 	// 登录与用户接口
 	authHandler := httpif.NewAuthHandler(authSvc, onlineStore, pg, redisClient)
 	authHandler.RegisterAuthRoutes(r)
-	userHandler := httpif.NewUserHandler(userRepo, roleRepo, menuRepo, tokenSvc)
+	userHandler := httpif.NewUserHandler(userRepo, roleRepo, menuRepo)
 	userHandler.RegisterUserRoutes(r)
 
 	// 系统监控：在线用户
-	onlineUserHandler := httpif.NewOnlineUserHandler(onlineStore, tokenSvc)
+	onlineUserHandler := httpif.NewOnlineUserHandler(onlineStore)
 	onlineUserHandler.RegisterOnlineUserRoutes(r)
 
 	// 系统管理：菜单管理
-	menuHandler := httpif.NewMenuHandler(pg, tokenSvc)
+	menuHandler := httpif.NewMenuHandler(pg)
 	menuHandler.RegisterMenuRoutes(r)
 
 	// 系统管理：角色管理
-	roleHandler := httpif.NewRoleHandler(pg, tokenSvc)
+	roleHandler := httpif.NewRoleHandler(pg)
 	roleHandler.RegisterRoleRoutes(r)
 
 	// 系统管理：部门管理（仅树查询）
-	deptHandler := httpif.NewDeptHandler(pg, tokenSvc)
+	deptHandler := httpif.NewDeptHandler(pg)
 	deptHandler.RegisterDeptRoutes(r)
 
 	// 系统管理：用户管理
-	systemUserHandler := httpif.NewSystemUserHandler(pg, tokenSvc, rsaDecryptor, pwdHasher)
+	systemUserHandler := httpif.NewSystemUserHandler(pg, rsaDecryptor, pwdHasher)
 	systemUserHandler.RegisterSystemUserRoutes(r)
 
 	// 系统管理：字典管理
-	dictHandler := httpif.NewDictHandler(pg, tokenSvc)
+	dictHandler := httpif.NewDictHandler(dictSvc)
 	dictHandler.RegisterDictRoutes(r)
 
 	// 系统管理：系统配置（参数管理）
-	optionHandler := httpif.NewOptionHandler(pg, tokenSvc)
+	optionHandler := httpif.NewOptionHandler(pg)
 	optionHandler.RegisterOptionRoutes(r)
 
 	// 系统管理：文件管理
-	fileHandler := httpif.NewFileHandler(pg, tokenSvc)
+	fileHandler := httpif.NewFileHandler(pg)
 	fileHandler.RegisterFileRoutes(r)
 
 	// 系统管理：存储配置（需要 RSA 解密存储密钥）
-	storageHandler := httpif.NewStorageHandler(pg, tokenSvc, rsaDecryptor)
+	storageHandler := httpif.NewStorageHandler(pg, rsaDecryptor)
 	storageHandler.RegisterStorageRoutes(r)
 
 	// 系统管理：客户端配置
-	clientHandler := httpif.NewClientHandler(pg, tokenSvc)
+	clientHandler := httpif.NewClientHandler(pg)
 	clientHandler.RegisterClientRoutes(r)
 
 	// 系统监控：系统日志
@@ -185,4 +194,29 @@ func getenvDefault(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func newRSADecryptorFromEnv() (*security.RSADecryptor, error) {
+	if pemPath := strings.TrimSpace(os.Getenv("AUTH_RSA_PRIVATE_KEY_FILE")); pemPath != "" {
+		return security.NewRSADecryptorFromPEMFile(pemPath)
+	}
+	return security.NewRSADecryptorFromBase64(mustGetenv("AUTH_RSA_PRIVATE_KEY"))
+}
+
+func mustGetenv(key string) string {
+	v := os.Getenv(key)
+	if v == "" {
+		log.Fatalf("missing required env var: %s", key)
+	}
+	return v
+}
+
+func loadDotenvForDev() {
+	env := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))
+	if env == "prod" || env == "production" {
+		return
+	}
+	if err := godotenv.Load(); err != nil {
+		// .env is optional; skip silently when missing.
+	}
 }

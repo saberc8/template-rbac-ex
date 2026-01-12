@@ -6,28 +6,24 @@ import (
 	appauth "voc-go-backend/internal/application/auth"
 	rbac "voc-go-backend/internal/domain/rbac"
 	"voc-go-backend/internal/domain/user"
-	"voc-go-backend/internal/infrastructure/security"
 )
 
 // UserHandler exposes /auth/user related endpoints (info, route).
 type UserHandler struct {
-	users       user.Repository
-	roles       rbac.RoleRepository
-	menus       rbac.MenuRepository
-	tokenSvc    *security.TokenService
+	users user.Repository
+	roles rbac.RoleRepository
+	menus rbac.MenuRepository
 }
 
 func NewUserHandler(
 	users user.Repository,
 	roles rbac.RoleRepository,
 	menus rbac.MenuRepository,
-	tokenSvc *security.TokenService,
 ) *UserHandler {
 	return &UserHandler{
-		users:    users,
-		roles:    roles,
-		menus:    menus,
-		tokenSvc: tokenSvc,
+		users: users,
+		roles: roles,
+		menus: menus,
 	}
 }
 
@@ -39,14 +35,12 @@ func (h *UserHandler) RegisterUserRoutes(r *gin.Engine) {
 
 // GetUserInfo handles GET /auth/user/info.
 func (h *UserHandler) GetUserInfo(c *gin.Context) {
-	authz := c.GetHeader("Authorization")
-	claims, err := h.tokenSvc.Parse(authz)
-	if err != nil {
-		Fail(c, "401", "未授权，请重新登录")
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 
-	domainUser, err := h.users.GetByID(c.Request.Context(), claims.UserID)
+	domainUser, err := h.users.GetByID(c.Request.Context(), userID)
 	if err != nil {
 		Fail(c, "401", "未授权，请重新登录")
 		return
@@ -56,14 +50,14 @@ func (h *UserHandler) GetUserInfo(c *gin.Context) {
 		return
 	}
 	// 角色与权限
-	roles, err := h.roles.ListByUserID(c.Request.Context(), claims.UserID)
+	roles, err := h.roles.ListByUserID(c.Request.Context(), userID)
 	if err != nil {
 		Fail(c, "500", "获取角色信息失败")
 		return
 	}
 	roleCodes := appauth.ExtractRoleCodes(roles)
 
-	perms, err := h.menus.ListPermissionsByUserID(c.Request.Context(), claims.UserID)
+	perms, err := h.menus.ListPermissionsByUserID(c.Request.Context(), userID)
 	if err != nil {
 		Fail(c, "500", "获取权限信息失败")
 		return
@@ -75,15 +69,13 @@ func (h *UserHandler) GetUserInfo(c *gin.Context) {
 
 // ListUserRoute returns an empty route list for now.
 func (h *UserHandler) ListUserRoute(c *gin.Context) {
-	authz := c.GetHeader("Authorization")
-	claims, err := h.tokenSvc.Parse(authz)
-	if err != nil {
-		Fail(c, "401", "未授权，请重新登录")
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 
 	// Load roles and menus for this user.
-	roles, err := h.roles.ListByUserID(c.Request.Context(), claims.UserID)
+	roles, err := h.roles.ListByUserID(c.Request.Context(), userID)
 	if err != nil {
 		Fail(c, "500", "获取角色信息失败")
 		return

@@ -3,6 +3,9 @@ package http
 import (
 	"context"
 	"database/sql"
+	"image/color"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -65,8 +68,12 @@ func (h *CaptchaHandler) GetImageCaptcha(c *gin.Context) {
 		return
 	}
 
-	// 启用验证码：使用 base64Captcha 生成 4 位数字验证码图片。
-	driver := base64Captcha.NewDriverDigit(40, 120, 4, 0.7, 80)
+	// 启用验证码：生成更清晰的纯数字验证码（不修改前端接口，仅优化图片可读性）。
+	//
+	// 说明：
+	// - DriverDigit 固定带波形扭曲与大量干扰点，容易导致不清晰；
+	// - 这里改用 DriverString（仅数字），并默认减少干扰、增大尺寸提升可读性。
+	driver := newClearDigitCaptchaDriver()
 	captcha := base64Captcha.NewCaptcha(driver, base64Captcha.DefaultMemStore)
 
 	id, b64s, answer, err := captcha.Generate()
@@ -127,4 +134,48 @@ LIMIT 1;
 	}
 	val = strings.TrimSpace(val)
 	return val != "" && val != "0", nil
+}
+
+func newClearDigitCaptchaDriver() base64Captcha.Driver {
+	// 不改前端：长度保持 4 位。
+	const length = 4
+
+	height := getenvInt("CAPTCHA_IMG_HEIGHT", 60)
+	width := getenvInt("CAPTCHA_IMG_WIDTH", 200)
+	noiseCount := getenvInt("CAPTCHA_NOISE_COUNT", 0)
+	showLineOptions := getenvInt("CAPTCHA_SHOW_LINE_OPTIONS", 0)
+
+	// 优先使用更易读的数字集合，避免 0/1 等歧义字符。
+	source := strings.TrimSpace(os.Getenv("CAPTCHA_SOURCE"))
+	if source == "" {
+		source = "23456789"
+	}
+
+	bg := &color.RGBA{R: 255, G: 255, B: 255, A: 255}
+	return base64Captcha.NewDriverString(
+		height,
+		width,
+		noiseCount,
+		showLineOptions,
+		length,
+		source,
+		bg,
+		nil,
+		nil,
+	)
+}
+
+func getenvInt(key string, def int) int {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return def
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil {
+		return def
+	}
+	if v <= 0 {
+		return def
+	}
+	return v
 }

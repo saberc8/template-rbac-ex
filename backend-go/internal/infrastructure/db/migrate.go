@@ -1315,12 +1315,8 @@ CREATE INDEX IF NOT EXISTS idx_dict_update_user ON sys_dict (update_user);
 	}
 
 	// 同步 Java 版 main_data.sql 中的默认字典：
-	// notice_type（公告分类）、client_type（客户端类型）、auth_type_enum（认证类型）、storage_type_enum（存储类型）。
+	// client_type（客户端类型）、auth_type_enum（认证类型）、storage_type_enum（存储类型）。
 	const seed = `
-INSERT INTO sys_dict (id, name, code, description, is_system, create_user, create_time)
-SELECT 1, '公告分类', 'notice_type', NULL, TRUE, 1, NOW()
-WHERE NOT EXISTS (SELECT 1 FROM sys_dict WHERE id = 1 OR code = 'notice_type');
-
 INSERT INTO sys_dict (id, name, code, description, is_system, create_user, create_time)
 SELECT 2, '客户端类型', 'client_type', NULL, TRUE, 1, NOW()
 WHERE NOT EXISTS (SELECT 1 FROM sys_dict WHERE id = 2 OR code = 'client_type');
@@ -1376,28 +1372,10 @@ CREATE INDEX IF NOT EXISTS idx_dict_item_update_user ON sys_dict_item (update_us
 	}
 
 	// 初始化默认字典项：
-	// - 公告分类（notice_type，dict_id=1）
 	// - 客户端类型（client_type，dict_id=2）
 	// - 认证类型（auth_type_enum，dict_id=3）
 	// - 存储类型（storage_type_enum，dict_id=4）
 	const seedItems = `
--- 公告分类
-INSERT INTO sys_dict_item (
-    id, label, value, color, sort, description, status,
-    dict_id, create_user, create_time
-)
-SELECT 1, '产品新闻', '1', 'primary', 1, NULL, 1,
-       1, 1, NOW()
-WHERE NOT EXISTS (SELECT 1 FROM sys_dict_item WHERE id = 1);
-
-INSERT INTO sys_dict_item (
-    id, label, value, color, sort, description, status,
-    dict_id, create_user, create_time
-)
-SELECT 2, '企业动态', '2', 'success', 2, NULL, 1,
-       1, 1, NOW()
-WHERE NOT EXISTS (SELECT 1 FROM sys_dict_item WHERE id = 2);
-
 -- 客户端类型
 INSERT INTO sys_dict_item (
     id, label, value, color, sort, description, status,

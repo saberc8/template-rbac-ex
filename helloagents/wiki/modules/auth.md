@@ -1,48 +1,45 @@
-# auth
+# 认证与用户信息
 
 ## 目的
-提供登录/注销、验证码、JWT 认证与在线用户能力。
+提供登录认证、JWT 颁发与解析、用户信息与路由树构建。
 
 ## 模块概述
-- **职责:** 登录鉴权、Token 生成与校验、验证码发放与校验、在线用户维护
-- **状态:** ✅稳定
-- **最后更新:** 2026-01-11
+- **职责:** 登录校验、JWT 生成/解析、聚合角色与权限、构建前端路由树。
+- **状态:** 🚧开发中
+- **最后更新:** 2026-01-12
 
-## 规范
-
-### 需求: 用户登录并获取 JWT
-**模块:** auth
-用户提交账号密码（及验证码）后，系统签发 JWT 并允许后续访问受保护接口。
-
-#### 场景: 登录
-请求 `POST /auth/login`。
-- 验证通过后返回 token
-- 失败时返回统一错误结构
-
-### 需求: 提供图片验证码
-**模块:** auth
-用于登录前的人机校验与防刷。
-
-#### 场景: 获取验证码图片
-请求 `GET /captcha/image`。
-- 返回图片验证码（及关联标识，以接口实现为准）
+## 鉴权机制（后端实现）
+- 全局中间件 `AuthContext`：解析 `Authorization`，如 token 合法则写入 `userID` 到 Gin Context。
+- 需要登录的接口在 handler 内调用 `RequireUserID` 统一返回 401（避免每个 handler 重复解析 token）。
 
 ## API接口
-- `POST /auth/login`
-- `POST /auth/logout`
-- `GET /auth/user/info`
-- `GET /auth/user/route`
-- `GET /captcha/image`
+### POST /auth/login
+**描述:** 账号登录，返回 token。
 
-## 数据模型
-主要表与关联：
-- `sys_user`（用户）
-- `sys_user_role`（用户角色）
-- `sys_role` / `sys_menu` / `sys_role_menu`（用于路由与权限）
+### GET /captcha/image
+**描述:** 获取登录图片验证码（前端是否展示由后端配置决定）。
+
+**开关配置:**
+- `sys_option.code = LOGIN_CAPTCHA_ENABLED`
+  - `0`：关闭验证码（接口返回 `isEnabled=false`，前端隐藏输入框）
+  - 非 `0`：开启验证码（接口返回 `uuid` + `img`）
+
+**可读性优化（后端实现）:**
+- 默认生成更清晰的纯数字验证码（不修改前端接口）
+- 可通过环境变量微调：`CAPTCHA_IMG_HEIGHT`、`CAPTCHA_IMG_WIDTH`、`CAPTCHA_NOISE_COUNT`、`CAPTCHA_SHOW_LINE_OPTIONS`、`CAPTCHA_SOURCE`
+
+### GET /auth/user/info
+**描述:** 返回用户信息、角色与权限集合。
+
+### GET /auth/user/route
+**描述:** 返回当前用户可见的菜单路由树。
 
 ## 依赖
-- Redis（验证码与缓存相关能力）
+- domain/user
+- domain/rbac
+- infrastructure/security
+- infrastructure/persistence/*
 
 ## 变更历史
-- 知识库初始化（202601112319） - 认证模块文档初始化
-
+- 202601120018_security-hardening-abc - 系统日志脱敏与启动配置校验关联改动
+- 202601120135_auth-middleware-context - 统一鉴权中间件与 userID Context 注入

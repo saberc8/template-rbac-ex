@@ -10,7 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"voc-go-backend/internal/infrastructure/id"
-	"voc-go-backend/internal/infrastructure/security"
 )
 
 // MenuResp matches MenuResp in admin/src/apis/system/type.ts.
@@ -56,12 +55,11 @@ type menuReq struct {
 
 // MenuHandler provides /system/menu endpoints.
 type MenuHandler struct {
-	db       *sql.DB
-	tokenSvc *security.TokenService
+	db *sql.DB
 }
 
-func NewMenuHandler(db *sql.DB, tokenSvc *security.TokenService) *MenuHandler {
-	return &MenuHandler{db: db, tokenSvc: tokenSvc}
+func NewMenuHandler(db *sql.DB) *MenuHandler {
+	return &MenuHandler{db: db}
 }
 
 // RegisterMenuRoutes registers menu management routes.
@@ -112,11 +110,11 @@ ORDER BY m.sort ASC, m.id ASC;
 	var flat []MenuResp
 	for rows.Next() {
 		var (
-			item      MenuResp
-			createAt  time.Time
-			createBy  string
-			updateAt  sql.NullTime
-			updateBy  string
+			item     MenuResp
+			createAt time.Time
+			createBy string
+			updateAt sql.NullTime
+			updateBy string
 		)
 		if err := rows.Scan(
 			&item.ID,
@@ -219,11 +217,11 @@ WHERE m.id = $1;
 `
 
 	var (
-		item      MenuResp
-		createAt  time.Time
-		createBy  string
-		updateAt  sql.NullTime
-		updateBy  string
+		item     MenuResp
+		createAt time.Time
+		createBy string
+		updateAt sql.NullTime
+		updateBy string
 	)
 	err = h.db.QueryRowContext(c.Request.Context(), query, idVal).
 		Scan(
@@ -265,21 +263,10 @@ WHERE m.id = $1;
 	OK(c, item)
 }
 
-// helper to parse auth header and return user id.
-func (h *MenuHandler) currentUserID(c *gin.Context) int64 {
-	authz := c.GetHeader("Authorization")
-	claims, err := h.tokenSvc.Parse(authz)
-	if err != nil {
-		Fail(c, "401", "未授权，请重新登录")
-		return 0
-	}
-	return claims.UserID
-}
-
 // CreateMenu handles POST /system/menu.
 func (h *MenuHandler) CreateMenu(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 
@@ -383,8 +370,8 @@ VALUES (
 
 // UpdateMenu handles PUT /system/menu/:id.
 func (h *MenuHandler) UpdateMenu(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 	idVal, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -494,8 +481,8 @@ UPDATE sys_menu
 
 // DeleteMenu handles DELETE /system/menu.
 func (h *MenuHandler) DeleteMenu(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 	_ = userID

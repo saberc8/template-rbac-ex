@@ -85,15 +85,13 @@ type UserImportResultResp struct {
 // SystemUserHandler provides /system/user endpoints.
 type SystemUserHandler struct {
 	db           *sql.DB
-	tokenSvc     *security.TokenService
 	rsaDecryptor *security.RSADecryptor
 	hasher       security.PasswordHasher
 }
 
-func NewSystemUserHandler(db *sql.DB, tokenSvc *security.TokenService, rsa *security.RSADecryptor, hasher security.PasswordHasher) *SystemUserHandler {
+func NewSystemUserHandler(db *sql.DB, rsa *security.RSADecryptor, hasher security.PasswordHasher) *SystemUserHandler {
 	return &SystemUserHandler{
 		db:           db,
-		tokenSvc:     tokenSvc,
 		rsaDecryptor: rsa,
 		hasher:       hasher,
 	}
@@ -115,16 +113,6 @@ func (h *SystemUserHandler) RegisterSystemUserRoutes(r *gin.Engine) {
 	r.GET("/system/user/import/template", h.DownloadImportTemplate)
 	r.POST("/system/user/import/parse", h.ParseImportUser)
 	r.POST("/system/user/import", h.ImportUser)
-}
-
-func (h *SystemUserHandler) currentUserID(c *gin.Context) int64 {
-	authz := c.GetHeader("Authorization")
-	claims, err := h.tokenSvc.Parse(authz)
-	if err != nil {
-		Fail(c, "401", "未授权，请重新登录")
-		return 0
-	}
-	return claims.UserID
 }
 
 // ListUserPage handles GET /system/user (分页查询用户).
@@ -533,8 +521,8 @@ WHERE u.id = $1;
 
 // CreateUser handles POST /system/user.
 func (h *SystemUserHandler) CreateUser(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 
@@ -655,8 +643,8 @@ ON CONFLICT (user_id, role_id) DO NOTHING;
 
 // UpdateUser handles PUT /system/user/:id.
 func (h *SystemUserHandler) UpdateUser(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 	idVal, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -753,8 +741,8 @@ ON CONFLICT (user_id, role_id) DO NOTHING;
 
 // DeleteUser handles DELETE /system/user.
 func (h *SystemUserHandler) DeleteUser(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 	_ = userID
@@ -804,8 +792,8 @@ func (h *SystemUserHandler) DeleteUser(c *gin.Context) {
 
 // ResetPassword handles PATCH /system/user/:id/password.
 func (h *SystemUserHandler) ResetPassword(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 	idVal, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -870,8 +858,8 @@ func (h *SystemUserHandler) ResetPassword(c *gin.Context) {
 
 // UpdateUserRole handles PATCH /system/user/:id/role.
 func (h *SystemUserHandler) UpdateUserRole(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 	_ = userID
@@ -995,4 +983,3 @@ func (h *SystemUserHandler) ImportUser(c *gin.Context) {
 	}
 	OK(c, resp)
 }
-

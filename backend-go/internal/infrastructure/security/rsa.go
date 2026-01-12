@@ -4,9 +4,11 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
 )
 
 // RSADecryptor holds a parsed RSA private key and can decrypt
@@ -16,7 +18,11 @@ type RSADecryptor struct {
 }
 
 // NewRSADecryptorFromBase64 creates a decryptor from a Base64-encoded
-// PKCS#8 private key, compatible with the Java SecureUtils configuration.
+// private key, compatible with the Java SecureUtils configuration.
+//
+// It accepts:
+// - PKCS#8 DER (recommended)
+// - PKCS#1 DER (legacy)
 func NewRSADecryptorFromBase64(b64Key string) (*RSADecryptor, error) {
 	if b64Key == "" {
 		return nil, errors.New("rsa private key is empty")
@@ -25,15 +31,64 @@ func NewRSADecryptorFromBase64(b64Key string) (*RSADecryptor, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decode private key: %w", err)
 	}
-	k, err := x509.ParsePKCS8PrivateKey(der)
+
+	if k, err := x509.ParsePKCS8PrivateKey(der); err == nil {
+		priv, ok := k.(*rsa.PrivateKey)
+		if !ok {
+			return nil, fmt.Errorf("unexpected private key type %T", k)
+		}
+		return &RSADecryptor{priv: priv}, nil
+	}
+
+	// Fallback for legacy PKCS#1 DER.
+	if priv, err := x509.ParsePKCS1PrivateKey(der); err == nil {
+		return &RSADecryptor{priv: priv}, nil
+	} else {
+		return nil, fmt.Errorf("parse rsa private key: %w", err)
+	}
+}
+
+// NewRSADecryptorFromPEMFile creates a decryptor from a PEM encoded RSA private key file.
+//
+// It supports:
+// - PKCS#8 PEM (-----BEGIN PRIVATE KEY-----)
+// - PKCS#1 PEM (-----BEGIN RSA PRIVATE KEY-----)
+func NewRSADecryptorFromPEMFile(pemPath string) (*RSADecryptor, error) {
+	if pemPath == "" {
+		return nil, errors.New("pem path is empty")
+	}
+	raw, err := os.ReadFile(pemPath)
 	if err != nil {
-		return nil, fmt.Errorf("parse pkcs8 private key: %w", err)
+		return nil, fmt.Errorf("read pem file: %w", err)
 	}
-	priv, ok := k.(*rsa.PrivateKey)
-	if !ok {
-		return nil, fmt.Errorf("unexpected private key type %T", k)
+	block, _ := pem.Decode(raw)
+	if block == nil {
+		return nil, errors.New("decode pem: no pem block found")
 	}
-	return &RSADecryptor{priv: priv}, nil
+
+	switch block.Type {
+	case "PRIVATE KEY":
+		if k, err := x509.ParsePKCS8PrivateKey(block.Bytes); err == nil {
+			priv, ok := k.(*rsa.PrivateKey)
+			if !ok {
+				return nil, fmt.Errorf("unexpected private key type %T", k)
+			}
+			return &RSADecryptor{priv: priv}, nil
+		}
+		// Some tools may still produce PKCS#1 in a generic PRIVATE KEY block; fall back.
+		if priv, err := x509.ParsePKCS1PrivateKey(block.Bytes); err == nil {
+			return &RSADecryptor{priv: priv}, nil
+		}
+		return nil, errors.New("parse private key from pem: unsupported format")
+	case "RSA PRIVATE KEY":
+		priv, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("parse pkcs1 private key: %w", err)
+		}
+		return &RSADecryptor{priv: priv}, nil
+	default:
+		return nil, fmt.Errorf("unsupported pem block type: %s", block.Type)
+	}
 }
 
 // DecryptBase64 decrypts a Base64-encoded ciphertext using RSA/PKCS1v15.
@@ -92,4 +147,3 @@ func decryptPKCS1v15Insecure(priv *rsa.PrivateKey, ciphertext []byte) ([]byte, e
 	}
 	return em[sep+1:], nil
 }
-

@@ -1,15 +1,12 @@
 package http
 
 import (
-	"net/http"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
-
-	"voc-go-backend/internal/infrastructure/security"
 )
 
 // OnlineSession 表示一条在线会话记录（基于内存的简单实现）。
@@ -167,15 +164,13 @@ func (s *OnlineStore) List(nickname string, loginStart, loginEnd *time.Time, pag
 
 // OnlineUserHandler 提供 /monitor/online 相关接口。
 type OnlineUserHandler struct {
-	store    *OnlineStore
-	tokenSvc *security.TokenService
+	store *OnlineStore
 }
 
 // NewOnlineUserHandler 创建在线用户 handler。
-func NewOnlineUserHandler(store *OnlineStore, tokenSvc *security.TokenService) *OnlineUserHandler {
+func NewOnlineUserHandler(store *OnlineStore) *OnlineUserHandler {
 	return &OnlineUserHandler{
-		store:    store,
-		tokenSvc: tokenSvc,
+		store: store,
 	}
 }
 
@@ -212,6 +207,11 @@ func (h *OnlineUserHandler) PageOnlineUser(c *gin.Context) {
 
 // Kickout 处理 DELETE /monitor/online/:token，将指定 token 标记为下线。
 func (h *OnlineUserHandler) Kickout(c *gin.Context) {
+	_, ok := RequireUserID(c)
+	if !ok {
+		return
+	}
+
 	token := c.Param("token")
 	if strings.TrimSpace(token) == "" {
 		Fail(c, "400", "令牌不能为空")
@@ -227,28 +227,6 @@ func (h *OnlineUserHandler) Kickout(c *gin.Context) {
 
 	if currentToken != "" && currentToken == token {
 		Fail(c, "400", "不能强退自己")
-		return
-	}
-
-	// 鉴权：仅需要校验当前请求 token 是否有效。
-	if authz == "" {
-		c.JSON(http.StatusOK, gin.H{
-			"code":      "401",
-			"data":      nil,
-			"msg":       "未授权，请重新登录",
-			"success":   false,
-			"timestamp": nowString(),
-		})
-		return
-	}
-	if _, err := h.tokenSvc.Parse(authz); err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"code":      "401",
-			"data":      nil,
-			"msg":       "未授权，请重新登录",
-			"success":   false,
-			"timestamp": nowString(),
-		})
 		return
 	}
 

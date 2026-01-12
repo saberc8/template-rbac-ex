@@ -1,4 +1,4 @@
-# template-rbac-ex
+# voc-go-backend（Avalon 管理后台）
 
 > 本文件包含项目级别的核心信息。详细的模块文档见 `modules/` 目录。
 
@@ -7,14 +7,11 @@
 ## 1. 项目概述
 
 ### 目标与背景
-本仓库提供一个 RBAC（角色/菜单/权限）示例工程，包含 Go 后端与 Vue3 管理端，用于演示认证、系统管理与审计日志等常见能力。
+提供一套管理后台的后端接口与基础管理能力（认证、RBAC、系统管理、审计日志等），并与 `pc-admin-vue3/` 前端对接。
 
 ### 范围
-- **范围内:** 登录/注销、验证码、用户管理、角色与菜单权限、部门/字典/参数/客户端/存储配置、文件管理、系统日志与在线用户
-- **范围外:** 生产级多租户、灰度发布、分布式会话与高可用部署（如需以代码实现为准）
-
-### 干系人
-- **负责人:** （待补充）
+- **范围内:** 认证登录、用户/角色/菜单/部门/字典/配置/文件/存储/客户端、系统日志与在线用户。
+- **范围外:** 多租户、灰度发布、生产级别分布式 ID、全链路追踪等（当前未实现）。
 
 ---
 
@@ -22,13 +19,16 @@
 
 | 模块名称 | 职责 | 状态 | 文档 |
 |---------|------|------|------|
-| backend-go | Go 后端服务（HTTP API、认证、权限、数据访问） | ✅稳定 | [backend-go](modules/backend-go.md) |
-| pc-admin-vue3 | Vue3 管理端（页面、路由与接口调用） | ✅稳定 | [pc-admin-vue3](modules/pc-admin-vue3.md) |
-| auth | 登录/注销、验证码、JWT、在线用户 | ✅稳定 | [auth](modules/auth.md) |
-| user | 用户体系与用户管理能力 | ✅稳定 | [user](modules/user.md) |
-| rbac | 角色/菜单/权限与授权关系 | ✅稳定 | [rbac](modules/rbac.md) |
-| system | 部门/字典/参数/客户端/存储/文件等系统管理 | ✅稳定 | [system](modules/system.md) |
-| monitor | 系统日志与在线用户监控 | ✅稳定 | [monitor](modules/monitor.md) |
+| 后端整体（backend-go） | 后端服务整体能力与入口说明 | ✅稳定 | [backend-go](modules/backend-go.md) |
+| 后端入口与组装 | 启动、依赖注入、路由注册、Swagger | 🚧开发中 | [cmd](modules/cmd.md) |
+| 认证与用户信息 | 登录、JWT、用户信息与路由构建 | 🚧开发中 | [auth](modules/auth.md) |
+| RBAC | 角色、菜单、权限查询（仓储接口+Pg实现） | 🚧开发中 | [rbac](modules/rbac.md) |
+| 系统管理 | 字典/用户/部门/配置/客户端等管理接口 | 🚧开发中 | [system](modules/system.md) |
+| 用户管理（user） | 用户 CRUD、密码、角色分配、导入导出 | ✅稳定 | [user](modules/user.md) |
+| 系统日志 | 操作日志采集与落库（`sys_log`） | 🚧开发中 | [syslog](modules/syslog.md) |
+| 监控（monitor） | 在线用户与系统日志查询/导出 | ✅稳定 | [monitor](modules/monitor.md) |
+| 基础设施 | DB/Redis/Security/ID/迁移 | 🚧开发中 | [infrastructure](modules/infrastructure.md) |
+| 管理后台前端 | Vue3 管理后台 | 🚧开发中 | [pc-admin-vue3](modules/pc-admin-vue3.md) |
 
 ---
 
@@ -38,4 +38,3 @@
 - [API 手册](api.md)
 - [数据模型](data.md)
 - [变更历史](../history/index.md)
-

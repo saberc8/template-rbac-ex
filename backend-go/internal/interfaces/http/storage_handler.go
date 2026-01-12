@@ -55,14 +55,12 @@ type storageReq struct {
 // StorageHandler 提供 /system/storage 相关接口。
 type StorageHandler struct {
 	db           *sql.DB
-	tokenSvc     *security.TokenService
 	rsaDecryptor *security.RSADecryptor
 }
 
-func NewStorageHandler(db *sql.DB, tokenSvc *security.TokenService, rsa *security.RSADecryptor) *StorageHandler {
+func NewStorageHandler(db *sql.DB, rsa *security.RSADecryptor) *StorageHandler {
 	return &StorageHandler{
 		db:           db,
-		tokenSvc:     tokenSvc,
 		rsaDecryptor: rsa,
 	}
 }
@@ -76,16 +74,6 @@ func (h *StorageHandler) RegisterStorageRoutes(r *gin.Engine) {
 	r.DELETE("/system/storage", h.DeleteStorage)
 	r.PUT("/system/storage/:id/status", h.UpdateStorageStatus)
 	r.PUT("/system/storage/:id/default", h.SetDefaultStorage)
-}
-
-func (h *StorageHandler) currentUserID(c *gin.Context) int64 {
-	authz := c.GetHeader("Authorization")
-	claims, err := h.tokenSvc.Parse(authz)
-	if err != nil {
-		Fail(c, "401", "未授权，请重新登录")
-		return 0
-	}
-	return claims.UserID
 }
 
 // decryptSecretKey 使用后端 RSA 私钥对前端加密的密钥进行解密，并做长度校验。
@@ -293,8 +281,8 @@ WHERE s.id = $1;
 
 // CreateStorage 处理 POST /system/storage。
 func (h *StorageHandler) CreateStorage(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 
@@ -395,8 +383,8 @@ INSERT INTO sys_storage (
 
 // UpdateStorage 处理 PUT /system/storage/:id。
 func (h *StorageHandler) UpdateStorage(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 	idVal, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -533,8 +521,8 @@ UPDATE sys_storage
 
 // DeleteStorage 处理 DELETE /system/storage。
 func (h *StorageHandler) DeleteStorage(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 	_ = userID
@@ -581,8 +569,8 @@ func (h *StorageHandler) DeleteStorage(c *gin.Context) {
 
 // UpdateStorageStatus 处理 PUT /system/storage/:id/status，仅修改启用状态。
 func (h *StorageHandler) UpdateStorageStatus(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 	idVal, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -634,8 +622,8 @@ UPDATE sys_storage
 
 // SetDefaultStorage 处理 PUT /system/storage/:id/default，将指定存储设置为默认。
 func (h *StorageHandler) SetDefaultStorage(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 	idVal, err := strconv.ParseInt(c.Param("id"), 10, 64)

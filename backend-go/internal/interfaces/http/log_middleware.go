@@ -6,6 +6,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,6 +25,7 @@ import (
 type sysLogMiddleware struct {
 	repo     syslog.Repository
 	tokenSvc *security.TokenService
+	cfg      sysLogConfig
 }
 
 // NewSysLogMiddleware 创建 Gin 中间件，用于记录系统操作日志。
@@ -30,8 +33,21 @@ func NewSysLogMiddleware(repo syslog.Repository, tokenSvc *security.TokenService
 	m := &sysLogMiddleware{
 		repo:     repo,
 		tokenSvc: tokenSvc,
+		cfg:      loadSysLogConfigFromEnv(),
 	}
 	return m.handle
+}
+
+type sysLogConfig struct {
+	maxBodyBytes   int
+	skipBodyPrefix []string
+}
+
+func loadSysLogConfigFromEnv() sysLogConfig {
+	return sysLogConfig{
+		maxBodyBytes:   envInt("LOG_BODY_MAX_BYTES", 4*1024),
+		skipBodyPrefix: envCSV("LOG_SKIP_BODY_PATHS", "/auth/login"),
+	}
 }
 
 // bodyCaptureWriter 包装 ResponseWriter，用于捕获响应状态码和响应体。
@@ -39,6 +55,8 @@ type bodyCaptureWriter struct {
 	gin.ResponseWriter
 	status int
 	body   bytes.Buffer
+	max    int
+	over   bool
 }
 
 func (w *bodyCaptureWriter) WriteHeader(code int) {
@@ -50,7 +68,19 @@ func (w *bodyCaptureWriter) Write(b []byte) (int, error) {
 	if w.status == 0 {
 		w.status = http.StatusOK
 	}
-	_, _ = w.body.Write(b)
+	if w.max > 0 && !w.over {
+		remain := (w.max + 1) - w.body.Len()
+		if remain > 0 {
+			chunk := b
+			if len(chunk) > remain {
+				chunk = chunk[:remain]
+			}
+			_, _ = w.body.Write(chunk)
+		}
+		if w.body.Len() > w.max {
+			w.over = true
+		}
+	}
 	return w.ResponseWriter.Write(b)
 }
 
@@ -65,16 +95,18 @@ func (m *sysLogMiddleware) handle(c *gin.Context) {
 	start := time.Now()
 
 	// 读取并保留请求体，避免影响后续 handler。
-	var reqBody []byte
-	if c.Request.Body != nil {
-		data, _ := io.ReadAll(c.Request.Body)
-		reqBody = data
-		c.Request.Body = io.NopCloser(bytes.NewBuffer(data))
+	path := c.FullPath()
+	if path == "" {
+		path = c.Request.URL.Path
 	}
+	reqBody, reqBodyTruncated := m.captureRequestBody(c, path)
 
 	// 包装响应 writer，捕获状态码与响应内容。
 	origWriter := c.Writer
-	cw := &bodyCaptureWriter{ResponseWriter: origWriter}
+	cw := &bodyCaptureWriter{
+		ResponseWriter: origWriter,
+		max:            m.responseBodyMax(path),
+	}
 	c.Writer = cw
 
 	// 执行后续处理。
@@ -88,21 +120,17 @@ func (m *sysLogMiddleware) handle(c *gin.Context) {
 	}
 
 	// 组装日志记录。
-	path := c.FullPath()
-	if path == "" {
-		path = c.Request.URL.Path
-	}
 
 	rec := &syslog.Record{
 		RequestURL:     c.Request.URL.String(),
 		RequestMethod:  c.Request.Method,
-		RequestHeaders: marshalHeaders(c.Request.Header),
-		RequestBody:    string(reqBody),
+		RequestHeaders: marshalHeadersRedacted(c.Request.Header),
+		RequestBody:    formatBodySample(reqBody, reqBodyTruncated),
 		StatusCode:     statusFromWriter(cw),
-		ResponseHeaders: marshalHeaders(
+		ResponseHeaders: marshalHeadersRedacted(
 			http.Header(cw.Header()),
 		),
-		ResponseBody: cw.body.String(),
+		ResponseBody: formatBodySample(cw.body.Bytes(), cw.over),
 		TimeTaken:    duration.Milliseconds(),
 		IP:           truncateString(c.ClientIP(), 100),
 		Address:      "",
@@ -119,7 +147,9 @@ func (m *sysLogMiddleware) handle(c *gin.Context) {
 	}
 
 	// 从 Authorization 头解析登录用户 ID。
-	if m.tokenSvc != nil {
+	if uid, ok := GetUserID(c); ok {
+		rec.CreateUser = &uid
+	} else if m.tokenSvc != nil {
 		if authz := c.GetHeader("Authorization"); authz != "" {
 			if claims, err := m.tokenSvc.Parse(authz); err == nil && claims.UserID != 0 {
 				uid := claims.UserID
@@ -155,12 +185,110 @@ func marshalHeaders(h http.Header) string {
 	return string(b)
 }
 
+func marshalHeadersRedacted(h http.Header) string {
+	if len(h) == 0 {
+		return ""
+	}
+	m := make(map[string]string, len(h))
+	for k, v := range h {
+		if isSensitiveHeaderKey(k) {
+			m[k] = "[REDACTED]"
+			continue
+		}
+		m[k] = strings.Join(v, ",")
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+func isSensitiveHeaderKey(k string) bool {
+	switch strings.ToLower(strings.TrimSpace(k)) {
+	case "authorization", "cookie", "set-cookie", "x-token", "x-auth-token":
+		return true
+	default:
+		return false
+	}
+}
+
 // statusFromWriter 获取最终 HTTP 状态码，未显式设置时默认为 200。
 func statusFromWriter(w *bodyCaptureWriter) int {
 	if w == nil || w.status == 0 {
 		return http.StatusOK
 	}
 	return w.status
+}
+
+func (m *sysLogMiddleware) shouldSkipBody(path string) bool {
+	for _, p := range m.cfg.skipBodyPrefix {
+		if p == "" {
+			continue
+		}
+		if strings.HasPrefix(path, p) {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *sysLogMiddleware) requestBodyMax(c *gin.Context, path string) int {
+	if m.shouldSkipBody(path) {
+		return 0
+	}
+	ct := strings.ToLower(strings.TrimSpace(canonicalContentType(c.Request.Header.Get("Content-Type"))))
+	if strings.HasPrefix(ct, "multipart/form-data") {
+		return 0
+	}
+	return m.cfg.maxBodyBytes
+}
+
+func (m *sysLogMiddleware) responseBodyMax(path string) int {
+	if m.shouldSkipBody(path) {
+		return 0
+	}
+	return m.cfg.maxBodyBytes
+}
+
+func canonicalContentType(v string) string {
+	if v == "" {
+		return ""
+	}
+	if i := strings.IndexByte(v, ';'); i >= 0 {
+		return strings.TrimSpace(v[:i])
+	}
+	return strings.TrimSpace(v)
+}
+
+func (m *sysLogMiddleware) captureRequestBody(c *gin.Context, path string) ([]byte, bool) {
+	max := m.requestBodyMax(c, path)
+	if max <= 0 || c.Request.Body == nil {
+		return nil, false
+	}
+
+	full, err := io.ReadAll(io.LimitReader(c.Request.Body, int64(max+1)))
+	if err != nil {
+		return nil, false
+	}
+	// Restore request body for downstream handlers without reading the entire payload.
+	c.Request.Body = io.NopCloser(io.MultiReader(bytes.NewReader(full), c.Request.Body))
+
+	truncated := len(full) > max
+	if truncated {
+		return full[:max], true
+	}
+	return full, false
+}
+
+func formatBodySample(b []byte, truncated bool) string {
+	if len(b) == 0 {
+		return ""
+	}
+	if truncated {
+		return string(b) + "\n...[TRUNCATED]"
+	}
+	return string(b)
 }
 
 // inferModuleAndDescription 根据路由前缀推断所属模块和简单描述。
@@ -205,4 +333,38 @@ func truncateString(s string, max int) string {
 		return s
 	}
 	return s[:max]
+}
+
+func envInt(key string, def int) int {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return def
+	}
+	if n < 0 {
+		return 0
+	}
+	return n
+}
+
+func envCSV(key string, def string) []string {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		v = def
+	}
+	if v == "" {
+		return nil
+	}
+	parts := strings.Split(v, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }

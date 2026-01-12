@@ -9,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"voc-go-backend/internal/infrastructure/id"
-	"voc-go-backend/internal/infrastructure/security"
 )
 
 // RoleResp matches RoleResp in admin/src/apis/system/type.ts.
@@ -31,38 +30,38 @@ type RoleResp struct {
 // RoleDetailResp extends RoleResp with menu/dept information.
 type RoleDetailResp struct {
 	RoleResp
-	MenuIDs          []int64 `json:"menuIds"`
-	DeptIDs          []int64 `json:"deptIds"`
-	MenuCheckStrict  bool    `json:"menuCheckStrictly"`
-	DeptCheckStrict  bool    `json:"deptCheckStrictly"`
+	MenuIDs         []int64 `json:"menuIds"`
+	DeptIDs         []int64 `json:"deptIds"`
+	MenuCheckStrict bool    `json:"menuCheckStrictly"`
+	DeptCheckStrict bool    `json:"deptCheckStrictly"`
 }
 
 // RoleUserResp matches RoleUserResp at front-end.
 type RoleUserResp struct {
-	ID               int64    `json:"id"` // sys_user_role.id
-	RoleID           int64    `json:"roleId"`
-	UserID           int64    `json:"userId"`
-	Username         string   `json:"username"`
-	Nickname         string   `json:"nickname"`
-	Gender           int16    `json:"gender"`
-	Status           int16    `json:"status"`
-	IsSystem         bool     `json:"isSystem"`
-	Description      string   `json:"description"`
-	DeptID           int64    `json:"deptId"`
-	DeptName         string   `json:"deptName"`
-	RoleIDs          []int64  `json:"roleIds"`
-	RoleNames        []string `json:"roleNames"`
-	Disabled         bool     `json:"disabled"`
+	ID          int64    `json:"id"` // sys_user_role.id
+	RoleID      int64    `json:"roleId"`
+	UserID      int64    `json:"userId"`
+	Username    string   `json:"username"`
+	Nickname    string   `json:"nickname"`
+	Gender      int16    `json:"gender"`
+	Status      int16    `json:"status"`
+	IsSystem    bool     `json:"isSystem"`
+	Description string   `json:"description"`
+	DeptID      int64    `json:"deptId"`
+	DeptName    string   `json:"deptName"`
+	RoleIDs     []int64  `json:"roleIds"`
+	RoleNames   []string `json:"roleNames"`
+	Disabled    bool     `json:"disabled"`
 }
 
 type roleReq struct {
-	Name             string   `json:"name"`
-	Code             string   `json:"code"`
-	Sort             int32    `json:"sort"`
-	Description      string   `json:"description"`
-	DataScope        int32    `json:"dataScope"`
-	DeptIDs          []int64  `json:"deptIds"`
-	DeptCheckStrict  bool     `json:"deptCheckStrictly"`
+	Name            string  `json:"name"`
+	Code            string  `json:"code"`
+	Sort            int32   `json:"sort"`
+	Description     string  `json:"description"`
+	DataScope       int32   `json:"dataScope"`
+	DeptIDs         []int64 `json:"deptIds"`
+	DeptCheckStrict bool    `json:"deptCheckStrictly"`
 }
 
 type rolePermissionReq struct {
@@ -72,12 +71,11 @@ type rolePermissionReq struct {
 
 // RoleHandler provides /system/role endpoints.
 type RoleHandler struct {
-	db       *sql.DB
-	tokenSvc *security.TokenService
+	db *sql.DB
 }
 
-func NewRoleHandler(db *sql.DB, tokenSvc *security.TokenService) *RoleHandler {
-	return &RoleHandler{db: db, tokenSvc: tokenSvc}
+func NewRoleHandler(db *sql.DB) *RoleHandler {
+	return &RoleHandler{db: db}
 }
 
 // RegisterRoleRoutes registers role management routes.
@@ -93,16 +91,6 @@ func (h *RoleHandler) RegisterRoleRoutes(r *gin.Engine) {
 	r.POST("/system/role/:id/user", h.AssignToUsers)
 	r.DELETE("/system/role/user", h.UnassignFromUsers)
 	r.GET("/system/role/:id/user/id", h.ListRoleUserIDs)
-}
-
-func (h *RoleHandler) currentUserID(c *gin.Context) int64 {
-	authz := c.GetHeader("Authorization")
-	claims, err := h.tokenSvc.Parse(authz)
-	if err != nil {
-		Fail(c, "401", "未授权，请重新登录")
-		return 0
-	}
-	return claims.UserID
 }
 
 // ListRole handles GET /system/role/list.
@@ -136,11 +124,11 @@ ORDER BY r.sort ASC, r.id ASC;
 	var list []RoleResp
 	for rows.Next() {
 		var (
-			item      RoleResp
-			createAt  time.Time
-			createBy  string
-			updateAt  sql.NullTime
-			updateBy  string
+			item     RoleResp
+			createAt time.Time
+			createBy string
+			updateAt sql.NullTime
+			updateBy string
 		)
 		if err := rows.Scan(
 			&item.ID,
@@ -302,8 +290,8 @@ WHERE r.id = $1;
 
 // CreateRole handles POST /system/role.
 func (h *RoleHandler) CreateRole(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 
@@ -381,8 +369,8 @@ VALUES ($1, $2, $3, $4, $5, $6,
 
 // UpdateRole handles PUT /system/role/:id.
 func (h *RoleHandler) UpdateRole(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 	idVal, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -465,8 +453,8 @@ UPDATE sys_role
 
 // DeleteRole handles DELETE /system/role.
 func (h *RoleHandler) DeleteRole(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 	_ = userID
@@ -512,8 +500,8 @@ func (h *RoleHandler) DeleteRole(c *gin.Context) {
 
 // UpdateRolePermission handles PUT /system/role/:id/permission.
 func (h *RoleHandler) UpdateRolePermission(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 	idVal, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -713,8 +701,8 @@ WHERE ur.user_id = ANY($1::bigint[]);
 
 // AssignToUsers handles POST /system/role/:id/user.
 func (h *RoleHandler) AssignToUsers(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	_, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 	roleID, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -761,8 +749,8 @@ ON CONFLICT (user_id, role_id) DO NOTHING;
 // UnassignFromUsers handles DELETE /system/role/user.
 // Body is an array of userRoleIds.
 func (h *RoleHandler) UnassignFromUsers(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 	_ = userID
@@ -810,4 +798,3 @@ func (h *RoleHandler) ListRoleUserIDs(c *gin.Context) {
 	}
 	OK(c, ids)
 }
-

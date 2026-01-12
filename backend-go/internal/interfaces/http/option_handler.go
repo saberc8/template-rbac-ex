@@ -9,8 +9,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-
-	"voc-go-backend/internal/infrastructure/security"
 )
 
 // OptionResp matches OptionResp in admin/src/apis/system/type.ts.
@@ -30,14 +28,12 @@ type OptionQuery struct {
 
 // OptionHandler exposes /system/option endpoints used by /system/config* tabs.
 type OptionHandler struct {
-	db       *sql.DB
-	tokenSvc *security.TokenService
+	db *sql.DB
 }
 
-func NewOptionHandler(db *sql.DB, tokenSvc *security.TokenService) *OptionHandler {
+func NewOptionHandler(db *sql.DB) *OptionHandler {
 	return &OptionHandler{
-		db:       db,
-		tokenSvc: tokenSvc,
+		db: db,
 	}
 }
 
@@ -46,17 +42,6 @@ func (h *OptionHandler) RegisterOptionRoutes(r *gin.Engine) {
 	r.GET("/system/option", h.ListOption)
 	r.PUT("/system/option", h.UpdateOption)
 	r.PATCH("/system/option/value", h.ResetOptionValue)
-}
-
-// currentUserID parses token and returns userID; shared with other handlers.
-func (h *OptionHandler) currentUserID(c *gin.Context) int64 {
-	authz := c.GetHeader("Authorization")
-	claims, err := h.tokenSvc.Parse(authz)
-	if err != nil {
-		Fail(c, "401", "未授权，请重新登录")
-		return 0
-	}
-	return claims.UserID
 }
 
 // ListOption handles GET /system/option.
@@ -128,8 +113,8 @@ ORDER BY id ASC;
 
 // UpdateOption handles PUT /system/option (bulk update).
 func (h *OptionHandler) UpdateOption(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 
@@ -178,8 +163,8 @@ UPDATE sys_option
 
 // ResetOptionValue handles PATCH /system/option/value to reset to defaults.
 func (h *OptionHandler) ResetOptionValue(c *gin.Context) {
-	userID := h.currentUserID(c)
-	if userID == 0 {
+	userID, ok := RequireUserID(c)
+	if !ok {
 		return
 	}
 	_ = userID // reserved for audit usage
