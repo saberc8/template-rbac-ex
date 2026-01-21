@@ -88,7 +88,7 @@ func TestService_Login_Uninitialized(t *testing.T) {
 	repo := stubUserRepo{}
 	svc := NewService(repo, nil, nil)
 	_, err := svc.Login(context.Background(), LoginRequest{ClientID: "c1", Username: "u1", Password: "raw"})
-	if err == nil || err.Error() != "认证服务未初始化" {
+	if err == nil || err.Code != "500" || err.Msg != "认证服务未初始化" {
 		t.Fatalf("expected init error, got %v", err)
 	}
 }

@@ -4,28 +4,21 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
 
 	"go-backend/internal/application/auth"
-	appsystem "go-backend/internal/application/system"
 )
 
 // AuthHandler 暴露认证相关 HTTP 接口。
 type AuthHandler struct {
-	svc    *auth.Service
 	online *OnlineStore
-	sysSvc *appsystem.Service
-	redis  *redis.Client
+	uc     *auth.LoginUseCase
 }
 
 // NewAuthHandler 创建认证接口处理器。
-// 其中 sysSvc 用于读取登录相关配置（如是否启用验证码）。
-func NewAuthHandler(svc *auth.Service, online *OnlineStore, sysSvc *appsystem.Service, redisClient *redis.Client) *AuthHandler {
+func NewAuthHandler(uc *auth.LoginUseCase, online *OnlineStore) *AuthHandler {
 	return &AuthHandler{
-		svc:    svc,
 		online: online,
-		sysSvc: sysSvc,
-		redis:  redisClient,
+		uc:     uc,
 	}
 }
 
@@ -53,60 +46,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// 当配置启用登录验证码且为账号登录时，先校验图形验证码。
-	// 行为对齐 Java AccountLoginHandler.preLogin：
-	// - LOGIN_CAPTCHA_ENABLED=0：不校验验证码；
-	// - LOGIN_CAPTCHA_ENABLED!=0：必须校验 uuid + captcha。
-	authType := strings.ToUpper(strings.TrimSpace(req.AuthType))
-	if authType == "" || authType == "ACCOUNT" {
-		enabled := false
-		if h.sysSvc != nil {
-			v, derr := h.sysSvc.IsOptionEnabled(c.Request.Context(), "LOGIN_CAPTCHA_ENABLED")
-			if derr != nil {
-				Fail(c, derr.Code, "查询登录验证码配置失败")
-				return
-			}
-			enabled = v
-		}
-		if enabled {
-			if strings.TrimSpace(req.Captcha) == "" {
-				Fail(c, "400", "验证码不能为空")
-				return
-			}
-			if strings.TrimSpace(req.UUID) == "" {
-				Fail(c, "400", "验证码标识不能为空")
-				return
-			}
-			// 使用 Redis 校验验证码，key 与 Java 一致：CAPTCHA:{uuid}
-			if h.redis == nil {
-				Fail(c, "500", "验证码服务未初始化")
-				return
-			}
-			ctx := c.Request.Context()
-			key := buildCaptchaRedisKey(strings.TrimSpace(req.UUID))
-			val, err := h.redis.Get(ctx, key).Result()
-			if err != nil {
-				if err == redis.Nil {
-					Fail(c, "400", "验证码不正确或已过期")
-					return
-				}
-				Fail(c, "500", "验证码校验失败")
-				return
-			}
-			if !strings.EqualFold(strings.TrimSpace(req.Captcha), strings.TrimSpace(val)) {
-				Fail(c, "400", "验证码不正确或已过期")
-				return
-			}
-			// 校验通过后删除验证码，避免重复使用。
-			_, _ = h.redis.Del(ctx, key).Result()
-		}
-	}
-
-	resp, err := h.svc.Login(c.Request.Context(), req)
+	resp, err := h.uc.Login(c.Request.Context(), req)
 	if err != nil {
-		// Treat any error returned by the service as a 400-style business error,
-		// with the message coming from the service (already localized).
-		Fail(c, "400", err.Error())
+		FailErr(c, err)
 		return
 	}
 

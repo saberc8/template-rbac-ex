@@ -13,6 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	appsystem "go-backend/internal/application/system"
+	"go-backend/internal/core/captcha"
 	domainsys "go-backend/internal/domain/system"
 )
 
@@ -82,10 +83,10 @@ func TestGetImageCaptcha_Enabled_WritesToRedis(t *testing.T) {
 	if data.UUID == "" {
 		t.Fatalf("expected uuid non-empty")
 	}
-	if got, err := mr.Get(buildCaptchaRedisKey(data.UUID)); err != nil || got == "" {
+	if got, err := mr.Get(captcha.BuildRedisKey(data.UUID)); err != nil || got == "" {
 		t.Fatalf("expected redis captcha value written")
 	}
-	if ttl := mr.TTL(buildCaptchaRedisKey(data.UUID)); ttl <= 0 || ttl > 2*time.Minute {
+	if ttl := mr.TTL(captcha.BuildRedisKey(data.UUID)); ttl <= 0 || ttl > 2*time.Minute {
 		t.Fatalf("unexpected ttl: %v", ttl)
 	}
 }

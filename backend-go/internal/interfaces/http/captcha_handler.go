@@ -107,13 +107,6 @@ func (h *CaptchaHandler) GetImageCaptcha(c *gin.Context) {
 	OK(c, resp)
 }
 
-// buildCaptchaRedisKey 构建验证码在 Redis 中的 key。
-// 对齐 Java 侧 CacheConstants.CAPTCHA_KEY_PREFIX：CAPTCHA:{uuid}
-func buildCaptchaRedisKey(id string) string {
-	const prefix = "CAPTCHA:"
-	return prefix + id
-}
-
 func newClearDigitCaptchaDriver() base64Captcha.Driver {
 	// 不改前端：长度保持 4 位。
 	const length = 4

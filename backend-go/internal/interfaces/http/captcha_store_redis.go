@@ -8,6 +8,8 @@ import (
 
 	"github.com/mojocn/base64Captcha"
 	"github.com/redis/go-redis/v9"
+
+	"go-backend/internal/core/captcha"
 )
 
 var _ base64Captcha.Store = (*RedisCaptchaStore)(nil)
@@ -29,7 +31,7 @@ func (s *RedisCaptchaStore) Set(id string, value string) error {
 		return errors.New("redis captcha store not initialized")
 	}
 	ctx := context.Background()
-	return s.redis.Set(ctx, buildCaptchaRedisKey(id), value, s.ttl).Err()
+	return s.redis.Set(ctx, captcha.BuildRedisKey(id), value, s.ttl).Err()
 }
 
 func (s *RedisCaptchaStore) Get(id string, clear bool) string {
@@ -37,7 +39,7 @@ func (s *RedisCaptchaStore) Get(id string, clear bool) string {
 		return ""
 	}
 	ctx := context.Background()
-	key := buildCaptchaRedisKey(id)
+	key := captcha.BuildRedisKey(id)
 	val, err := s.redis.Get(ctx, key).Result()
 	if err != nil {
 		return ""
