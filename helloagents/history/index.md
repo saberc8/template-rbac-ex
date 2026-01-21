@@ -14,6 +14,7 @@
 | 202601121124 | dotenv-autoload | 优化 | ✅已完成 | [202601121124_dotenv-autoload](2026-01/202601121124_dotenv-autoload/) |
 | 202601122139 | captcha-clear | 优化 | ✅已完成 | [202601122139_captcha-clear](2026-01/202601122139_captcha-clear/) |
 | 202601122248 | go1255-optimize-clienthandler | 优化 | ✅已完成 | [202601122248_go1255_optimize_clienthandler](2026-01/202601122248_go1255_optimize_clienthandler/) |
+| 202601122347 | migrate-ctx-tx-captcha-redis | 优化 | ✅已完成 | [202601122347_migrate_ctx_tx_captcha_redis](2026-01/202601122347_migrate_ctx_tx_captcha_redis/) |
 
 ---
 
@@ -27,3 +28,4 @@
 - [202601121124_dotenv-autoload](2026-01/202601121124_dotenv-autoload/) - 开发环境自动加载 .env（godotenv）
 - [202601122139_captcha-clear](2026-01/202601122139_captcha-clear/) - 登录验证码图片可读性优化（后端实现，接口不变）
 - [202601122248_go1255_optimize_clienthandler](2026-01/202601122248_go1255_optimize_clienthandler/) - Go 1.25.5 升级与 /system/client 列表参数/筛选优化
+- [202601122347_migrate_ctx_tx_captcha_redis](2026-01/202601122347_migrate_ctx_tx_captcha_redis/) - 自动迁移 Context/事务化与验证码 Redis 存储统一

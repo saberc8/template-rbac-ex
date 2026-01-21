@@ -9,6 +9,7 @@
 ### 新增
 - 创建 HelloAGENTS 知识库（`helloagents/`），用于作为项目知识 SSOT。
 - 为 `GET /system/client` 增加基础单测（参数校验与筛选 SQL 断言）。
+- 为自动迁移与验证码 Redis store 补充单测（含 miniredis）。
 
 ### 变更
 - Go：`backend-go` 升级到 `go 1.25.5` 并锁定 `toolchain go1.25.5`。
@@ -21,6 +22,8 @@
 - 登录验证码：`/captcha/image` 默认生成更清晰的验证码图片，并支持 `CAPTCHA_*` 环境变量微调参数。
 - 系统管理：`GET /system/client` 参数校验更严格；`status=0` 可筛选；`authType` 筛选改为 `jsonb` 精确包含匹配并增加索引。
 - 开发体验：`cmd/test_menus` 移除 `panic(err)`，改为明确输出错误并返回非 0 退出码。
+- 基础设施：自动迁移新增 `AutoMigrateContext(ctx, db)` 并在事务内执行（统一 `ExecContext/QueryRowContext`）。
+- 登录验证码：验证码生成存储统一为 Redis-backed store，移除内存+Redis 双写（与登录校验一致）。
 
 ### 安全
 - 系统日志默认脱敏 `Authorization/Cookie` 等敏感 header，并对请求/响应 body 进行截断与敏感路径跳过。

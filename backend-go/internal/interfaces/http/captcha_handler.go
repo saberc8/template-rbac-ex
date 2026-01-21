@@ -68,28 +68,24 @@ func (h *CaptchaHandler) GetImageCaptcha(c *gin.Context) {
 		return
 	}
 
+	if h.redis == nil {
+		Fail(c, "500", "验证码服务未初始化")
+		return
+	}
+
 	// 启用验证码：生成更清晰的纯数字验证码（不修改前端接口，仅优化图片可读性）。
 	//
 	// 说明：
 	// - DriverDigit 固定带波形扭曲与大量干扰点，容易导致不清晰；
 	// - 这里改用 DriverString（仅数字），并默认减少干扰、增大尺寸提升可读性。
 	driver := newClearDigitCaptchaDriver()
-	captcha := base64Captcha.NewCaptcha(driver, base64Captcha.DefaultMemStore)
+	store := NewRedisCaptchaStore(h.redis, graphicCaptchaExpirationMinutes*time.Minute)
+	captcha := base64Captcha.NewCaptcha(driver, store)
 
-	id, b64s, answer, err := captcha.Generate()
+	id, b64s, _, err := captcha.Generate()
 	if err != nil {
 		Fail(c, "500", "生成验证码失败")
 		return
-	}
-
-	// 将验证码内容写入 Redis，使用与 Java 一致的前缀：CAPTCHA:{uuid}
-	if h.redis != nil {
-		key := buildCaptchaRedisKey(id)
-		ctx := c.Request.Context()
-		if err := h.redis.Set(ctx, key, answer, graphicCaptchaExpirationMinutes*time.Minute).Err(); err != nil {
-			Fail(c, "500", "保存验证码失败")
-			return
-		}
 	}
 
 	expireTime := time.Now().Add(graphicCaptchaExpirationMinutes * time.Minute).UnixMilli()
