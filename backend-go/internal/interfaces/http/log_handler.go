@@ -9,8 +9,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	appsyslog "voc-go-backend/internal/application/syslog"
-	domainsyslog "voc-go-backend/internal/domain/syslog"
+	appsyslog "go-backend/internal/application/syslog"
+	domainsyslog "go-backend/internal/domain/syslog"
 )
 
 // LogResp 与前端 LogResp 类型对齐。

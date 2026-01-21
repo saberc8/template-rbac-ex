@@ -7,8 +7,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	appstorage "voc-go-backend/internal/application/storage"
-	domainstorage "voc-go-backend/internal/domain/storage"
+	appstorage "go-backend/internal/application/storage"
+	domainstorage "go-backend/internal/domain/storage"
 )
 
 // FileItem matches the front-end FileItem type in admin/src/apis/system/type.ts.

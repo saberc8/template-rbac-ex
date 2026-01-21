@@ -8,7 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	appsystem "voc-go-backend/internal/application/system"
+	appsystem "go-backend/internal/application/system"
 )
 
 // DeptResp matches DeptResp in admin/src/apis/system/type.ts.

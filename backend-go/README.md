@@ -1,4 +1,4 @@
-# voc-go-backend（Go 后端）
+# go-backend（Go 后端）
 
 ## 1. 前置依赖
 - Go（建议 1.21+）

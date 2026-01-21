@@ -9,7 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	appuser "voc-go-backend/internal/application/user"
+	appuser "go-backend/internal/application/user"
 )
 
 // UserResp matches UserResp in admin/src/apis/system/type.ts.

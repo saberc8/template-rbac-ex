@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	domainstorage "voc-go-backend/internal/domain/storage"
+	domainstorage "go-backend/internal/domain/storage"
 )
 
 // FileService 提供文件管理的用例编排（sys_file）。

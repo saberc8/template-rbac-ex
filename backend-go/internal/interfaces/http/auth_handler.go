@@ -6,8 +6,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 
-	"voc-go-backend/internal/application/auth"
-	appsystem "voc-go-backend/internal/application/system"
+	"go-backend/internal/application/auth"
+	appsystem "go-backend/internal/application/system"
 )
 
 // AuthHandler 暴露认证相关 HTTP 接口。

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	domain "voc-go-backend/internal/domain/user"
+	domain "go-backend/internal/domain/user"
 )
 
 // Service handles authentication use cases.

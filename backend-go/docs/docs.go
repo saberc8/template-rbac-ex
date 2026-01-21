@@ -30,7 +30,7 @@ var SwaggerInfo = &swag.Spec{
 	Host:             "",
 	BasePath:         "/",
 	Schemes:          []string{"http"},
-	Title:            "voc-go-backend 接口文档",
+	Title:            "go-backend 接口文档",
 	Description:      "Avalon 平台 Go 后端接口文档，涵盖认证、系统管理、日志等模块。",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	domainsys "voc-go-backend/internal/domain/system"
+	domainsys "go-backend/internal/domain/system"
 )
 
 // Service 提供 system 子域的用例编排（部门/系统配置）。

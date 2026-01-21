@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	domainstorage "voc-go-backend/internal/domain/storage"
+	domainstorage "go-backend/internal/domain/storage"
 )
 
 // Service 提供 storage 子域的用例编排（存储配置）。

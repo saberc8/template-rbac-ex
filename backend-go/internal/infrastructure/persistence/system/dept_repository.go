@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	domainsys "voc-go-backend/internal/domain/system"
+	domainsys "go-backend/internal/domain/system"
 
 	"github.com/lib/pq"
 )
@@ -308,4 +308,3 @@ func derefTime(v *time.Time) any {
 	}
 	return *v
 }
-

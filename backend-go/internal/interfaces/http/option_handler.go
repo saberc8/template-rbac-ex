@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	appsystem "voc-go-backend/internal/application/system"
+	appsystem "go-backend/internal/application/system"
 )
 
 // OptionResp matches OptionResp in admin/src/apis/system/type.ts.

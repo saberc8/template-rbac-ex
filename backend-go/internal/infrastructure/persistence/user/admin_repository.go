@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	domain "voc-go-backend/internal/domain/user"
+	domain "go-backend/internal/domain/user"
 
 	"github.com/lib/pq"
 )
@@ -95,16 +95,16 @@ LIMIT $%d OFFSET $%d;
 	list := make([]domain.AdminUserDetail, 0, q.Size)
 	for rows.Next() {
 		var (
-			item              domain.AdminUserDetail
-			email, phone      sql.NullString
-			avatar, desc      sql.NullString
-			deptName          sql.NullString
-			createUser        sql.NullInt64
-			updateUser        sql.NullInt64
-			updateTime        sql.NullTime
-			createUserString  sql.NullString
-			updateUserString  sql.NullString
-			password          sql.NullString
+			item             domain.AdminUserDetail
+			email, phone     sql.NullString
+			avatar, desc     sql.NullString
+			deptName         sql.NullString
+			createUser       sql.NullInt64
+			updateUser       sql.NullInt64
+			updateTime       sql.NullTime
+			createUserString sql.NullString
+			updateUserString sql.NullString
+			password         sql.NullString
 		)
 		if err := rows.Scan(
 			&item.ID,
@@ -221,16 +221,16 @@ LEFT JOIN sys_user AS uu ON uu.id = u.update_user
 	list := make([]domain.AdminUserDetail, 0, 64)
 	for rows.Next() {
 		var (
-			item              domain.AdminUserDetail
-			email, phone      sql.NullString
-			avatar, desc      sql.NullString
-			deptName          sql.NullString
-			createUser        sql.NullInt64
-			updateUser        sql.NullInt64
-			updateTime        sql.NullTime
-			createUserString  sql.NullString
-			updateUserString  sql.NullString
-			password          sql.NullString
+			item             domain.AdminUserDetail
+			email, phone     sql.NullString
+			avatar, desc     sql.NullString
+			deptName         sql.NullString
+			createUser       sql.NullInt64
+			updateUser       sql.NullInt64
+			updateTime       sql.NullTime
+			createUserString sql.NullString
+			updateUserString sql.NullString
+			password         sql.NullString
 		)
 		if err := rows.Scan(
 			&item.ID,
@@ -332,17 +332,17 @@ LEFT JOIN sys_user AS uu ON uu.id = u.update_user
 WHERE u.id = $1;
 `
 	var (
-		item              domain.AdminUserDetailWithPwdReset
-		email, phone      sql.NullString
-		avatar, desc      sql.NullString
-		deptName          sql.NullString
-		createUser        sql.NullInt64
-		updateUser        sql.NullInt64
-		updateTime        sql.NullTime
-		createUserString  sql.NullString
-		updateUserString  sql.NullString
-		password          sql.NullString
-		pwdResetTime      sql.NullTime
+		item             domain.AdminUserDetailWithPwdReset
+		email, phone     sql.NullString
+		avatar, desc     sql.NullString
+		deptName         sql.NullString
+		createUser       sql.NullInt64
+		updateUser       sql.NullInt64
+		updateTime       sql.NullTime
+		createUserString sql.NullString
+		updateUserString sql.NullString
+		password         sql.NullString
+		pwdResetTime     sql.NullTime
 	)
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&item.ID,
@@ -676,4 +676,3 @@ func timeOrNow(t *time.Time, now time.Time) time.Time {
 	}
 	return *t
 }
-

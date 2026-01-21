@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	domain "voc-go-backend/internal/domain/rbac"
+	domain "go-backend/internal/domain/rbac"
 
 	"github.com/lib/pq"
 )
@@ -178,26 +178,26 @@ ORDER BY m.sort ASC, m.id ASC;
 	list := make([]domain.MenuDetail, 0, 64)
 	for rows.Next() {
 		var (
-			item            domain.MenuDetail
-			createUser      sql.NullInt64
-			updateUser      sql.NullInt64
-			updateTime      sql.NullTime
-			parentID        sql.NullInt64
-			path            sql.NullString
-			name            sql.NullString
-			component       sql.NullString
-			redirect        sql.NullString
-			icon            sql.NullString
-			permission      sql.NullString
-			isExternal      sql.NullBool
-			isCache         sql.NullBool
-			isHidden        sql.NullBool
-			sortVal         sql.NullInt64
-			statusVal       sql.NullInt64
-			createUserStr   sql.NullString
-			updateUserStr   sql.NullString
-			typeVal         int16
-			createTime      time.Time
+			item          domain.MenuDetail
+			createUser    sql.NullInt64
+			updateUser    sql.NullInt64
+			updateTime    sql.NullTime
+			parentID      sql.NullInt64
+			path          sql.NullString
+			name          sql.NullString
+			component     sql.NullString
+			redirect      sql.NullString
+			icon          sql.NullString
+			permission    sql.NullString
+			isExternal    sql.NullBool
+			isCache       sql.NullBool
+			isHidden      sql.NullBool
+			sortVal       sql.NullInt64
+			statusVal     sql.NullInt64
+			createUserStr sql.NullString
+			updateUserStr sql.NullString
+			typeVal       int16
+			createTime    time.Time
 		)
 		if err := rows.Scan(
 			&item.ID,
@@ -318,26 +318,26 @@ LEFT JOIN sys_user AS uu ON uu.id = m.update_user
 WHERE m.id = $1;
 `
 	var (
-		item            domain.MenuDetail
-		createUser      sql.NullInt64
-		updateUser      sql.NullInt64
-		updateTime      sql.NullTime
-		parentID        sql.NullInt64
-		path            sql.NullString
-		name            sql.NullString
-		component       sql.NullString
-		redirect        sql.NullString
-		icon            sql.NullString
-		permission      sql.NullString
-		isExternal      sql.NullBool
-		isCache         sql.NullBool
-		isHidden        sql.NullBool
-		sortVal         sql.NullInt64
-		statusVal       sql.NullInt64
-		createUserStr   sql.NullString
-		updateUserStr   sql.NullString
-		typeVal         int16
-		createTime      time.Time
+		item          domain.MenuDetail
+		createUser    sql.NullInt64
+		updateUser    sql.NullInt64
+		updateTime    sql.NullTime
+		parentID      sql.NullInt64
+		path          sql.NullString
+		name          sql.NullString
+		component     sql.NullString
+		redirect      sql.NullString
+		icon          sql.NullString
+		permission    sql.NullString
+		isExternal    sql.NullBool
+		isCache       sql.NullBool
+		isHidden      sql.NullBool
+		sortVal       sql.NullInt64
+		statusVal     sql.NullInt64
+		createUserStr sql.NullString
+		updateUserStr sql.NullString
+		typeVal       int16
+		createTime    time.Time
 	)
 	if err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&item.ID,

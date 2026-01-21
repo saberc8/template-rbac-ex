@@ -16,8 +16,8 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 
-	appstorage "voc-go-backend/internal/application/storage"
-	domainstorage "voc-go-backend/internal/domain/storage"
+	appstorage "go-backend/internal/application/storage"
+	domainstorage "go-backend/internal/domain/storage"
 )
 
 // DefaultFileContentStore 是 FileContentStore 的默认实现，支持本地文件系统与 MinIO/S3 兼容对象存储。
@@ -224,4 +224,3 @@ func newMinioClient(storage *domainstorage.StorageDetail) (*minio.Client, error)
 		Region: strings.TrimSpace(storage.Region),
 	})
 }
-

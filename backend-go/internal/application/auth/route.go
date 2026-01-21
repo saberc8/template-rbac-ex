@@ -3,7 +3,7 @@ package auth
 import (
 	"sort"
 
-	rbac "voc-go-backend/internal/domain/rbac"
+	rbac "go-backend/internal/domain/rbac"
 )
 
 // RouteItem matches the front-end RouteItem type.

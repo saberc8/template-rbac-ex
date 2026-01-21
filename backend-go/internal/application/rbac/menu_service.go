@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	domainrbac "voc-go-backend/internal/domain/rbac"
+	domainrbac "go-backend/internal/domain/rbac"
 )
 
 // MenuService 提供菜单管理的用例编排（sys_menu）。

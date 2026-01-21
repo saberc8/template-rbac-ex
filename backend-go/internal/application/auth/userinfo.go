@@ -1,8 +1,8 @@
 package auth
 
 import (
-	rbac "voc-go-backend/internal/domain/rbac"
-	domain "voc-go-backend/internal/domain/user"
+	rbac "go-backend/internal/domain/rbac"
+	domain "go-backend/internal/domain/user"
 )
 
 // UserInfo is the shape returned by /auth/user/info,

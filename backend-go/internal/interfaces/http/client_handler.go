@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	appclient "voc-go-backend/internal/application/client"
-	domainclient "voc-go-backend/internal/domain/client"
+	appclient "go-backend/internal/application/client"
+	domainclient "go-backend/internal/domain/client"
 )
 
 // ClientResp 对应前端 ClientResp，用于列表展示。

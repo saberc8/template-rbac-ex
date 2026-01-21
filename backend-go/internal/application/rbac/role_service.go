@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	domainrbac "voc-go-backend/internal/domain/rbac"
+	domainrbac "go-backend/internal/domain/rbac"
 )
 
 // RoleService 提供角色管理的用例编排（sys_role + 关联表）。
@@ -301,4 +301,3 @@ func (s *RoleService) ListRoleUserIDs(ctx context.Context, roleID int64) ([]int6
 	}
 	return ids, nil
 }
-

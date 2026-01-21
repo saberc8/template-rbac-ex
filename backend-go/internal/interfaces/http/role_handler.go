@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	apprbac "voc-go-backend/internal/application/rbac"
-	domainrbac "voc-go-backend/internal/domain/rbac"
+	apprbac "go-backend/internal/application/rbac"
+	domainrbac "go-backend/internal/domain/rbac"
 )
 
 // RoleResp matches RoleResp in admin/src/apis/system/type.ts.
@@ -374,4 +374,3 @@ func toRoleResp(row domainrbac.RoleDetail) RoleResp {
 	}
 	return item
 }
-

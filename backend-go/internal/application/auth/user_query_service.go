@@ -3,8 +3,8 @@ package auth
 import (
 	"context"
 
-	domainrbac "voc-go-backend/internal/domain/rbac"
-	domainuser "voc-go-backend/internal/domain/user"
+	domainrbac "go-backend/internal/domain/rbac"
+	domainuser "go-backend/internal/domain/user"
 )
 
 // UserQueryService 提供 /auth/user/* 相关的用例编排，避免在 HTTP 层拼装跨仓储逻辑。

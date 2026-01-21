@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	domaindict "voc-go-backend/internal/domain/dict"
+	domaindict "go-backend/internal/domain/dict"
 
 	"github.com/lib/pq"
 )

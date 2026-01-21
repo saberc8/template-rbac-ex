@@ -4,7 +4,7 @@ import (
 	"context"
 	"mime/multipart"
 
-	domainstorage "voc-go-backend/internal/domain/storage"
+	domainstorage "go-backend/internal/domain/storage"
 )
 
 // FileContentStore 负责文件内容的物理存储（本地/对象存储等）。
@@ -20,4 +20,3 @@ type SaveResult struct {
 	Size        int64
 	ContentType string
 }
-

@@ -1,6 +1,6 @@
 package dict
 
-import domaindict "voc-go-backend/internal/domain/dict"
+import domaindict "go-backend/internal/domain/dict"
 
 type Dict = domaindict.Dict
 type DictItem = domaindict.DictItem

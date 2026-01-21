@@ -11,7 +11,7 @@ import (
 	"github.com/mojocn/base64Captcha"
 	"github.com/redis/go-redis/v9"
 
-	appsystem "voc-go-backend/internal/application/system"
+	appsystem "go-backend/internal/application/system"
 )
 
 // CaptchaResp matches the Java CaptchaResp structure.

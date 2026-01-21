@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"time"
 
-	domain "voc-go-backend/internal/domain/syslog"
-	"voc-go-backend/internal/infrastructure/id"
+	domain "go-backend/internal/domain/syslog"
+	"go-backend/internal/infrastructure/id"
 )
 
 // PgRepository 基于 PostgreSQL 的系统日志仓储实现。

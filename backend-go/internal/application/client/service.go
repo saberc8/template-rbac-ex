@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	domainclient "voc-go-backend/internal/domain/client"
+	domainclient "go-backend/internal/domain/client"
 )
 
 // Service 提供 client 子域的用例编排（客户端配置）。
@@ -169,4 +169,3 @@ func normalizeNonEmptyUnique(values []string) []string {
 	}
 	return out
 }
-

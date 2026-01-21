@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	domainclient "voc-go-backend/internal/domain/client"
+	domainclient "go-backend/internal/domain/client"
 )
 
 // PgRepository 提供 sys_client 的 PostgreSQL 实现。
@@ -279,4 +279,3 @@ func derefTime(v *time.Time) any {
 	}
 	return *v
 }
-

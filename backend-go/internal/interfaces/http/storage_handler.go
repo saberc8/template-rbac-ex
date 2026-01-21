@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	appstorage "voc-go-backend/internal/application/storage"
-	domainstorage "voc-go-backend/internal/domain/storage"
+	appstorage "go-backend/internal/application/storage"
+	domainstorage "go-backend/internal/domain/storage"
 )
 
 // StorageResp 对应前端 StorageResp 类型，用于存储配置列表与详情展示。

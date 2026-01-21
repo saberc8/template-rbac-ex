@@ -12,8 +12,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 
-	appsystem "voc-go-backend/internal/application/system"
-	domainsys "voc-go-backend/internal/domain/system"
+	appsystem "go-backend/internal/application/system"
+	domainsys "go-backend/internal/domain/system"
 )
 
 type captchaResp struct {

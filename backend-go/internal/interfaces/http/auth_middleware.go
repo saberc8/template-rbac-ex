@@ -3,7 +3,7 @@ package http
 import (
 	"github.com/gin-gonic/gin"
 
-	"voc-go-backend/internal/infrastructure/security"
+	"go-backend/internal/infrastructure/security"
 )
 
 const ctxUserIDKey = "userID"

@@ -1,4 +1,4 @@
-module voc-go-backend
+module go-backend
 
 go 1.25.5
 

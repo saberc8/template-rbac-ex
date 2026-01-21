@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	domain "voc-go-backend/internal/domain/rbac"
+	domain "go-backend/internal/domain/rbac"
 
 	"github.com/lib/pq"
 )
@@ -109,16 +109,16 @@ ORDER BY r.sort ASC, r.id ASC;
 	list := make([]domain.RoleDetail, 0, 32)
 	for rows.Next() {
 		var (
-			item        domain.RoleDetail
-			isSystem    sql.NullBool
-			sortVal     sql.NullInt64
-			dataScope   sql.NullInt64
-			createUser  sql.NullInt64
-			updateUser  sql.NullInt64
-			updateTime  sql.NullTime
-			createBy    sql.NullString
-			updateBy    sql.NullString
-			createTime  time.Time
+			item       domain.RoleDetail
+			isSystem   sql.NullBool
+			sortVal    sql.NullInt64
+			dataScope  sql.NullInt64
+			createUser sql.NullInt64
+			updateUser sql.NullInt64
+			updateTime sql.NullTime
+			createBy   sql.NullString
+			updateBy   sql.NullString
+			createTime time.Time
 		)
 		if err := rows.Scan(
 			&item.ID,
@@ -196,18 +196,18 @@ LEFT JOIN sys_user AS uu ON uu.id = r.update_user
 WHERE r.id = $1;
 `
 	var (
-		item        domain.RoleDetailWithRelations
-		isSystem    sql.NullBool
-		sortVal     sql.NullInt64
-		dataScope   sql.NullInt64
-		menuStrict  sql.NullBool
-		deptStrict  sql.NullBool
-		createUser  sql.NullInt64
-		updateUser  sql.NullInt64
-		updateTime  sql.NullTime
-		createBy    sql.NullString
-		updateBy    sql.NullString
-		createTime  time.Time
+		item       domain.RoleDetailWithRelations
+		isSystem   sql.NullBool
+		sortVal    sql.NullInt64
+		dataScope  sql.NullInt64
+		menuStrict sql.NullBool
+		deptStrict sql.NullBool
+		createUser sql.NullInt64
+		updateUser sql.NullInt64
+		updateTime sql.NullTime
+		createBy   sql.NullString
+		updateBy   sql.NullString
+		createTime time.Time
 	)
 	if err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&item.ID,

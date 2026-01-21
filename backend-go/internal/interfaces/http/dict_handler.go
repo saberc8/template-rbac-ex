@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	appdict "voc-go-backend/internal/application/dict"
+	appdict "go-backend/internal/application/dict"
 )
 
 // DictResp matches admin/src/apis/system/type.ts -> DictResp.

@@ -3,7 +3,7 @@ package http
 import (
 	"github.com/gin-gonic/gin"
 
-	appauth "voc-go-backend/internal/application/auth"
+	appauth "go-backend/internal/application/auth"
 )
 
 // UserHandler exposes /auth/user related endpoints (info, route).

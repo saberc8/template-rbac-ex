@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	domainuser "voc-go-backend/internal/domain/user"
+	domainuser "go-backend/internal/domain/user"
 )
 
 type stubUserRepo struct {

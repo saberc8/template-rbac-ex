@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	domainrbac "voc-go-backend/internal/domain/rbac"
-	domainuser "voc-go-backend/internal/domain/user"
+	domainrbac "go-backend/internal/domain/rbac"
+	domainuser "go-backend/internal/domain/user"
 )
 
 // AdminService 提供用户管理的用例编排（sys_user + sys_user_role）。

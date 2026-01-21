@@ -9,8 +9,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	appclient "voc-go-backend/internal/application/client"
-	domainclient "voc-go-backend/internal/domain/client"
+	appclient "go-backend/internal/application/client"
+	domainclient "go-backend/internal/domain/client"
 )
 
 type apiResp struct {

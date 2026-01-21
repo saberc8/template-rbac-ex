@@ -6,10 +6,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	appdict "voc-go-backend/internal/application/dict"
-	apprbac "voc-go-backend/internal/application/rbac"
-	appsystem "voc-go-backend/internal/application/system"
-	appuser "voc-go-backend/internal/application/user"
+	appdict "go-backend/internal/application/dict"
+	apprbac "go-backend/internal/application/rbac"
+	appsystem "go-backend/internal/application/system"
+	appuser "go-backend/internal/application/user"
 )
 
 // LabelValue represents a simple label/value pair for dictionaries.

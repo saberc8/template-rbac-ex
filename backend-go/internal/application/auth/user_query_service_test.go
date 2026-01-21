@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	domainrbac "voc-go-backend/internal/domain/rbac"
-	domainuser "voc-go-backend/internal/domain/user"
+	domainrbac "go-backend/internal/domain/rbac"
+	domainuser "go-backend/internal/domain/user"
 )
 
 type stubRoleRepo struct {

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	domainsyslog "voc-go-backend/internal/domain/syslog"
+	domainsyslog "go-backend/internal/domain/syslog"
 )
 
 // PgQueryRepository 提供 sys_log 的查询实现。

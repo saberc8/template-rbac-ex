@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	domainsys "voc-go-backend/internal/domain/system"
+	domainsys "go-backend/internal/domain/system"
 )
 
 // PgOptionRepository 提供 sys_option 的 PostgreSQL 实现。

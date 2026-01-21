@@ -5,8 +5,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	apprbac "voc-go-backend/internal/application/rbac"
-	domainrbac "voc-go-backend/internal/domain/rbac"
+	apprbac "go-backend/internal/application/rbac"
+	domainrbac "go-backend/internal/domain/rbac"
 )
 
 // MenuResp matches MenuResp in admin/src/apis/system/type.ts.

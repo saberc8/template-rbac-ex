@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"voc-go-backend/internal/infrastructure/db"
-	rbacp "voc-go-backend/internal/infrastructure/persistence/rbac"
+	"go-backend/internal/infrastructure/db"
+	rbacp "go-backend/internal/infrastructure/persistence/rbac"
 )
 
 func main() {

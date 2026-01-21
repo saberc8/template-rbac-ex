@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	domainsyslog "voc-go-backend/internal/domain/syslog"
+	domainsyslog "go-backend/internal/domain/syslog"
 )
 
 // Service 提供 syslog 子域的用例编排（日志查询）。
@@ -61,4 +61,3 @@ func (s *Service) ListForExport(ctx context.Context, f domainsyslog.QueryFilter)
 	}
 	return list, nil
 }
-

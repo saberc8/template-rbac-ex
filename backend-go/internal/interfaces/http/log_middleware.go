@@ -13,8 +13,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"voc-go-backend/internal/domain/syslog"
-	"voc-go-backend/internal/infrastructure/security"
+	"go-backend/internal/domain/syslog"
+	"go-backend/internal/infrastructure/security"
 )
 
 // sysLogMiddleware 负责在 HTTP 层统一采集请求/响应信息并写入 sys_log。

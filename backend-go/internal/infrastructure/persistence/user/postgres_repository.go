@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"errors"
 
-	domain "voc-go-backend/internal/domain/user"
+	domain "go-backend/internal/domain/user"
 )
 
 // PgRepository implements domain.Repository using PostgreSQL.
