@@ -1,5 +1,7 @@
 package rbac
 
+import "time"
+
 // MenuType corresponds to sys_menu.type (MenuTypeEnum in Java).
 // 1: DIR, 2: MENU, 3: BUTTON.
 type MenuType int16
@@ -27,4 +29,9 @@ type Menu struct {
 	Permission string
 	Sort       int32
 	Status     int16
+
+	CreateUser *int64
+	CreateTime time.Time
+	UpdateUser *int64
+	UpdateTime *time.Time
 }

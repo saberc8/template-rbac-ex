@@ -1,16 +1,13 @@
 package http
 
 import (
-	"database/sql"
-	"encoding/json"
-	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
-	"voc-go-backend/internal/infrastructure/id"
+	appclient "voc-go-backend/internal/application/client"
+	domainclient "voc-go-backend/internal/domain/client"
 )
 
 // ClientResp 对应前端 ClientResp，用于列表展示。
@@ -44,12 +41,12 @@ type clientReq struct {
 
 // ClientHandler 提供 /system/client 相关接口。
 type ClientHandler struct {
-	db *sql.DB
+	svc *appclient.Service
 }
 
-func NewClientHandler(db *sql.DB) *ClientHandler {
+func NewClientHandler(svc *appclient.Service) *ClientHandler {
 	return &ClientHandler{
-		db: db,
+		svc: svc,
 	}
 }
 
@@ -134,129 +131,46 @@ func (h *ClientHandler) ListClientPage(c *gin.Context) {
 		}
 	}
 
-	where := "WHERE 1=1"
-	args := []any{}
-	argPos := 1
-
-	if clientType != "" {
-		where += fmt.Sprintf(" AND c.client_type = $%d", argPos)
-		args = append(args, clientType)
-		argPos++
-	}
+	var statusPtr *int16
 	if hasStatus {
-		where += fmt.Sprintf(" AND c.status = $%d", argPos)
-		args = append(args, statusFilter)
-		argPos++
-	}
-	if len(authTypes) > 0 {
-		// 精确匹配：任意一个认证类型命中即可。
-		where += fmt.Sprintf(" AND (")
-		conds := make([]string, 0, len(authTypes))
-		for _, t := range authTypes {
-			conds = append(conds, fmt.Sprintf("c.auth_type::jsonb @> $%d::jsonb", argPos))
-			b, _ := json.Marshal([]string{t})
-			args = append(args, string(b))
-			argPos++
-		}
-		where += strings.Join(conds, " OR ") + ")"
+		v := int16(statusFilter)
+		statusPtr = &v
 	}
 
-	countSQL := "SELECT COUNT(*) FROM sys_client AS c " + where
-	var total int64
-	if err := h.db.QueryRowContext(c.Request.Context(), countSQL, args...).Scan(&total); err != nil {
-		Fail(c, "500", "查询客户端失败")
-		return
-	}
-	if total == 0 {
-		OK(c, PageResult[ClientResp]{List: []ClientResp{}, Total: 0})
+	res, derr := h.svc.Page(c.Request.Context(), domainclient.PageQuery{
+		Page:       page,
+		Size:       size,
+		ClientType: clientType,
+		AuthType:   authTypes,
+		Status:     statusPtr,
+	})
+	if derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
 
-	offset := int64((page - 1) * size)
-	limitPos := argPos
-	offsetPos := argPos + 1
-	argsWithPage := append(args, int64(size), offset)
-
-	query := fmt.Sprintf(`
-SELECT c.id,
-       c.client_id,
-       c.client_type,
-       c.auth_type,
-       c.active_timeout,
-       c.timeout,
-       c.status,
-       c.create_user,
-       c.create_time,
-       c.update_user,
-       c.update_time,
-       COALESCE(cu.nickname, ''),
-       COALESCE(uu.nickname, '')
-FROM sys_client AS c
-LEFT JOIN sys_user AS cu ON cu.id = c.create_user
-LEFT JOIN sys_user AS uu ON uu.id = c.update_user
-%s
-ORDER BY c.id DESC
-LIMIT $%d OFFSET $%d;
-`, where, limitPos, offsetPos)
-
-	rows, err := h.db.QueryContext(c.Request.Context(), query, argsWithPage...)
-	if err != nil {
-		Fail(c, "500", "查询客户端失败")
-		return
-	}
-	defer rows.Close()
-
-	var list []ClientResp
-	for rows.Next() {
-		var (
-			item          ClientResp
-			authRaw       []byte
-			createUserID  sql.NullInt64
-			updateUserID  sql.NullInt64
-			createAt      time.Time
-			updateAt      sql.NullTime
-			createUserStr string
-			updateUserStr string
-		)
-		if err := rows.Scan(
-			&item.ID,
-			&item.ClientID,
-			&item.ClientType,
-			&authRaw,
-			&item.ActiveTimeout,
-			&item.Timeout,
-			&item.Status,
-			&createUserID,
-			&createAt,
-			&updateUserID,
-			&updateAt,
-			&createUserStr,
-			&updateUserStr,
-		); err != nil {
-			Fail(c, "500", "解析客户端数据失败")
-			return
+	list := make([]ClientResp, 0, len(res.List))
+	for _, item := range res.List {
+		resp := ClientResp{
+			ID:               item.ID,
+			ClientID:         item.ClientID,
+			ClientType:       item.ClientType,
+			AuthType:         item.AuthType,
+			ActiveTimeout:    item.ActiveTimeout,
+			Timeout:          item.Timeout,
+			Status:           item.Status,
+			CreateUser:       item.CreateUserString,
+			UpdateUser:       item.UpdateUserString,
+			CreateUserString: item.CreateUserString,
+			UpdateUserString: item.UpdateUserString,
+			CreateTime:       formatTime(item.CreateTime),
 		}
-		item.CreateUser = createUserStr
-		item.UpdateUser = updateUserStr
-		item.CreateUserString = createUserStr
-		item.UpdateUserString = updateUserStr
-		item.CreateTime = formatTime(createAt)
-		if updateAt.Valid {
-			item.UpdateTime = formatTime(updateAt.Time)
+		if item.UpdateTime != nil && !item.UpdateTime.IsZero() {
+			resp.UpdateTime = formatTime(*item.UpdateTime)
 		}
-		if len(authRaw) > 0 {
-			var authSlice []string
-			if err := json.Unmarshal(authRaw, &authSlice); err == nil {
-				item.AuthType = authSlice
-			}
-		}
-		list = append(list, item)
+		list = append(list, resp)
 	}
-	if err := rows.Err(); err != nil {
-		Fail(c, "500", "查询客户端失败")
-		return
-	}
-	OK(c, PageResult[ClientResp]{List: list, Total: total})
+	OK(c, PageResult[ClientResp]{List: list, Total: res.Total})
 }
 
 // GetClient 处理 GET /system/client/:id。
@@ -267,72 +181,27 @@ func (h *ClientHandler) GetClient(c *gin.Context) {
 		return
 	}
 
-	const query = `
-SELECT c.id,
-       c.client_id,
-       c.client_type,
-       c.auth_type,
-       c.active_timeout,
-       c.timeout,
-       c.status,
-       c.create_user,
-       c.create_time,
-       c.update_user,
-       c.update_time,
-       COALESCE(cu.nickname, ''),
-       COALESCE(uu.nickname, '')
-FROM sys_client AS c
-LEFT JOIN sys_user AS cu ON cu.id = c.create_user
-LEFT JOIN sys_user AS uu ON uu.id = c.update_user
-WHERE c.id = $1;
-`
-
-	var (
-		resp          ClientDetailResp
-		authRaw       []byte
-		createUserID  sql.NullInt64
-		updateUserID  sql.NullInt64
-		createAt      time.Time
-		updateAt      sql.NullTime
-		createUserStr string
-		updateUserStr string
-	)
-	if err := h.db.QueryRowContext(c.Request.Context(), query, idVal).
-		Scan(
-			&resp.ID,
-			&resp.ClientID,
-			&resp.ClientType,
-			&authRaw,
-			&resp.ActiveTimeout,
-			&resp.Timeout,
-			&resp.Status,
-			&createUserID,
-			&createAt,
-			&updateUserID,
-			&updateAt,
-			&createUserStr,
-			&updateUserStr,
-		); err != nil {
-		if err == sql.ErrNoRows {
-			Fail(c, "404", "客户端不存在")
-			return
-		}
-		Fail(c, "500", "查询客户端失败")
+	item, derr := h.svc.Get(c.Request.Context(), idVal)
+	if derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
-	resp.CreateUser = createUserStr
-	resp.UpdateUser = updateUserStr
-	resp.CreateUserString = createUserStr
-	resp.UpdateUserString = updateUserStr
-	resp.CreateTime = formatTime(createAt)
-	if updateAt.Valid {
-		resp.UpdateTime = formatTime(updateAt.Time)
+	resp := ClientDetailResp{
+		ID:               item.ID,
+		ClientID:         item.ClientID,
+		ClientType:       item.ClientType,
+		AuthType:         item.AuthType,
+		ActiveTimeout:    item.ActiveTimeout,
+		Timeout:          item.Timeout,
+		Status:           item.Status,
+		CreateUser:       item.CreateUserString,
+		UpdateUser:       item.UpdateUserString,
+		CreateUserString: item.CreateUserString,
+		UpdateUserString: item.UpdateUserString,
+		CreateTime:       formatTime(item.CreateTime),
 	}
-	if len(authRaw) > 0 {
-		var authSlice []string
-		if err := json.Unmarshal(authRaw, &authSlice); err == nil {
-			resp.AuthType = authSlice
-		}
+	if item.UpdateTime != nil && !item.UpdateTime.IsZero() {
+		resp.UpdateTime = formatTime(*item.UpdateTime)
 	}
 	OK(c, resp)
 }
@@ -363,43 +232,15 @@ func (h *ClientHandler) CreateClient(c *gin.Context) {
 	if req.Status == 0 {
 		req.Status = 1
 	}
-
-	// 生成客户端 ID，使用随机雪花 ID 的 hex 形式，保证唯一且长度适中。
-	clientID := fmt.Sprintf("%x", id.Next())
-	authJSON, err := json.Marshal(req.AuthType)
-	if err != nil {
-		Fail(c, "500", "保存客户端失败")
-		return
-	}
-
-	now := time.Now()
-	idVal := id.Next()
-
-	const stmt = `
-INSERT INTO sys_client (
-    id, client_id, client_type, auth_type,
-    active_timeout, timeout, status,
-    create_user, create_time
-) VALUES (
-    $1, $2, $3, $4,
-    $5, $6, $7,
-    $8, $9
-);
-`
-	if _, err := h.db.ExecContext(
-		c.Request.Context(),
-		stmt,
-		idVal,
-		clientID,
-		req.ClientType,
-		string(authJSON),
-		req.ActiveTimeout,
-		req.Timeout,
-		req.Status,
-		userID,
-		now,
-	); err != nil {
-		Fail(c, "500", "新增客户端失败")
+	idVal, derr := h.svc.Create(c.Request.Context(), userID, appclient.CreateRequest{
+		ClientType:    req.ClientType,
+		AuthType:      req.AuthType,
+		ActiveTimeout: req.ActiveTimeout,
+		Timeout:       req.Timeout,
+		Status:        req.Status,
+	})
+	if derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
 	OK(c, gin.H{"id": idVal})
@@ -430,37 +271,14 @@ func (h *ClientHandler) UpdateClient(c *gin.Context) {
 	if req.Status == 0 {
 		req.Status = 1
 	}
-
-	authJSON, err := json.Marshal(req.AuthType)
-	if err != nil {
-		Fail(c, "500", "保存客户端失败")
-		return
-	}
-
-	const stmt = `
-UPDATE sys_client
-   SET client_type = $1,
-       auth_type = $2,
-       active_timeout = $3,
-       timeout = $4,
-       status = $5,
-       update_user = $6,
-       update_time = $7
- WHERE id = $8;
-`
-	if _, err := h.db.ExecContext(
-		c.Request.Context(),
-		stmt,
-		req.ClientType,
-		string(authJSON),
-		req.ActiveTimeout,
-		req.Timeout,
-		req.Status,
-		userID,
-		time.Now(),
-		idVal,
-	); err != nil {
-		Fail(c, "500", "修改客户端失败")
+	if derr := h.svc.Update(c.Request.Context(), userID, idVal, appclient.UpdateRequest{
+		ClientType:    req.ClientType,
+		AuthType:      req.AuthType,
+		ActiveTimeout: req.ActiveTimeout,
+		Timeout:       req.Timeout,
+		Status:        req.Status,
+	}); derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
 	OK(c, true)
@@ -479,23 +297,8 @@ func (h *ClientHandler) DeleteClient(c *gin.Context) {
 		Fail(c, "400", "ID 列表不能为空")
 		return
 	}
-
-	tx, err := h.db.BeginTx(c.Request.Context(), nil)
-	if err != nil {
-		Fail(c, "500", "删除客户端失败")
-		return
-	}
-	defer tx.Rollback()
-
-	for _, idVal := range req.IDs {
-		if _, err := tx.ExecContext(c.Request.Context(), `DELETE FROM sys_client WHERE id = $1`, idVal); err != nil {
-			Fail(c, "500", "删除客户端失败")
-			return
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		Fail(c, "500", "删除客户端失败")
+	if derr := h.svc.Delete(c.Request.Context(), req.IDs); derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
 	OK(c, true)

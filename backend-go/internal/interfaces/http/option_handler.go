@@ -1,14 +1,11 @@
 package http
 
 import (
-	"database/sql"
-	"encoding/json"
-	"fmt"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
+
+	appsystem "voc-go-backend/internal/application/system"
 )
 
 // OptionResp matches OptionResp in admin/src/apis/system/type.ts.
@@ -28,12 +25,12 @@ type OptionQuery struct {
 
 // OptionHandler exposes /system/option endpoints used by /system/config* tabs.
 type OptionHandler struct {
-	db *sql.DB
+	svc *appsystem.Service
 }
 
-func NewOptionHandler(db *sql.DB) *OptionHandler {
+func NewOptionHandler(svc *appsystem.Service) *OptionHandler {
 	return &OptionHandler{
-		db: db,
+		svc: svc,
 	}
 }
 
@@ -61,54 +58,22 @@ func (h *OptionHandler) ListOption(c *gin.Context) {
 	}
 	query.Category = strings.TrimSpace(c.Query("category"))
 
-	where := "WHERE 1=1"
-	args := []any{}
-	argPos := 1
-
-	if len(query.Code) > 0 {
-		placeholders := make([]string, len(query.Code))
-		for i, code := range query.Code {
-			placeholders[i] = "$" + strconv.Itoa(argPos)
-			args = append(args, code)
-			argPos++
-		}
-		where += " AND code IN (" + strings.Join(placeholders, ",") + ")"
-	}
-	if query.Category != "" {
-		where += fmt.Sprintf(" AND category = $%d", argPos)
-		args = append(args, query.Category)
-		argPos++
-	}
-
-	sqlText := `
-SELECT id, name, code,
-       COALESCE(value, default_value, '') AS value,
-       COALESCE(description, '')
-FROM sys_option
-` + where + `
-ORDER BY id ASC;
-`
-	rows, err := h.db.QueryContext(c.Request.Context(), sqlText, args...)
-	if err != nil {
-		Fail(c, "500", "查询系统配置失败")
+	list, derr := h.svc.ListOption(c.Request.Context(), query.Code, query.Category)
+	if derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
-	defer rows.Close()
-
-	var list []OptionResp
-	for rows.Next() {
-		var item OptionResp
-		if err := rows.Scan(&item.ID, &item.Name, &item.Code, &item.Value, &item.Description); err != nil {
-			Fail(c, "500", "解析系统配置失败")
-			return
-		}
-		list = append(list, item)
+	out := make([]OptionResp, 0, len(list))
+	for _, o := range list {
+		out = append(out, OptionResp{
+			ID:          o.ID,
+			Name:        o.Name,
+			Code:        o.Code,
+			Value:       o.Value,
+			Description: o.Description,
+		})
 	}
-	if err := rows.Err(); err != nil {
-		Fail(c, "500", "查询系统配置失败")
-		return
-	}
-	OK(c, list)
+	OK(c, out)
 }
 
 // UpdateOption handles PUT /system/option (bulk update).
@@ -129,33 +94,16 @@ func (h *OptionHandler) UpdateOption(c *gin.Context) {
 		Fail(c, "400", "请求参数不正确")
 		return
 	}
-
-	tx, err := h.db.BeginTx(c.Request.Context(), nil)
-	if err != nil {
-		Fail(c, "500", "保存系统配置失败")
-		return
-	}
-	defer tx.Rollback()
-
-	const stmt = `
-UPDATE sys_option
-   SET value = $1,
-       update_user = $2,
-       update_time = $3
- WHERE id = $4 AND code = $5;
-`
-	now := time.Now()
+	reqs := make([]appsystem.OptionUpdateRequest, 0, len(body))
 	for _, o := range body {
-		// 将任意类型的 Value 转换为字符串存入数据库，保持与 Java 版本一致的行为。
-		valStr := toOptionValueString(o.Value)
-		if _, err := tx.ExecContext(c.Request.Context(), stmt, valStr, userID, now, o.ID, o.Code); err != nil {
-			Fail(c, "500", "保存系统配置失败")
-			return
-		}
+		reqs = append(reqs, appsystem.OptionUpdateRequest{
+			ID:    o.ID,
+			Code:  o.Code,
+			Value: o.Value,
+		})
 	}
-
-	if err := tx.Commit(); err != nil {
-		Fail(c, "500", "保存系统配置失败")
+	if derr := h.svc.UpdateOption(c.Request.Context(), userID, reqs); derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
 	OK(c, true)
@@ -183,60 +131,12 @@ func (h *OptionHandler) ResetOptionValue(c *gin.Context) {
 		return
 	}
 
-	where := ""
-	args := []any{}
-	argPos := 1
-	if body.Category != "" {
-		where = fmt.Sprintf("category = $%d", argPos)
-		args = append(args, body.Category)
-		argPos++
-	} else if len(body.Code) > 0 {
-		placeholders := make([]string, len(body.Code))
-		for i, code := range body.Code {
-			placeholders[i] = "$" + strconv.Itoa(argPos)
-			args = append(args, code)
-			argPos++
-		}
-		where = "code IN (" + strings.Join(placeholders, ",") + ")"
-	}
-
-	stmt := "UPDATE sys_option SET value = NULL"
-	if where != "" {
-		stmt += " WHERE " + where
-	}
-	if _, err := h.db.ExecContext(c.Request.Context(), stmt, args...); err != nil {
-		Fail(c, "500", "恢复默认配置失败")
+	if derr := h.svc.ResetOptionValue(c.Request.Context(), appsystem.OptionResetRequest{
+		Codes:    body.Code,
+		Category: body.Category,
+	}); derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
 	OK(c, true)
-}
-
-// toOptionValueString 将任意 JSON 解析后的值转换为字符串，便于存入 sys_option.value。
-// - 字符串：直接返回
-// - 数字：转为不带小数的整数字符串（如 0, 1, 2）
-// - 布尔：true/false
-// - nil：空串
-// - 其他复杂类型：序列化为 JSON 字符串
-func toOptionValueString(v interface{}) string {
-	if v == nil {
-		return ""
-	}
-	switch t := v.(type) {
-	case string:
-		return t
-	case float64:
-		// JSON 数字默认解析为 float64，这里统一按整数方式输出（当前配置值场景足够）。
-		return strconv.FormatInt(int64(t), 10)
-	case bool:
-		if t {
-			return "true"
-		}
-		return "false"
-	default:
-		b, err := json.Marshal(t)
-		if err != nil {
-			return ""
-		}
-		return string(b)
-	}
 }

@@ -26,7 +26,7 @@ openssl pkcs8 -topk8 -nocrypt -in dev_rsa_private_key.pem -outform DER | base64 
 ```
 
 ### 常用
-- `HTTP_PORT`：服务端口（默认 4398）
+- `HTTP_PORT`：服务端口（默认 14398）
 - `DB_*`：PostgreSQL 连接配置
 - `REDIS_*`：Redis 连接配置
 

@@ -1,14 +1,13 @@
 package http
 
 import (
-	"database/sql"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
-	"voc-go-backend/internal/infrastructure/id"
+	apprbac "voc-go-backend/internal/application/rbac"
+	domainrbac "voc-go-backend/internal/domain/rbac"
 )
 
 // RoleResp matches RoleResp in admin/src/apis/system/type.ts.
@@ -71,11 +70,11 @@ type rolePermissionReq struct {
 
 // RoleHandler provides /system/role endpoints.
 type RoleHandler struct {
-	db *sql.DB
+	svc *apprbac.RoleService
 }
 
-func NewRoleHandler(db *sql.DB) *RoleHandler {
-	return &RoleHandler{db: db}
+func NewRoleHandler(svc *apprbac.RoleService) *RoleHandler {
+	return &RoleHandler{svc: svc}
 }
 
 // RegisterRoleRoutes registers role management routes.
@@ -95,74 +94,20 @@ func (h *RoleHandler) RegisterRoleRoutes(r *gin.Engine) {
 
 // ListRole handles GET /system/role/list.
 func (h *RoleHandler) ListRole(c *gin.Context) {
-	const query = `
-SELECT r.id,
-       r.name,
-       r.code,
-       COALESCE(r.sort, 999),
-       COALESCE(r.description, ''),
-       COALESCE(r.data_scope, 4),
-       COALESCE(r.is_system, FALSE),
-       r.create_time,
-       COALESCE(cu.nickname, ''),
-       r.update_time,
-       COALESCE(uu.nickname, '')
-FROM sys_role AS r
-LEFT JOIN sys_user AS cu ON cu.id = r.create_user
-LEFT JOIN sys_user AS uu ON uu.id = r.update_user
-ORDER BY r.sort ASC, r.id ASC;
-`
-	rows, err := h.db.QueryContext(c.Request.Context(), query)
-	if err != nil {
-		Fail(c, "500", "查询角色失败")
-		return
-	}
-	defer rows.Close()
-
 	descFilter := strings.TrimSpace(c.Query("description"))
-
-	var list []RoleResp
-	for rows.Next() {
-		var (
-			item     RoleResp
-			createAt time.Time
-			createBy string
-			updateAt sql.NullTime
-			updateBy string
-		)
-		if err := rows.Scan(
-			&item.ID,
-			&item.Name,
-			&item.Code,
-			&item.Sort,
-			&item.Description,
-			&item.DataScope,
-			&item.IsSystem,
-			&createAt,
-			&createBy,
-			&updateAt,
-			&updateBy,
-		); err != nil {
-			Fail(c, "500", "解析角色数据失败")
-			return
-		}
-		if descFilter != "" && !strings.Contains(item.Name, descFilter) && !strings.Contains(item.Description, descFilter) {
-			continue
-		}
-		item.CreateUserString = createBy
-		item.CreateTime = formatTime(createAt)
-		if updateAt.Valid {
-			item.UpdateUserString = updateBy
-			item.UpdateTime = formatTime(updateAt.Time)
-		}
-		item.Disabled = item.IsSystem && item.Code == "admin"
-		list = append(list, item)
-	}
-	if err := rows.Err(); err != nil {
-		Fail(c, "500", "查询角色失败")
+	list, derr := h.svc.List(c.Request.Context(), descFilter)
+	if derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
-	OK(c, list)
+
+	out := make([]RoleResp, 0, len(list))
+	for _, row := range list {
+		item := toRoleResp(row)
+		item.Disabled = item.IsSystem && item.Code == "admin"
+		out = append(out, item)
+	}
+	OK(c, out)
 }
 
 // GetRole handles GET /system/role/:id.
@@ -173,117 +118,21 @@ func (h *RoleHandler) GetRole(c *gin.Context) {
 		return
 	}
 
-	const query = `
-SELECT r.id,
-       r.name,
-       r.code,
-       COALESCE(r.sort, 999),
-       COALESCE(r.description, ''),
-       COALESCE(r.data_scope, 4),
-       COALESCE(r.is_system, FALSE),
-       COALESCE(r.menu_check_strictly, TRUE),
-       COALESCE(r.dept_check_strictly, TRUE),
-       r.create_time,
-       COALESCE(cu.nickname, ''),
-       r.update_time,
-       COALESCE(uu.nickname, '')
-FROM sys_role AS r
-LEFT JOIN sys_user AS cu ON cu.id = r.create_user
-LEFT JOIN sys_user AS uu ON uu.id = r.update_user
-WHERE r.id = $1;
-`
+	row, derr := h.svc.Get(c.Request.Context(), idVal)
+	if derr != nil {
+		Fail(c, derr.Code, derr.Msg)
+		return
+	}
 
-	var (
-		base       RoleResp
-		menuStrict bool
-		deptStrict bool
-		createAt   time.Time
-		createBy   string
-		updateAt   sql.NullTime
-		updateBy   string
-		isSystem   bool
-	)
-	err = h.db.QueryRowContext(c.Request.Context(), query, idVal).
-		Scan(
-			&base.ID,
-			&base.Name,
-			&base.Code,
-			&base.Sort,
-			&base.Description,
-			&base.DataScope,
-			&isSystem,
-			&menuStrict,
-			&deptStrict,
-			&createAt,
-			&createBy,
-			&updateAt,
-			&updateBy,
-		)
-	if err == sql.ErrNoRows {
-		Fail(c, "404", "角色不存在")
-		return
-	}
-	if err != nil {
-		Fail(c, "500", "查询角色失败")
-		return
-	}
-	base.IsSystem = isSystem
-	base.CreateUserString = createBy
-	base.CreateTime = formatTime(createAt)
-	if updateAt.Valid {
-		base.UpdateUserString = updateBy
-		base.UpdateTime = formatTime(updateAt.Time)
-	}
+	base := toRoleResp(row.RoleDetail)
 	base.Disabled = base.IsSystem && base.Code == "admin"
-
-	// Load menuIds.
-	menuRows, err := h.db.QueryContext(c.Request.Context(), `SELECT menu_id FROM sys_role_menu WHERE role_id = $1`, idVal)
-	if err != nil {
-		Fail(c, "500", "查询角色菜单失败")
-		return
-	}
-	defer menuRows.Close()
-	var menuIDs []int64
-	for menuRows.Next() {
-		var mid int64
-		if err := menuRows.Scan(&mid); err != nil {
-			Fail(c, "500", "查询角色菜单失败")
-			return
-		}
-		menuIDs = append(menuIDs, mid)
-	}
-	if err := menuRows.Err(); err != nil {
-		Fail(c, "500", "查询角色菜单失败")
-		return
-	}
-
-	// Load deptIds.
-	deptRows, err := h.db.QueryContext(c.Request.Context(), `SELECT dept_id FROM sys_role_dept WHERE role_id = $1`, idVal)
-	if err != nil {
-		Fail(c, "500", "查询角色部门失败")
-		return
-	}
-	defer deptRows.Close()
-	var deptIDs []int64
-	for deptRows.Next() {
-		var did int64
-		if err := deptRows.Scan(&did); err != nil {
-			Fail(c, "500", "查询角色部门失败")
-			return
-		}
-		deptIDs = append(deptIDs, did)
-	}
-	if err := deptRows.Err(); err != nil {
-		Fail(c, "500", "查询角色部门失败")
-		return
-	}
 
 	resp := RoleDetailResp{
 		RoleResp:        base,
-		MenuIDs:         menuIDs,
-		DeptIDs:         deptIDs,
-		MenuCheckStrict: menuStrict,
-		DeptCheckStrict: deptStrict,
+		MenuIDs:         row.MenuIDs,
+		DeptIDs:         row.DeptIDs,
+		MenuCheckStrict: row.MenuCheckStrictly,
+		DeptCheckStrict: row.DeptCheckStrictly,
 	}
 	OK(c, resp)
 }
@@ -300,68 +149,18 @@ func (h *RoleHandler) CreateRole(c *gin.Context) {
 		Fail(c, "400", "请求参数不正确")
 		return
 	}
-	req.Name = strings.TrimSpace(req.Name)
-	req.Code = strings.TrimSpace(req.Code)
-	if req.Name == "" || req.Code == "" {
-		Fail(c, "400", "名称和编码不能为空")
-		return
-	}
-	if req.Sort <= 0 {
-		req.Sort = 999
-	}
-	if req.DataScope == 0 {
-		req.DataScope = 4
-	}
 
-	now := time.Now()
-	idVal := id.Next()
-
-	tx, err := h.db.BeginTx(c.Request.Context(), nil)
-	if err != nil {
-		Fail(c, "500", "新增角色失败")
-		return
-	}
-	defer tx.Rollback()
-
-	const insertRole = `
-INSERT INTO sys_role (
-    id, name, code, data_scope, description, sort,
-    is_system, menu_check_strictly, dept_check_strictly,
-    create_user, create_time
-)
-VALUES ($1, $2, $3, $4, $5, $6,
-        FALSE, TRUE, $7,
-        $8, $9);
-`
-	if _, err := tx.ExecContext(
-		c.Request.Context(),
-		insertRole,
-		idVal,
-		req.Name,
-		req.Code,
-		req.DataScope,
-		req.Description,
-		req.Sort,
-		req.DeptCheckStrict,
-		userID,
-		now,
-	); err != nil {
-		Fail(c, "500", "新增角色失败")
-		return
-	}
-
-	if len(req.DeptIDs) > 0 {
-		const insertDept = `INSERT INTO sys_role_dept (role_id, dept_id) VALUES ($1, $2) ON CONFLICT DO NOTHING;`
-		for _, did := range req.DeptIDs {
-			if _, err := tx.ExecContext(c.Request.Context(), insertDept, idVal, did); err != nil {
-				Fail(c, "500", "保存角色部门失败")
-				return
-			}
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		Fail(c, "500", "新增角色失败")
+	idVal, derr := h.svc.Create(c.Request.Context(), userID, apprbac.RoleSave{
+		Name:            req.Name,
+		Code:            req.Code,
+		Sort:            req.Sort,
+		Description:     req.Description,
+		DataScope:       req.DataScope,
+		DeptIDs:         req.DeptIDs,
+		DeptCheckStrict: req.DeptCheckStrict,
+	})
+	if derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
 	OK(c, gin.H{"id": idVal})
@@ -384,68 +183,17 @@ func (h *RoleHandler) UpdateRole(c *gin.Context) {
 		Fail(c, "400", "请求参数不正确")
 		return
 	}
-	req.Name = strings.TrimSpace(req.Name)
-	if req.Name == "" {
-		Fail(c, "400", "名称不能为空")
-		return
-	}
-	if req.Sort <= 0 {
-		req.Sort = 999
-	}
-	if req.DataScope == 0 {
-		req.DataScope = 4
-	}
 
-	tx, err := h.db.BeginTx(c.Request.Context(), nil)
-	if err != nil {
-		Fail(c, "500", "修改角色失败")
-		return
-	}
-	defer tx.Rollback()
-
-	const updateRole = `
-UPDATE sys_role
-   SET name               = $1,
-       description        = $2,
-       sort               = $3,
-       data_scope         = $4,
-       dept_check_strictly= $5,
-       update_user        = $6,
-       update_time        = $7
- WHERE id                 = $8;
-`
-	if _, err := tx.ExecContext(
-		c.Request.Context(),
-		updateRole,
-		req.Name,
-		req.Description,
-		req.Sort,
-		req.DataScope,
-		req.DeptCheckStrict,
-		userID,
-		time.Now(),
-		idVal,
-	); err != nil {
-		Fail(c, "500", "修改角色失败")
-		return
-	}
-
-	if _, err := tx.ExecContext(c.Request.Context(), `DELETE FROM sys_role_dept WHERE role_id = $1`, idVal); err != nil {
-		Fail(c, "500", "修改角色失败")
-		return
-	}
-	if len(req.DeptIDs) > 0 {
-		const insertDept = `INSERT INTO sys_role_dept (role_id, dept_id) VALUES ($1, $2) ON CONFLICT DO NOTHING;`
-		for _, did := range req.DeptIDs {
-			if _, err := tx.ExecContext(c.Request.Context(), insertDept, idVal, did); err != nil {
-				Fail(c, "500", "保存角色部门失败")
-				return
-			}
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		Fail(c, "500", "修改角色失败")
+	if derr := h.svc.Update(c.Request.Context(), userID, idVal, apprbac.RoleSave{
+		Name:            req.Name,
+		Code:            req.Code,
+		Sort:            req.Sort,
+		Description:     req.Description,
+		DataScope:       req.DataScope,
+		DeptIDs:         req.DeptIDs,
+		DeptCheckStrict: req.DeptCheckStrict,
+	}); derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
 	OK(c, true)
@@ -453,11 +201,10 @@ UPDATE sys_role
 
 // DeleteRole handles DELETE /system/role.
 func (h *RoleHandler) DeleteRole(c *gin.Context) {
-	userID, ok := RequireUserID(c)
+	_, ok := RequireUserID(c)
 	if !ok {
 		return
 	}
-	_ = userID
 
 	var req idsRequest
 	if err := c.ShouldBindJSON(&req); err != nil || len(req.IDs) == 0 {
@@ -465,34 +212,8 @@ func (h *RoleHandler) DeleteRole(c *gin.Context) {
 		return
 	}
 
-	tx, err := h.db.BeginTx(c.Request.Context(), nil)
-	if err != nil {
-		Fail(c, "500", "删除角色失败")
-		return
-	}
-	defer tx.Rollback()
-
-	for _, idVal := range req.IDs {
-		if _, err := tx.ExecContext(c.Request.Context(), `DELETE FROM sys_user_role WHERE role_id = $1`, idVal); err != nil {
-			Fail(c, "500", "删除角色失败")
-			return
-		}
-		if _, err := tx.ExecContext(c.Request.Context(), `DELETE FROM sys_role_menu WHERE role_id = $1`, idVal); err != nil {
-			Fail(c, "500", "删除角色失败")
-			return
-		}
-		if _, err := tx.ExecContext(c.Request.Context(), `DELETE FROM sys_role_dept WHERE role_id = $1`, idVal); err != nil {
-			Fail(c, "500", "删除角色失败")
-			return
-		}
-		if _, err := tx.ExecContext(c.Request.Context(), `DELETE FROM sys_role WHERE id = $1`, idVal); err != nil {
-			Fail(c, "500", "删除角色失败")
-			return
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		Fail(c, "500", "删除角色失败")
+	if derr := h.svc.Delete(c.Request.Context(), req.IDs); derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
 	OK(c, true)
@@ -516,39 +237,11 @@ func (h *RoleHandler) UpdateRolePermission(c *gin.Context) {
 		return
 	}
 
-	tx, err := h.db.BeginTx(c.Request.Context(), nil)
-	if err != nil {
-		Fail(c, "500", "保存角色权限失败")
-		return
-	}
-	defer tx.Rollback()
-
-	if _, err := tx.ExecContext(c.Request.Context(), `DELETE FROM sys_role_menu WHERE role_id = $1`, idVal); err != nil {
-		Fail(c, "500", "保存角色权限失败")
-		return
-	}
-	const insertMenu = `INSERT INTO sys_role_menu (role_id, menu_id) VALUES ($1, $2) ON CONFLICT DO NOTHING;`
-	for _, mid := range req.MenuIDs {
-		if _, err := tx.ExecContext(c.Request.Context(), insertMenu, idVal, mid); err != nil {
-			Fail(c, "500", "保存角色权限失败")
-			return
-		}
-	}
-
-	if _, err := tx.ExecContext(
-		c.Request.Context(),
-		`UPDATE sys_role SET menu_check_strictly = $1, update_user = $2, update_time = $3 WHERE id = $4`,
-		req.MenuCheckStrict,
-		userID,
-		time.Now(),
-		idVal,
-	); err != nil {
-		Fail(c, "500", "保存角色权限失败")
-		return
-	}
-
-	if err := tx.Commit(); err != nil {
-		Fail(c, "500", "保存角色权限失败")
+	if derr := h.svc.UpdatePermission(c.Request.Context(), userID, idVal, apprbac.RolePermissionSave{
+		MenuIDs:         req.MenuIDs,
+		MenuCheckStrict: req.MenuCheckStrict,
+	}); derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
 	OK(c, true)
@@ -571,132 +264,34 @@ func (h *RoleHandler) PageRoleUser(c *gin.Context) {
 	}
 	descFilter := strings.TrimSpace(c.Query("description"))
 
-	const query = `
-SELECT ur.id,
-       ur.role_id,
-       u.id,
-       u.username,
-       u.nickname,
-       u.gender,
-       u.status,
-       u.is_system,
-       COALESCE(u.description, ''),
-       u.dept_id,
-       COALESCE(d.name, '')
-FROM sys_user_role AS ur
-JOIN sys_user AS u ON u.id = ur.user_id
-LEFT JOIN sys_dept AS d ON d.id = u.dept_id
-WHERE ur.role_id = $1
-ORDER BY ur.id DESC;
-`
-	rows, err := h.db.QueryContext(c.Request.Context(), query, roleID)
-	if err != nil {
-		Fail(c, "500", "查询关联用户失败")
-		return
-	}
-	defer rows.Close()
-
-	var all []RoleUserResp
-	for rows.Next() {
-		var item RoleUserResp
-		if err := rows.Scan(
-			&item.ID,
-			&item.RoleID,
-			&item.UserID,
-			&item.Username,
-			&item.Nickname,
-			&item.Gender,
-			&item.Status,
-			&item.IsSystem,
-			&item.Description,
-			&item.DeptID,
-			&item.DeptName,
-		); err != nil {
-			Fail(c, "500", "解析关联用户失败")
-			return
-		}
-		if descFilter != "" &&
-			!strings.Contains(item.Username, descFilter) &&
-			!strings.Contains(item.Nickname, descFilter) &&
-			!strings.Contains(item.Description, descFilter) {
-			continue
-		}
-		all = append(all, item)
-	}
-	if err := rows.Err(); err != nil {
-		Fail(c, "500", "查询关联用户失败")
+	list, total, derr := h.svc.PageRoleUsers(c.Request.Context(), roleID, descFilter, page, size)
+	if derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
 
-	// Build roleIds/roleNames for each user.
-	if len(all) > 0 {
-		userIDs := make([]int64, 0, len(all))
-		seen := make(map[int64]struct{})
-		for _, item := range all {
-			if _, ok := seen[item.UserID]; !ok {
-				seen[item.UserID] = struct{}{}
-				userIDs = append(userIDs, item.UserID)
-			}
+	out := make([]RoleUserResp, 0, len(list))
+	for _, row := range list {
+		item := RoleUserResp{
+			ID:          row.ID,
+			RoleID:      row.RoleID,
+			UserID:      row.UserID,
+			Username:    row.Username,
+			Nickname:    row.Nickname,
+			Gender:      row.Gender,
+			Status:      row.Status,
+			IsSystem:    row.IsSystem,
+			Description: row.Description,
+			DeptID:      row.DeptID,
+			DeptName:    row.DeptName,
+			RoleIDs:     row.RoleIDs,
+			RoleNames:   row.RoleNames,
+			Disabled:    row.Disabled,
 		}
-		const roleQuery = `
-SELECT ur.user_id, ur.role_id, r.name
-FROM sys_user_role AS ur
-JOIN sys_role AS r ON r.id = ur.role_id
-WHERE ur.user_id = ANY($1::bigint[]);
-`
-		roleRows, err := h.db.QueryContext(c.Request.Context(), roleQuery, pqInt64Array(userIDs))
-		if err != nil {
-			Fail(c, "500", "查询用户角色失败")
-			return
-		}
-		defer roleRows.Close()
-
-		type info struct {
-			ids   []int64
-			names []string
-		}
-		roleMap := make(map[int64]*info)
-		for roleRows.Next() {
-			var uid, rid int64
-			var name string
-			if err := roleRows.Scan(&uid, &rid, &name); err != nil {
-				Fail(c, "500", "查询用户角色失败")
-				return
-			}
-			entry := roleMap[uid]
-			if entry == nil {
-				entry = &info{}
-				roleMap[uid] = entry
-			}
-			entry.ids = append(entry.ids, rid)
-			entry.names = append(entry.names, name)
-		}
-		if err := roleRows.Err(); err != nil {
-			Fail(c, "500", "查询用户角色失败")
-			return
-		}
-
-		for i := range all {
-			if entry := roleMap[all[i].UserID]; entry != nil {
-				all[i].RoleIDs = entry.ids
-				all[i].RoleNames = entry.names
-			}
-			all[i].Disabled = all[i].IsSystem && all[i].RoleID == 1
-		}
+		out = append(out, item)
 	}
 
-	total := int64(len(all))
-	start := (page - 1) * size
-	if start > len(all) {
-		start = len(all)
-	}
-	end := start + size
-	if end > len(all) {
-		end = len(all)
-	}
-	pageList := all[start:end]
-
-	OK(c, PageResult[RoleUserResp]{List: pageList, Total: total})
+	OK(c, PageResult[RoleUserResp]{List: out, Total: total})
 }
 
 // AssignToUsers handles POST /system/role/:id/user.
@@ -717,30 +312,8 @@ func (h *RoleHandler) AssignToUsers(c *gin.Context) {
 		return
 	}
 
-	tx, err := h.db.BeginTx(c.Request.Context(), nil)
-	if err != nil {
-		Fail(c, "500", "分配用户失败")
-		return
-	}
-	defer tx.Rollback()
-
-	const insertUserRole = `
-INSERT INTO sys_user_role (id, user_id, role_id)
-VALUES ($1, $2, $3)
-ON CONFLICT (user_id, role_id) DO NOTHING;
-`
-	for _, uid := range userIDs {
-		if uid <= 0 {
-			continue
-		}
-		if _, err := tx.ExecContext(c.Request.Context(), insertUserRole, id.Next(), uid, roleID); err != nil {
-			Fail(c, "500", "分配用户失败")
-			return
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		Fail(c, "500", "分配用户失败")
+	if derr := h.svc.AssignToUsers(c.Request.Context(), roleID, userIDs); derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
 	OK(c, true)
@@ -749,11 +322,10 @@ ON CONFLICT (user_id, role_id) DO NOTHING;
 // UnassignFromUsers handles DELETE /system/role/user.
 // Body is an array of userRoleIds.
 func (h *RoleHandler) UnassignFromUsers(c *gin.Context) {
-	userID, ok := RequireUserID(c)
+	_, ok := RequireUserID(c)
 	if !ok {
 		return
 	}
-	_ = userID
 
 	var ids []int64
 	if err := c.ShouldBindJSON(&ids); err != nil || len(ids) == 0 {
@@ -761,8 +333,8 @@ func (h *RoleHandler) UnassignFromUsers(c *gin.Context) {
 		return
 	}
 
-	if _, err := h.db.ExecContext(c.Request.Context(), `DELETE FROM sys_user_role WHERE id = ANY($1::bigint[])`, pqInt64Array(ids)); err != nil {
-		Fail(c, "500", "取消分配失败")
+	if derr := h.svc.UnassignFromUsers(c.Request.Context(), ids); derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
 	OK(c, true)
@@ -776,25 +348,30 @@ func (h *RoleHandler) ListRoleUserIDs(c *gin.Context) {
 		return
 	}
 
-	rows, err := h.db.QueryContext(c.Request.Context(), `SELECT user_id FROM sys_user_role WHERE role_id = $1`, roleID)
-	if err != nil {
-		Fail(c, "500", "查询关联用户失败")
-		return
-	}
-	defer rows.Close()
-
-	var ids []int64
-	for rows.Next() {
-		var uid int64
-		if err := rows.Scan(&uid); err != nil {
-			Fail(c, "500", "查询关联用户失败")
-			return
-		}
-		ids = append(ids, uid)
-	}
-	if err := rows.Err(); err != nil {
-		Fail(c, "500", "查询关联用户失败")
+	ids, derr := h.svc.ListRoleUserIDs(c.Request.Context(), roleID)
+	if derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
 	OK(c, ids)
 }
+
+func toRoleResp(row domainrbac.RoleDetail) RoleResp {
+	item := RoleResp{
+		ID:               row.ID,
+		Name:             row.Name,
+		Code:             row.Code,
+		Sort:             row.Sort,
+		Description:      row.Description,
+		DataScope:        row.DataScope,
+		IsSystem:         row.IsSystem,
+		CreateUserString: row.CreateUserString,
+		CreateTime:       formatTime(row.CreateTime),
+		UpdateUserString: row.UpdateUserString,
+	}
+	if row.UpdateTime != nil && !row.UpdateTime.IsZero() {
+		item.UpdateTime = formatTime(*row.UpdateTime)
+	}
+	return item
+}
+

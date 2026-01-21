@@ -1,16 +1,19 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
-	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
+
+	appsystem "voc-go-backend/internal/application/system"
+	domainsys "voc-go-backend/internal/domain/system"
 )
 
 type captchaResp struct {
@@ -23,20 +26,13 @@ type captchaResp struct {
 func TestGetImageCaptcha_Enabled_RequiresRedis(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	database, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("sqlmock.New: %v", err)
-	}
-	t.Cleanup(func() { _ = database.Close() })
-
-	mock.ExpectQuery("SELECT COALESCE\\(value, default_value, '0'\\) AS val").
-		WillReturnRows(sqlmock.NewRows([]string{"val"}).AddRow("1"))
+	sysSvc := appsystem.NewService(nil, &fakeOptionRepo{val: "1", found: true}, nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodGet, "/captcha/image", nil)
 
-	h := NewCaptchaHandler(database, nil)
+	h := NewCaptchaHandler(sysSvc, nil)
 	h.GetImageCaptcha(c)
 
 	var resp apiResp
@@ -45,9 +41,6 @@ func TestGetImageCaptcha_Enabled_RequiresRedis(t *testing.T) {
 	}
 	if resp.Code != "500" {
 		t.Fatalf("expected code=500, got %s (msg=%s)", resp.Code, resp.Msg)
-	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Fatalf("sql expectations: %v", err)
 	}
 }
 
@@ -62,21 +55,13 @@ func TestGetImageCaptcha_Enabled_WritesToRedis(t *testing.T) {
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
-
-	database, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("sqlmock.New: %v", err)
-	}
-	t.Cleanup(func() { _ = database.Close() })
-
-	mock.ExpectQuery("SELECT COALESCE\\(value, default_value, '0'\\) AS val").
-		WillReturnRows(sqlmock.NewRows([]string{"val"}).AddRow("1"))
+	sysSvc := appsystem.NewService(nil, &fakeOptionRepo{val: "1", found: true}, nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodGet, "/captcha/image", nil)
 
-	h := NewCaptchaHandler(database, rdb)
+	h := NewCaptchaHandler(sysSvc, rdb)
 	h.GetImageCaptcha(c)
 
 	var resp apiResp
@@ -103,8 +88,25 @@ func TestGetImageCaptcha_Enabled_WritesToRedis(t *testing.T) {
 	if ttl := mr.TTL(buildCaptchaRedisKey(data.UUID)); ttl <= 0 || ttl > 2*time.Minute {
 		t.Fatalf("unexpected ttl: %v", ttl)
 	}
+}
 
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Fatalf("sql expectations: %v", err)
-	}
+type fakeOptionRepo struct {
+	val   string
+	found bool
+}
+
+func (f *fakeOptionRepo) List(context.Context, domainsys.OptionListFilter) ([]domainsys.OptionView, error) {
+	return nil, nil
+}
+
+func (f *fakeOptionRepo) GetMergedValue(context.Context, string) (string, bool, error) {
+	return f.val, f.found, nil
+}
+
+func (f *fakeOptionRepo) UpdateValues(context.Context, int64, []domainsys.OptionUpdate) error {
+	return nil
+}
+
+func (f *fakeOptionRepo) ResetValues(context.Context, domainsys.OptionResetFilter) error {
+	return nil
 }

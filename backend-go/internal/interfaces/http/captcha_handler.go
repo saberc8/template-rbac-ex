@@ -1,8 +1,6 @@
 package http
 
 import (
-	"context"
-	"database/sql"
 	"image/color"
 	"os"
 	"strconv"
@@ -12,6 +10,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/mojocn/base64Captcha"
 	"github.com/redis/go-redis/v9"
+
+	appsystem "voc-go-backend/internal/application/system"
 )
 
 // CaptchaResp matches the Java CaptchaResp structure.
@@ -24,17 +24,17 @@ type CaptchaResp struct {
 
 // CaptchaHandler exposes /captcha endpoints.
 type CaptchaHandler struct {
-	db    *sql.DB
-	redis *redis.Client
+	sysSvc *appsystem.Service
+	redis  *redis.Client
 }
 
 // NewCaptchaHandler 创建验证码处理器。
 // 目前仅实现登录图片验证码，与 Java 版 /captcha/image 行为保持一致：
-// - 读取 sys_option 表中的 LOGIN_CAPTCHA_ENABLED 判断是否启用登录验证码；
+// - 读取 sys_option 中的 LOGIN_CAPTCHA_ENABLED 判断是否启用登录验证码；
 // - 启用时生成 Base64 图片验证码并返回 uuid、图片与过期时间；
 // - 未启用时仅返回 isEnabled=false，前端据此隐藏验证码输入框。
-func NewCaptchaHandler(db *sql.DB, redisClient *redis.Client) *CaptchaHandler {
-	return &CaptchaHandler{db: db, redis: redisClient}
+func NewCaptchaHandler(sysSvc *appsystem.Service, redisClient *redis.Client) *CaptchaHandler {
+	return &CaptchaHandler{sysSvc: sysSvc, redis: redisClient}
 }
 
 // RegisterCaptchaRoutes registers /captcha endpoints.
@@ -49,10 +49,14 @@ func (h *CaptchaHandler) RegisterCaptchaRoutes(r *gin.Engine) {
 func (h *CaptchaHandler) GetImageCaptcha(c *gin.Context) {
 	const graphicCaptchaExpirationMinutes = 2
 
-	enabled, err := isLoginCaptchaEnabled(c.Request.Context(), h.db)
-	if err != nil {
-		Fail(c, "500", "查询登录验证码配置失败")
-		return
+	enabled := false
+	if h.sysSvc != nil {
+		val, derr := h.sysSvc.IsOptionEnabled(c.Request.Context(), "LOGIN_CAPTCHA_ENABLED")
+		if derr != nil {
+			Fail(c, derr.Code, "查询登录验证码配置失败")
+			return
+		}
+		enabled = val
 	}
 
 	// 未启用登录验证码时，仅返回 isEnabled=false，保持与 Java 逻辑一致。
@@ -108,28 +112,6 @@ func (h *CaptchaHandler) GetImageCaptcha(c *gin.Context) {
 func buildCaptchaRedisKey(id string) string {
 	const prefix = "CAPTCHA:"
 	return prefix + id
-}
-
-// isLoginCaptchaEnabled 读取 sys_option 中的 LOGIN_CAPTCHA_ENABLED 配置。
-// 返回 true 表示启用登录验证码，false 表示关闭。
-func isLoginCaptchaEnabled(ctx context.Context, db *sql.DB) (bool, error) {
-	const query = `
-SELECT COALESCE(value, default_value, '0') AS val
-FROM sys_option
-WHERE code = 'LOGIN_CAPTCHA_ENABLED'
-LIMIT 1;
-`
-	var val string
-	err := db.QueryRowContext(ctx, query).Scan(&val)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			// 未找到配置时视为未开启验证码。
-			return false, nil
-		}
-		return false, err
-	}
-	val = strings.TrimSpace(val)
-	return val != "" && val != "0", nil
 }
 
 func newClearDigitCaptchaDriver() base64Captcha.Driver {

@@ -183,6 +183,18 @@ func (s *Service) DeleteDictItem(ctx context.Context, userID int64, ids []int64)
 	return nil
 }
 
+func (s *Service) ListActiveItemsByCode(ctx context.Context, code string) ([]DictItem, *Error) {
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return []DictItem{}, nil
+	}
+	list, err := s.repo.ListActiveItemsByCode(ctx, code)
+	if err != nil {
+		return nil, &Error{Code: "500", Msg: "查询字典失败"}
+	}
+	return list, nil
+}
+
 func (s *Service) next() int64 {
 	if s == nil || s.nextID == nil {
 		return 0

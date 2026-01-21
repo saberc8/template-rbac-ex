@@ -1,15 +1,14 @@
 package http
 
 import (
-	"database/sql"
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
-	"voc-go-backend/internal/infrastructure/id"
+	appstorage "voc-go-backend/internal/application/storage"
+	domainstorage "voc-go-backend/internal/domain/storage"
 	"voc-go-backend/internal/infrastructure/security"
 )
 
@@ -54,13 +53,13 @@ type storageReq struct {
 
 // StorageHandler 提供 /system/storage 相关接口。
 type StorageHandler struct {
-	db           *sql.DB
+	svc          *appstorage.Service
 	rsaDecryptor *security.RSADecryptor
 }
 
-func NewStorageHandler(db *sql.DB, rsa *security.RSADecryptor) *StorageHandler {
+func NewStorageHandler(svc *appstorage.Service, rsa *security.RSADecryptor) *StorageHandler {
 	return &StorageHandler{
-		db:           db,
+		svc:          svc,
 		rsaDecryptor: rsa,
 	}
 }
@@ -109,97 +108,17 @@ func (h *StorageHandler) ListStorage(c *gin.Context) {
 		storageType, _ = strconv.ParseInt(typeStr, 10, 64)
 	}
 
-	where := "WHERE 1=1"
-	args := []any{}
-	argPos := 1
-
-	if description != "" {
-		where += fmt.Sprintf(" AND (s.name ILIKE $%d OR s.code ILIKE $%d OR COALESCE(s.description,'') ILIKE $%d)", argPos, argPos, argPos)
-		args = append(args, "%"+description+"%")
-		argPos++
-	}
-	if storageType != 0 {
-		where += fmt.Sprintf(" AND s.type = $%d", argPos)
-		args = append(args, storageType)
-		argPos++
-	}
-
-	query := fmt.Sprintf(`
-SELECT s.id,
-       s.name,
-       s.code,
-       s.type,
-       COALESCE(s.access_key, ''),
-       COALESCE(s.region, ''),
-       COALESCE(s.endpoint, ''),
-       s.bucket_name,
-       COALESCE(s.domain, ''),
-       COALESCE(s.description, ''),
-       s.is_default,
-       COALESCE(s.sort, 999),
-       s.status,
-       s.create_time,
-       COALESCE(cu.nickname, ''),
-       s.update_time,
-       COALESCE(uu.nickname, '')
-FROM sys_storage AS s
-LEFT JOIN sys_user AS cu ON cu.id = s.create_user
-LEFT JOIN sys_user AS uu ON uu.id = s.update_user
-%s
-ORDER BY s.sort ASC, s.id ASC;
-`, where)
-
-	rows, err := h.db.QueryContext(c.Request.Context(), query, args...)
-	if err != nil {
-		Fail(c, "500", "查询存储配置失败")
+	list, derr := h.svc.ListStorage(c.Request.Context(), description, storageType)
+	if derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
-	defer rows.Close()
 
-	var list []StorageResp
-	for rows.Next() {
-		var (
-			item        StorageResp
-			createAt    time.Time
-			updateAt    sql.NullTime
-			secretDummy string
-		)
-		if err := rows.Scan(
-			&item.ID,
-			&item.Name,
-			&item.Code,
-			&item.Type,
-			&item.AccessKey,
-			&item.Region,
-			&item.Endpoint,
-			&item.BucketName,
-			&item.Domain,
-			&item.Description,
-			&item.IsDefault,
-			&item.Sort,
-			&item.Status,
-			&createAt,
-			&item.CreateUserString,
-			&updateAt,
-			&item.UpdateUserString,
-		); err != nil {
-			_ = secretDummy
-			Fail(c, "500", "解析存储配置失败")
-			return
-		}
-		item.CreateTime = formatTime(createAt)
-		if updateAt.Valid {
-			item.UpdateTime = formatTime(updateAt.Time)
-		}
-		// 列表场景不需要返回 SecretKey，保持为空字符串即可。
-		item.SecretKey = ""
-		list = append(list, item)
+	out := make([]StorageResp, 0, len(list))
+	for _, item := range list {
+		out = append(out, toStorageResp(item, false))
 	}
-	if err := rows.Err(); err != nil {
-		Fail(c, "500", "查询存储配置失败")
-		return
-	}
-	OK(c, list)
+	OK(c, out)
 }
 
 // GetStorage 处理 GET /system/storage/:id。
@@ -210,73 +129,12 @@ func (h *StorageHandler) GetStorage(c *gin.Context) {
 		return
 	}
 
-	const query = `
-SELECT s.id,
-       s.name,
-       s.code,
-       s.type,
-       COALESCE(s.access_key, ''),
-       COALESCE(s.secret_key, ''),
-       COALESCE(s.endpoint, ''),
-       COALESCE(s.region, ''),
-       s.bucket_name,
-       COALESCE(s.domain, ''),
-       COALESCE(s.description, ''),
-       s.is_default,
-       COALESCE(s.sort, 999),
-       s.status,
-       s.create_time,
-       COALESCE(cu.nickname, ''),
-       s.update_time,
-       COALESCE(uu.nickname, '')
-FROM sys_storage AS s
-LEFT JOIN sys_user AS cu ON cu.id = s.create_user
-LEFT JOIN sys_user AS uu ON uu.id = s.update_user
-WHERE s.id = $1;
-`
-
-	var (
-		resp     StorageResp
-		createAt time.Time
-		updateAt sql.NullTime
-	)
-	if err := h.db.QueryRowContext(c.Request.Context(), query, idVal).
-		Scan(
-			&resp.ID,
-			&resp.Name,
-			&resp.Code,
-			&resp.Type,
-			&resp.AccessKey,
-			&resp.SecretKey,
-			&resp.Endpoint,
-			&resp.Region,
-			&resp.BucketName,
-			&resp.Domain,
-			&resp.Description,
-			&resp.IsDefault,
-			&resp.Sort,
-			&resp.Status,
-			&createAt,
-			&resp.CreateUserString,
-			&updateAt,
-			&resp.UpdateUserString,
-		); err != nil {
-		if err == sql.ErrNoRows {
-			Fail(c, "404", "存储配置不存在")
-			return
-		}
-		Fail(c, "500", "查询存储配置失败")
+	item, derr := h.svc.GetStorage(c.Request.Context(), idVal)
+	if derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
-	resp.CreateTime = formatTime(createAt)
-	if updateAt.Valid {
-		resp.UpdateTime = formatTime(updateAt.Time)
-	}
-	// 为了与 Java 行为一致，不返回真实密钥，而是掩码，前端据此决定是否更新密钥。
-	if resp.SecretKey != "" {
-		resp.SecretKey = "******"
-	}
-	OK(c, resp)
+	OK(c, toStorageResp(*item, true))
 }
 
 // CreateStorage 处理 POST /system/storage。
@@ -313,69 +171,38 @@ func (h *StorageHandler) CreateStorage(c *gin.Context) {
 	}
 
 	// 编码唯一性校验
-	const checkCodeSQL = `SELECT 1 FROM sys_storage WHERE code = $1 LIMIT 1;`
-	var dummy int
-	if err := h.db.QueryRowContext(c.Request.Context(), checkCodeSQL, req.Code).Scan(&dummy); err != nil && err != sql.ErrNoRows {
-		Fail(c, "500", "校验存储编码失败")
-		return
-	} else if err == nil {
-		Fail(c, "400", "存储编码已存在")
-		return
-	}
 
-	// 解密 SecretKey（仅对象存储需要）
+	// 解密 SecretKey（仅对象存储需要，解密失败按 400 返回）
 	secretVal := ""
 	if req.Type == 2 {
-		var err error
-		secretVal, err = h.decryptSecretKey(req.SecretKey, "")
+		plain, err := h.decryptSecretKey(req.SecretKey, "")
 		if err != nil {
 			Fail(c, "400", err.Error())
 			return
 		}
+		secretVal = plain
 	}
-
-	now := time.Now()
-	idVal := id.Next()
-
-	const stmt = `
-INSERT INTO sys_storage (
-    id, name, code, type, access_key, secret_key, endpoint,
-    region,
-    bucket_name, domain, description, is_default, sort, status,
-    create_user, create_time
-) VALUES (
-    $1, $2, $3, $4, $5, $6, $7,
-    $8,
-    $9, $10, $11, $12, $13, $14,
-    $15, $16
-);
-`
 	isDefault := false
 	if req.IsDefault != nil {
 		isDefault = *req.IsDefault
 	}
-
-	if _, err := h.db.ExecContext(
-		c.Request.Context(),
-		stmt,
-		idVal,
-		req.Name,
-		req.Code,
-		req.Type,
-		req.AccessKey,
-		secretVal,
-		req.Endpoint,
-		req.Region,
-		req.BucketName,
-		req.Domain,
-		req.Description,
-		isDefault,
-		req.Sort,
-		req.Status,
-		userID,
-		now,
-	); err != nil {
-		Fail(c, "500", "新增存储配置失败")
+	idVal, derr := h.svc.CreateStorage(c.Request.Context(), userID, appstorage.StorageCreateRequest{
+		Name:        req.Name,
+		Code:        req.Code,
+		Type:        req.Type,
+		AccessKey:   req.AccessKey,
+		SecretKey:   secretVal,
+		Endpoint:    req.Endpoint,
+		Region:      req.Region,
+		BucketName:  req.BucketName,
+		Domain:      req.Domain,
+		Description: req.Description,
+		IsDefault:   &isDefault,
+		Sort:        req.Sort,
+		Status:      req.Status,
+	})
+	if derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
 	OK(c, gin.H{"id": idVal})
@@ -415,106 +242,38 @@ func (h *StorageHandler) UpdateStorage(c *gin.Context) {
 		req.Status = 1
 	}
 
-	// 查询旧配置，用于保持未修改时的密钥。
-	const selectOld = `
-SELECT COALESCE(secret_key, '')
-FROM sys_storage
-WHERE id = $1;
-`
-	var oldSecret string
-	if err := h.db.QueryRowContext(c.Request.Context(), selectOld, idVal).Scan(&oldSecret); err != nil {
-		if err == sql.ErrNoRows {
-			Fail(c, "404", "存储配置不存在")
-			return
+	var secretPtr *string
+	if req.SecretKey != nil {
+		secretVal := strings.TrimSpace(*req.SecretKey)
+		if req.Type == 2 {
+			plain, err := h.decryptSecretKey(req.SecretKey, "")
+			if err != nil {
+				Fail(c, "400", err.Error())
+				return
+			}
+			secretVal = plain
 		}
-		Fail(c, "500", "查询存储配置失败")
-		return
+		secretPtr = &secretVal
 	}
 
-	now := time.Now()
-
-	// 根据是否需要修改密钥构造不同的 SQL。
-	if req.SecretKey != nil {
-		secretVal, err := h.decryptSecretKey(req.SecretKey, oldSecret)
-		if err != nil {
-			Fail(c, "400", err.Error())
-			return
-		}
-		const stmtWithSecret = `
-UPDATE sys_storage
-   SET name = $1,
-       type = $2,
-       access_key = $3,
-       secret_key = $4,
-       endpoint = $5,
-       region = $6,
-       bucket_name = $7,
-       domain = $8,
-       description = $9,
-       sort = $10,
-       status = $11,
-       update_user = $12,
-       update_time = $13
- WHERE id = $14;
-`
-		if _, err := h.db.ExecContext(
-			c.Request.Context(),
-			stmtWithSecret,
-			req.Name,
-			req.Type,
-			req.AccessKey,
-			secretVal,
-			req.Endpoint,
-			req.Region,
-			req.BucketName,
-			req.Domain,
-			req.Description,
-			req.Sort,
-			req.Status,
-			userID,
-			now,
-			idVal,
-		); err != nil {
-			Fail(c, "500", "修改存储配置失败")
-			return
-		}
-	} else {
-		const stmt = `
-UPDATE sys_storage
-   SET name = $1,
-       type = $2,
-       access_key = $3,
-       endpoint = $4,
-       region = $5,
-       bucket_name = $6,
-       domain = $7,
-       description = $8,
-       sort = $9,
-       status = $10,
-       update_user = $11,
-       update_time = $12
- WHERE id = $13;
-`
-		if _, err := h.db.ExecContext(
-			c.Request.Context(),
-			stmt,
-			req.Name,
-			req.Type,
-			req.AccessKey,
-			req.Endpoint,
-			req.Region,
-			req.BucketName,
-			req.Domain,
-			req.Description,
-			req.Sort,
-			req.Status,
-			userID,
-			now,
-			idVal,
-		); err != nil {
-			Fail(c, "500", "修改存储配置失败")
-			return
-		}
+	derr := h.svc.UpdateStorage(c.Request.Context(), userID, idVal, appstorage.StorageUpdateRequest{
+		Name:        req.Name,
+		Code:        req.Code,
+		Type:        req.Type,
+		AccessKey:   req.AccessKey,
+		SecretKey:   secretPtr,
+		Endpoint:    req.Endpoint,
+		Region:      req.Region,
+		BucketName:  req.BucketName,
+		Domain:      req.Domain,
+		Description: req.Description,
+		IsDefault:   req.IsDefault,
+		Sort:        req.Sort,
+		Status:      req.Status,
+	})
+	if derr != nil {
+		Fail(c, derr.Code, derr.Msg)
+		return
 	}
 	OK(c, true)
 }
@@ -532,36 +291,8 @@ func (h *StorageHandler) DeleteStorage(c *gin.Context) {
 		Fail(c, "400", "ID 列表不能为空")
 		return
 	}
-
-	tx, err := h.db.BeginTx(c.Request.Context(), nil)
-	if err != nil {
-		Fail(c, "500", "删除存储配置失败")
-		return
-	}
-	defer tx.Rollback()
-
-	for _, idVal := range req.IDs {
-		// 不允许删除默认存储
-		var isDefault bool
-		if err := tx.QueryRowContext(c.Request.Context(), `SELECT is_default FROM sys_storage WHERE id = $1`, idVal).Scan(&isDefault); err != nil {
-			if err == sql.ErrNoRows {
-				continue
-			}
-			Fail(c, "500", "删除存储配置失败")
-			return
-		}
-		if isDefault {
-			Fail(c, "400", "不允许删除默认存储")
-			return
-		}
-		if _, err := tx.ExecContext(c.Request.Context(), `DELETE FROM sys_storage WHERE id = $1`, idVal); err != nil {
-			Fail(c, "500", "删除存储配置失败")
-			return
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		Fail(c, "500", "删除存储配置失败")
+	if derr := h.svc.DeleteStorage(c.Request.Context(), req.IDs); derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
 	OK(c, true)
@@ -590,31 +321,8 @@ func (h *StorageHandler) UpdateStorageStatus(c *gin.Context) {
 		Fail(c, "400", "状态参数不正确")
 		return
 	}
-
-	// 默认存储不允许被禁用
-	var isDefault bool
-	if err := h.db.QueryRowContext(c.Request.Context(), `SELECT is_default FROM sys_storage WHERE id = $1`, idVal).Scan(&isDefault); err != nil {
-		if err == sql.ErrNoRows {
-			Fail(c, "404", "存储配置不存在")
-			return
-		}
-		Fail(c, "500", "更新存储状态失败")
-		return
-	}
-	if isDefault && req.Status != 1 {
-		Fail(c, "400", "不允许禁用默认存储")
-		return
-	}
-
-	const stmt = `
-UPDATE sys_storage
-   SET status = $1,
-       update_user = $2,
-       update_time = $3
- WHERE id = $4;
-`
-	if _, err := h.db.ExecContext(c.Request.Context(), stmt, req.Status, userID, time.Now(), idVal); err != nil {
-		Fail(c, "500", "更新存储状态失败")
+	if derr := h.svc.UpdateStorageStatus(c.Request.Context(), userID, idVal, req.Status); derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
 	OK(c, true)
@@ -631,34 +339,42 @@ func (h *StorageHandler) SetDefaultStorage(c *gin.Context) {
 		Fail(c, "400", "ID 参数不正确")
 		return
 	}
-
-	tx, err := h.db.BeginTx(c.Request.Context(), nil)
-	if err != nil {
-		Fail(c, "500", "设为默认存储失败")
-		return
-	}
-	defer tx.Rollback()
-
-	// 先将所有存储设为非默认
-	if _, err := tx.ExecContext(c.Request.Context(), `UPDATE sys_storage SET is_default = FALSE`); err != nil {
-		Fail(c, "500", "设为默认存储失败")
-		return
-	}
-	// 再设置目标存储为默认
-	if _, err := tx.ExecContext(
-		c.Request.Context(),
-		`UPDATE sys_storage SET is_default = TRUE, update_user = $1, update_time = $2 WHERE id = $3`,
-		userID,
-		time.Now(),
-		idVal,
-	); err != nil {
-		Fail(c, "500", "设为默认存储失败")
-		return
-	}
-
-	if err := tx.Commit(); err != nil {
-		Fail(c, "500", "设为默认存储失败")
+	if derr := h.svc.SetDefaultStorage(c.Request.Context(), userID, idVal); derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
 	OK(c, true)
+}
+
+func toStorageResp(item domainstorage.StorageDetail, maskSecret bool) StorageResp {
+	resp := StorageResp{
+		ID:               item.ID,
+		Name:             item.Name,
+		Code:             item.Code,
+		Type:             item.Type,
+		AccessKey:        item.AccessKey,
+		SecretKey:        item.SecretKey,
+		Endpoint:         item.Endpoint,
+		Region:           item.Region,
+		BucketName:       item.BucketName,
+		Domain:           item.Domain,
+		Description:      item.Description,
+		IsDefault:        item.IsDefault,
+		Sort:             item.Sort,
+		Status:           item.Status,
+		CreateUserString: item.CreateUserString,
+		UpdateUserString: item.UpdateUserString,
+		CreateTime:       formatTime(item.CreateTime),
+	}
+	if item.UpdateTime != nil && !item.UpdateTime.IsZero() {
+		resp.UpdateTime = formatTime(*item.UpdateTime)
+	}
+	if maskSecret {
+		if strings.TrimSpace(resp.SecretKey) != "" {
+			resp.SecretKey = "******"
+		}
+	} else {
+		resp.SecretKey = ""
+	}
+	return resp
 }

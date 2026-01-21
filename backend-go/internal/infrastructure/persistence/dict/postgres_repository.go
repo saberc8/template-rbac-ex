@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	appdict "voc-go-backend/internal/application/dict"
+	domaindict "voc-go-backend/internal/domain/dict"
 
 	"github.com/lib/pq"
 )
@@ -21,9 +21,9 @@ func NewPgRepository(db *sql.DB) *PgRepository {
 	return &PgRepository{db: db}
 }
 
-var _ appdict.Repository = (*PgRepository)(nil)
+var _ domaindict.Repository = (*PgRepository)(nil)
 
-func (r *PgRepository) ListDict(ctx context.Context, description string) ([]appdict.Dict, error) {
+func (r *PgRepository) ListDict(ctx context.Context, description string) ([]domaindict.Dict, error) {
 	args := []any{}
 	where := ""
 	if description != "" {
@@ -54,10 +54,10 @@ ORDER BY d.create_time DESC, d.id DESC;
 	}
 	defer rows.Close()
 
-	var list []appdict.Dict
+	var list []domaindict.Dict
 	for rows.Next() {
 		var (
-			item     appdict.Dict
+			item     domaindict.Dict
 			updateAt sql.NullTime
 		)
 		if err := rows.Scan(
@@ -85,7 +85,7 @@ ORDER BY d.create_time DESC, d.id DESC;
 	return list, nil
 }
 
-func (r *PgRepository) GetDict(ctx context.Context, id int64) (*appdict.Dict, error) {
+func (r *PgRepository) GetDict(ctx context.Context, id int64) (*domaindict.Dict, error) {
 	const query = `
 SELECT d.id,
        d.name,
@@ -102,7 +102,7 @@ LEFT JOIN sys_user AS uu ON uu.id = d.update_user
 WHERE d.id = $1;
 `
 	var (
-		item     appdict.Dict
+		item     domaindict.Dict
 		updateAt sql.NullTime
 	)
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
@@ -193,7 +193,7 @@ func (r *PgRepository) DeleteDict(ctx context.Context, ids []int64) error {
 	return tx.Commit()
 }
 
-func (r *PgRepository) PageDictItem(ctx context.Context, q appdict.DictItemPageQuery) ([]appdict.DictItem, int64, error) {
+func (r *PgRepository) PageDictItem(ctx context.Context, q domaindict.DictItemPageQuery) ([]domaindict.DictItem, int64, error) {
 	baseFrom := `
 FROM sys_dict_item AS di
 LEFT JOIN sys_user AS cu ON cu.id = di.create_user
@@ -225,7 +225,7 @@ LEFT JOIN sys_user AS uu ON uu.id = di.update_user
 		return nil, 0, err
 	}
 	if total == 0 {
-		return []appdict.DictItem{}, 0, nil
+		return []domaindict.DictItem{}, 0, nil
 	}
 
 	offset := int64((q.Page - 1) * q.Size)
@@ -258,10 +258,10 @@ LIMIT $%d OFFSET $%d;
 	}
 	defer rows.Close()
 
-	var list []appdict.DictItem
+	var list []domaindict.DictItem
 	for rows.Next() {
 		var (
-			item     appdict.DictItem
+			item     domaindict.DictItem
 			updateAt sql.NullTime
 		)
 		if err := rows.Scan(
@@ -292,7 +292,7 @@ LIMIT $%d OFFSET $%d;
 	return list, total, nil
 }
 
-func (r *PgRepository) GetDictItem(ctx context.Context, id int64) (*appdict.DictItem, error) {
+func (r *PgRepository) GetDictItem(ctx context.Context, id int64) (*domaindict.DictItem, error) {
 	const query = `
 SELECT di.id,
        di.label,
@@ -312,7 +312,7 @@ LEFT JOIN sys_user AS uu ON uu.id = di.update_user
 WHERE di.id = $1;
 `
 	var (
-		item     appdict.DictItem
+		item     domaindict.DictItem
 		updateAt sql.NullTime
 	)
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
@@ -342,7 +342,7 @@ WHERE di.id = $1;
 	return &item, nil
 }
 
-func (r *PgRepository) CreateDictItem(ctx context.Context, id int64, req appdict.DictItemCreateRequest, userID int64, now time.Time) error {
+func (r *PgRepository) CreateDictItem(ctx context.Context, id int64, req domaindict.DictItemCreateRequest, userID int64, now time.Time) error {
 	const stmt = `
 INSERT INTO sys_dict_item (
     id, label, value, color, sort, description, status, dict_id,
@@ -367,7 +367,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
 	return err
 }
 
-func (r *PgRepository) UpdateDictItem(ctx context.Context, id int64, req appdict.DictItemUpdateRequest, userID int64, now time.Time) error {
+func (r *PgRepository) UpdateDictItem(ctx context.Context, id int64, req domaindict.DictItemUpdateRequest, userID int64, now time.Time) error {
 	const stmt = `
 UPDATE sys_dict_item
    SET label       = $1,
@@ -407,4 +407,66 @@ func (r *PgRepository) DeleteDictItem(ctx context.Context, ids []int64) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+func (r *PgRepository) ListActiveItemsByCode(ctx context.Context, code string) ([]domaindict.DictItem, error) {
+	const query = `
+SELECT t1.id,
+       t1.label,
+       t1.value,
+       COALESCE(t1.color, '') AS color,
+       COALESCE(t1.sort, 999) AS sort,
+       COALESCE(t1.description, '') AS description,
+       COALESCE(t1.status, 1) AS status,
+       t1.dict_id,
+       t1.create_time,
+       COALESCE(cu.nickname, ''),
+       t1.update_time,
+       COALESCE(uu.nickname, '')
+FROM sys_dict_item AS t1
+LEFT JOIN sys_dict AS t2 ON t1.dict_id = t2.id
+LEFT JOIN sys_user AS cu ON cu.id = t1.create_user
+LEFT JOIN sys_user AS uu ON uu.id = t1.update_user
+WHERE t1.status = 1
+  AND t2.code = $1
+ORDER BY t1.sort ASC, t1.id ASC;
+`
+	rows, err := r.db.QueryContext(ctx, query, strings.TrimSpace(code))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	list := make([]domaindict.DictItem, 0)
+	for rows.Next() {
+		var (
+			item     domaindict.DictItem
+			updateAt sql.NullTime
+		)
+		if err := rows.Scan(
+			&item.ID,
+			&item.Label,
+			&item.Value,
+			&item.Color,
+			&item.Sort,
+			&item.Description,
+			&item.Status,
+			&item.DictID,
+			&item.CreateTime,
+			&item.CreateUserString,
+			&updateAt,
+			&item.UpdateUserString,
+		); err != nil {
+			return nil, err
+		}
+		if updateAt.Valid {
+			t := updateAt.Time
+			item.UpdateTime = &t
+		}
+		list = append(list, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return list, nil
 }

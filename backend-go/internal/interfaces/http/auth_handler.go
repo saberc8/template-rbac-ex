@@ -1,30 +1,30 @@
 package http
 
 import (
-	"database/sql"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 
 	"voc-go-backend/internal/application/auth"
+	appsystem "voc-go-backend/internal/application/system"
 )
 
 // AuthHandler 暴露认证相关 HTTP 接口。
 type AuthHandler struct {
 	svc    *auth.Service
 	online *OnlineStore
-	db     *sql.DB
+	sysSvc *appsystem.Service
 	redis  *redis.Client
 }
 
 // NewAuthHandler 创建认证接口处理器。
-// 其中 db 用于读取登录相关配置（如是否启用验证码）。
-func NewAuthHandler(svc *auth.Service, online *OnlineStore, db *sql.DB, redisClient *redis.Client) *AuthHandler {
+// 其中 sysSvc 用于读取登录相关配置（如是否启用验证码）。
+func NewAuthHandler(svc *auth.Service, online *OnlineStore, sysSvc *appsystem.Service, redisClient *redis.Client) *AuthHandler {
 	return &AuthHandler{
 		svc:    svc,
 		online: online,
-		db:     db,
+		sysSvc: sysSvc,
 		redis:  redisClient,
 	}
 }
@@ -59,10 +59,14 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// - LOGIN_CAPTCHA_ENABLED!=0：必须校验 uuid + captcha。
 	authType := strings.ToUpper(strings.TrimSpace(req.AuthType))
 	if authType == "" || authType == "ACCOUNT" {
-		enabled, err := isLoginCaptchaEnabled(c.Request.Context(), h.db)
-		if err != nil {
-			Fail(c, "500", "查询登录验证码配置失败")
-			return
+		enabled := false
+		if h.sysSvc != nil {
+			v, derr := h.sysSvc.IsOptionEnabled(c.Request.Context(), "LOGIN_CAPTCHA_ENABLED")
+			if derr != nil {
+				Fail(c, derr.Code, "查询登录验证码配置失败")
+				return
+			}
+			enabled = v
 		}
 		if enabled {
 			if strings.TrimSpace(req.Captcha) == "" {

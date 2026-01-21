@@ -1,68 +1,13 @@
 package dict
 
-import "time"
+import domaindict "voc-go-backend/internal/domain/dict"
 
-type Dict struct {
-	ID               int64
-	Name             string
-	Code             string
-	IsSystem         bool
-	Description      string
-	CreateUserString string
-	CreateTime       time.Time
-	UpdateUserString string
-	UpdateTime       *time.Time
-}
+type Dict = domaindict.Dict
+type DictItem = domaindict.DictItem
 
-type DictItem struct {
-	ID               int64
-	Label            string
-	Value            string
-	Color            string
-	Sort             int32
-	Description      string
-	Status           int16
-	DictID           int64
-	CreateUserString string
-	CreateTime       time.Time
-	UpdateUserString string
-	UpdateTime       *time.Time
-}
+type DictCreateRequest = domaindict.DictCreateRequest
+type DictUpdateRequest = domaindict.DictUpdateRequest
 
-type DictCreateRequest struct {
-	Name        string
-	Code        string
-	Description string
-}
-
-type DictUpdateRequest struct {
-	Name        string
-	Description string
-}
-
-type DictItemCreateRequest struct {
-	Label       string
-	Value       string
-	Color       string
-	Sort        int32
-	Description string
-	Status      int16
-	DictID      int64
-}
-
-type DictItemUpdateRequest struct {
-	Label       string
-	Value       string
-	Color       string
-	Sort        int32
-	Description string
-	Status      int16
-}
-
-type DictItemPageQuery struct {
-	DictID      *int64
-	Page        int
-	Size        int
-	Description string
-	Status      *int64
-}
+type DictItemCreateRequest = domaindict.DictItemCreateRequest
+type DictItemUpdateRequest = domaindict.DictItemUpdateRequest
+type DictItemPageQuery = domaindict.DictItemPageQuery

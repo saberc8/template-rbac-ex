@@ -1,15 +1,12 @@
 package http
 
 import (
-	"database/sql"
-	"database/sql/driver"
 	"strconv"
-	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
-	"voc-go-backend/internal/infrastructure/id"
+	apprbac "voc-go-backend/internal/application/rbac"
+	domainrbac "voc-go-backend/internal/domain/rbac"
 )
 
 // MenuResp matches MenuResp in admin/src/apis/system/type.ts.
@@ -55,11 +52,11 @@ type menuReq struct {
 
 // MenuHandler provides /system/menu endpoints.
 type MenuHandler struct {
-	db *sql.DB
+	svc *apprbac.MenuService
 }
 
-func NewMenuHandler(db *sql.DB) *MenuHandler {
-	return &MenuHandler{db: db}
+func NewMenuHandler(svc *apprbac.MenuService) *MenuHandler {
+	return &MenuHandler{svc: svc}
 }
 
 // RegisterMenuRoutes registers menu management routes.
@@ -74,84 +71,17 @@ func (h *MenuHandler) RegisterMenuRoutes(r *gin.Engine) {
 
 // ListMenuTree handles GET /system/menu/tree.
 func (h *MenuHandler) ListMenuTree(c *gin.Context) {
-	const query = `
-SELECT m.id,
-       m.title,
-       m.parent_id,
-       m.type,
-       COALESCE(m.path, ''),
-       COALESCE(m.name, ''),
-       COALESCE(m.component, ''),
-       COALESCE(m.redirect, ''),
-       COALESCE(m.icon, ''),
-       COALESCE(m.is_external, FALSE),
-       COALESCE(m.is_cache, FALSE),
-       COALESCE(m.is_hidden, FALSE),
-       COALESCE(m.permission, ''),
-       COALESCE(m.sort, 0),
-       COALESCE(m.status, 1),
-       m.create_time,
-       COALESCE(cu.nickname, ''),
-       m.update_time,
-       COALESCE(uu.nickname, '')
-FROM sys_menu AS m
-LEFT JOIN sys_user AS cu ON cu.id = m.create_user
-LEFT JOIN sys_user AS uu ON uu.id = m.update_user
-ORDER BY m.sort ASC, m.id ASC;
-`
-
-	rows, err := h.db.QueryContext(c.Request.Context(), query)
-	if err != nil {
-		Fail(c, "500", "查询菜单失败")
+	list, derr := h.svc.ListAll(c.Request.Context())
+	if derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
-	defer rows.Close()
 
-	var flat []MenuResp
-	for rows.Next() {
-		var (
-			item     MenuResp
-			createAt time.Time
-			createBy string
-			updateAt sql.NullTime
-			updateBy string
-		)
-		if err := rows.Scan(
-			&item.ID,
-			&item.Title,
-			&item.ParentID,
-			&item.Type,
-			&item.Path,
-			&item.Name,
-			&item.Component,
-			&item.Redirect,
-			&item.Icon,
-			&item.IsExternal,
-			&item.IsCache,
-			&item.IsHidden,
-			&item.Permission,
-			&item.Sort,
-			&item.Status,
-			&createAt,
-			&createBy,
-			&updateAt,
-			&updateBy,
-		); err != nil {
-			Fail(c, "500", "解析菜单数据失败")
-			return
-		}
-		item.CreateUserString = createBy
-		item.CreateTime = formatTime(createAt)
-		if updateAt.Valid {
-			item.UpdateUserString = updateBy
-			item.UpdateTime = formatTime(updateAt.Time)
-		}
+	flat := make([]MenuResp, 0, len(list))
+	for _, row := range list {
+		item := toMenuResp(row)
 		item.Children = []MenuResp{}
 		flat = append(flat, item)
-	}
-	if err := rows.Err(); err != nil {
-		Fail(c, "500", "查询菜单失败")
-		return
 	}
 
 	// Build tree by parentId.
@@ -190,75 +120,12 @@ func (h *MenuHandler) GetMenu(c *gin.Context) {
 		return
 	}
 
-	const query = `
-SELECT m.id,
-       m.title,
-       m.parent_id,
-       m.type,
-       COALESCE(m.path, ''),
-       COALESCE(m.name, ''),
-       COALESCE(m.component, ''),
-       COALESCE(m.redirect, ''),
-       COALESCE(m.icon, ''),
-       COALESCE(m.is_external, FALSE),
-       COALESCE(m.is_cache, FALSE),
-       COALESCE(m.is_hidden, FALSE),
-       COALESCE(m.permission, ''),
-       COALESCE(m.sort, 0),
-       COALESCE(m.status, 1),
-       m.create_time,
-       COALESCE(cu.nickname, ''),
-       m.update_time,
-       COALESCE(uu.nickname, '')
-FROM sys_menu AS m
-LEFT JOIN sys_user AS cu ON cu.id = m.create_user
-LEFT JOIN sys_user AS uu ON uu.id = m.update_user
-WHERE m.id = $1;
-`
-
-	var (
-		item     MenuResp
-		createAt time.Time
-		createBy string
-		updateAt sql.NullTime
-		updateBy string
-	)
-	err = h.db.QueryRowContext(c.Request.Context(), query, idVal).
-		Scan(
-			&item.ID,
-			&item.Title,
-			&item.ParentID,
-			&item.Type,
-			&item.Path,
-			&item.Name,
-			&item.Component,
-			&item.Redirect,
-			&item.Icon,
-			&item.IsExternal,
-			&item.IsCache,
-			&item.IsHidden,
-			&item.Permission,
-			&item.Sort,
-			&item.Status,
-			&createAt,
-			&createBy,
-			&updateAt,
-			&updateBy,
-		)
-	if err == sql.ErrNoRows {
-		Fail(c, "404", "菜单不存在")
+	row, derr := h.svc.Get(c.Request.Context(), idVal)
+	if derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
-	if err != nil {
-		Fail(c, "500", "查询菜单失败")
-		return
-	}
-	item.CreateUserString = createBy
-	item.CreateTime = formatTime(createAt)
-	if updateAt.Valid {
-		item.UpdateUserString = updateBy
-		item.UpdateTime = formatTime(updateAt.Time)
-	}
+	item := toMenuResp(*row)
 	item.Children = []MenuResp{}
 	OK(c, item)
 }
@@ -275,94 +142,25 @@ func (h *MenuHandler) CreateMenu(c *gin.Context) {
 		Fail(c, "400", "请求参数不正确")
 		return
 	}
-	if req.Type == 0 {
-		req.Type = 1
-	}
-	req.Title = strings.TrimSpace(req.Title)
-	if req.Title == "" {
-		Fail(c, "400", "菜单标题不能为空")
-		return
-	}
-	// 默认布尔值
-	isExternal := false
-	if req.IsExternal != nil {
-		isExternal = *req.IsExternal
-	}
-	isCache := false
-	if req.IsCache != nil {
-		isCache = *req.IsCache
-	}
-	isHidden := false
-	if req.IsHidden != nil {
-		isHidden = *req.IsHidden
-	}
 
-	// 按 Java 逻辑处理外链和路由
-	req.Path = strings.TrimSpace(req.Path)
-	req.Name = strings.TrimSpace(req.Name)
-	req.Component = strings.TrimSpace(req.Component)
-	if isExternal {
-		if !(strings.HasPrefix(req.Path, "http://") || strings.HasPrefix(req.Path, "https://")) {
-			Fail(c, "400", "路由地址格式不正确，请以 http:// 或 https:// 开头")
-			return
-		}
-	} else {
-		if strings.HasPrefix(req.Path, "http://") || strings.HasPrefix(req.Path, "https://") {
-			Fail(c, "400", "路由地址格式不正确")
-			return
-		}
-		if req.Path != "" && !strings.HasPrefix(req.Path, "/") {
-			req.Path = "/" + req.Path
-		}
-		req.Name = strings.TrimPrefix(req.Name, "/")
-		req.Component = strings.TrimPrefix(req.Component, "/")
-	}
-
-	if req.Sort <= 0 {
-		req.Sort = 999
-	}
-	if req.Status == 0 {
-		req.Status = 1
-	}
-
-	now := time.Now()
-	idVal := id.Next()
-
-	const stmt = `
-INSERT INTO sys_menu (
-    id, title, parent_id, type, path, name, component, redirect,
-    icon, is_external, is_cache, is_hidden, permission, sort, status,
-    create_user, create_time
-)
-VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8,
-    $9, $10, $11, $12, $13, $14, $15,
-    $16, $17
-);
-`
-	_, err := h.db.ExecContext(
-		c.Request.Context(),
-		stmt,
-		idVal,
-		req.Title,
-		req.ParentID,
-		req.Type,
-		req.Path,
-		req.Name,
-		req.Component,
-		req.Redirect,
-		req.Icon,
-		isExternal,
-		isCache,
-		isHidden,
-		req.Permission,
-		req.Sort,
-		req.Status,
-		userID,
-		now,
-	)
-	if err != nil {
-		Fail(c, "500", "新增菜单失败")
+	idVal, derr := h.svc.Create(c.Request.Context(), userID, apprbac.MenuSave{
+		Type:       req.Type,
+		Icon:       req.Icon,
+		Title:      req.Title,
+		Sort:       req.Sort,
+		Permission: req.Permission,
+		Path:       req.Path,
+		Name:       req.Name,
+		Component:  req.Component,
+		Redirect:   req.Redirect,
+		IsExternal: req.IsExternal,
+		IsCache:    req.IsCache,
+		IsHidden:   req.IsHidden,
+		ParentID:   req.ParentID,
+		Status:     req.Status,
+	})
+	if derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
 	OK(c, gin.H{"id": idVal})
@@ -385,95 +183,23 @@ func (h *MenuHandler) UpdateMenu(c *gin.Context) {
 		Fail(c, "400", "请求参数不正确")
 		return
 	}
-	req.Title = strings.TrimSpace(req.Title)
-	if req.Title == "" {
-		Fail(c, "400", "菜单标题不能为空")
-		return
-	}
-
-	isExternal := false
-	if req.IsExternal != nil {
-		isExternal = *req.IsExternal
-	}
-	isCache := false
-	if req.IsCache != nil {
-		isCache = *req.IsCache
-	}
-	isHidden := false
-	if req.IsHidden != nil {
-		isHidden = *req.IsHidden
-	}
-
-	req.Path = strings.TrimSpace(req.Path)
-	req.Name = strings.TrimSpace(req.Name)
-	req.Component = strings.TrimSpace(req.Component)
-	if isExternal {
-		if !(strings.HasPrefix(req.Path, "http://") || strings.HasPrefix(req.Path, "https://")) {
-			Fail(c, "400", "路由地址格式不正确，请以 http:// 或 https:// 开头")
-			return
-		}
-	} else {
-		if strings.HasPrefix(req.Path, "http://") || strings.HasPrefix(req.Path, "https://") {
-			Fail(c, "400", "路由地址格式不正确")
-			return
-		}
-		if req.Path != "" && !strings.HasPrefix(req.Path, "/") {
-			req.Path = "/" + req.Path
-		}
-		req.Name = strings.TrimPrefix(req.Name, "/")
-		req.Component = strings.TrimPrefix(req.Component, "/")
-	}
-
-	if req.Sort <= 0 {
-		req.Sort = 999
-	}
-	if req.Status == 0 {
-		req.Status = 1
-	}
-
-	const stmt = `
-UPDATE sys_menu
-   SET title       = $1,
-       parent_id   = $2,
-       type        = $3,
-       path        = $4,
-       name        = $5,
-       component   = $6,
-       redirect    = $7,
-       icon        = $8,
-       is_external = $9,
-       is_cache    = $10,
-       is_hidden   = $11,
-       permission  = $12,
-       sort        = $13,
-       status      = $14,
-       update_user = $15,
-       update_time = $16
- WHERE id          = $17;
-`
-	_, err = h.db.ExecContext(
-		c.Request.Context(),
-		stmt,
-		req.Title,
-		req.ParentID,
-		req.Type,
-		req.Path,
-		req.Name,
-		req.Component,
-		req.Redirect,
-		req.Icon,
-		isExternal,
-		isCache,
-		isHidden,
-		req.Permission,
-		req.Sort,
-		req.Status,
-		userID,
-		time.Now(),
-		idVal,
-	)
-	if err != nil {
-		Fail(c, "500", "修改菜单失败")
+	if derr := h.svc.Update(c.Request.Context(), userID, idVal, apprbac.MenuSave{
+		Type:       req.Type,
+		Icon:       req.Icon,
+		Title:      req.Title,
+		Sort:       req.Sort,
+		Permission: req.Permission,
+		Path:       req.Path,
+		Name:       req.Name,
+		Component:  req.Component,
+		Redirect:   req.Redirect,
+		IsExternal: req.IsExternal,
+		IsCache:    req.IsCache,
+		IsHidden:   req.IsHidden,
+		ParentID:   req.ParentID,
+		Status:     req.Status,
+	}); derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
 	OK(c, true)
@@ -492,80 +218,8 @@ func (h *MenuHandler) DeleteMenu(c *gin.Context) {
 		Fail(c, "400", "ID 列表不能为空")
 		return
 	}
-
-	// Load all menus to compute descendants.
-	const query = `SELECT id, parent_id FROM sys_menu;`
-	rows, err := h.db.QueryContext(c.Request.Context(), query)
-	if err != nil {
-		Fail(c, "500", "删除菜单失败")
-		return
-	}
-	defer rows.Close()
-
-	type node struct {
-		id       int64
-		parentID int64
-	}
-	var all []node
-	for rows.Next() {
-		var n node
-		if err := rows.Scan(&n.id, &n.parentID); err != nil {
-			Fail(c, "500", "删除菜单失败")
-			return
-		}
-		all = append(all, n)
-	}
-	if err := rows.Err(); err != nil {
-		Fail(c, "500", "删除菜单失败")
-		return
-	}
-
-	childrenOf := make(map[int64][]int64)
-	for _, n := range all {
-		childrenOf[n.parentID] = append(childrenOf[n.parentID], n.id)
-	}
-
-	seen := make(map[int64]struct{})
-	var collect func(id int64)
-	collect = func(id int64) {
-		if _, ok := seen[id]; ok {
-			return
-		}
-		seen[id] = struct{}{}
-		for _, ch := range childrenOf[id] {
-			collect(ch)
-		}
-	}
-	for _, idVal := range req.IDs {
-		collect(idVal)
-	}
-	if len(seen) == 0 {
-		OK(c, true)
-		return
-	}
-	allIDs := make([]int64, 0, len(seen))
-	for idVal := range seen {
-		allIDs = append(allIDs, idVal)
-	}
-
-	tx, err := h.db.BeginTx(c.Request.Context(), nil)
-	if err != nil {
-		Fail(c, "500", "删除菜单失败")
-		return
-	}
-	defer tx.Rollback()
-
-	// Remove role-menu relations first.
-	if _, err := tx.ExecContext(c.Request.Context(), `DELETE FROM sys_role_menu WHERE menu_id = ANY($1::bigint[])`, pqInt64Array(allIDs)); err != nil {
-		Fail(c, "500", "删除菜单失败")
-		return
-	}
-	if _, err := tx.ExecContext(c.Request.Context(), `DELETE FROM sys_menu WHERE id = ANY($1::bigint[])`, pqInt64Array(allIDs)); err != nil {
-		Fail(c, "500", "删除菜单失败")
-		return
-	}
-	if err := tx.Commit(); err != nil {
-		Fail(c, "500", "删除菜单失败")
+	if derr := h.svc.Delete(c.Request.Context(), req.IDs); derr != nil {
+		Fail(c, derr.Code, derr.Msg)
 		return
 	}
 	OK(c, true)
@@ -577,22 +231,29 @@ func (h *MenuHandler) ClearMenuCache(c *gin.Context) {
 	OK(c, true)
 }
 
-// pqInt64Array wraps []int64 for simple ANY($1) usage.
-type pqInt64Array []int64
-
-func (a pqInt64Array) Value() (driver.Value, error) {
-	if len(a) == 0 {
-		return "{}", nil
+func toMenuResp(row domainrbac.MenuDetail) MenuResp {
+	item := MenuResp{
+		ID:               row.ID,
+		Title:            row.Title,
+		ParentID:         row.ParentID,
+		Type:             int16(row.Type),
+		Path:             row.Path,
+		Name:             row.Name,
+		Component:        row.Component,
+		Redirect:         row.Redirect,
+		Icon:             row.Icon,
+		IsExternal:       row.IsExternal,
+		IsCache:          row.IsCache,
+		IsHidden:         row.IsHidden,
+		Permission:       row.Permission,
+		Sort:             row.Sort,
+		Status:           row.Status,
+		CreateUserString: row.CreateUserString,
+		CreateTime:       formatTime(row.CreateTime),
+		UpdateUserString: row.UpdateUserString,
 	}
-	// simple text array representation: {1,2,3}
-	var sb strings.Builder
-	sb.WriteByte('{')
-	for i, v := range a {
-		if i > 0 {
-			sb.WriteByte(',')
-		}
-		sb.WriteString(strconv.FormatInt(v, 10))
+	if row.UpdateTime != nil && !row.UpdateTime.IsZero() {
+		item.UpdateTime = formatTime(*row.UpdateTime)
 	}
-	sb.WriteByte('}')
-	return sb.String(), nil
+	return item
 }
