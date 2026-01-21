@@ -27,7 +27,7 @@ func LoadConfigFromEnv() Config {
 		Port:     getenvDefault("DB_PORT", "5432"),
 		User:     getenvDefault("DB_USER", "postgres"),
 		Password: getenvDefault("DB_PWD", "123456"),
-		DBName:   getenvDefault("DB_NAME", "go_admin_v1"),
+		DBName:   getenvDefault("DB_NAME", "ex_admin_v1"),
 		SSLMode:  getenvDefault("DB_SSLMODE", "disable"),
 	}
 	return cfg
