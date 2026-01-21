@@ -1,11 +1,14 @@
 package http
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"go-backend/internal/core/apperr"
 )
 
 // APIResponse matches the front-end's ApiRes<T> definition.
@@ -51,4 +54,18 @@ func Fail(c *gin.Context, code, msg string) {
 		Timestamp: nowString(),
 	}
 	c.JSON(http.StatusOK, resp)
+}
+
+// FailErr 将应用错误映射为统一响应；非业务错误统一返回 500。
+func FailErr(c *gin.Context, err error) {
+	if err == nil {
+		Fail(c, "500", "系统异常")
+		return
+	}
+	var ae *apperr.Error
+	if errors.As(err, &ae) && ae != nil && ae.Code != "" {
+		Fail(c, ae.Code, ae.Msg)
+		return
+	}
+	Fail(c, "500", "系统异常")
 }

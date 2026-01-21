@@ -40,3 +40,18 @@
 #
 #     - script: "hello.go"
 #       runner: go run
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: backend-go tests
+      tags:
+        - backend
+      run: cd backend-go && go test ./...
+
+    - name: secret files guard
+      tags:
+        - security
+      run: |
+        files=$(git diff --cached --name-only)
+        echo "$files" | rg -n "(^|/)\\.env($|\\.)|\\.(pem|key|p12)$" && echo "ERROR: 检测到敏感文件被提交（.env/*.pem/*.key/*.p12），请移除后重试" && exit 1 || true

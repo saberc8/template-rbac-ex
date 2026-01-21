@@ -1,13 +1,5 @@
 package dict
 
-type Error struct {
-	Code string
-	Msg  string
-}
+import "go-backend/internal/core/apperr"
 
-func (e *Error) Error() string {
-	if e == nil {
-		return ""
-	}
-	return e.Msg
-}
+type Error = apperr.Error

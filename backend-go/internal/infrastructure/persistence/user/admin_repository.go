@@ -9,6 +9,7 @@ import (
 	"time"
 
 	domain "go-backend/internal/domain/user"
+	"go-backend/internal/infrastructure/persistence/sqlutil"
 
 	"github.com/lib/pq"
 )
@@ -45,7 +46,8 @@ func (r *PgRepository) Page(ctx context.Context, q domain.AdminUserPageQuery) ([
 
 	countSQL := "SELECT COUNT(*) FROM sys_user AS u " + where
 	var total int64
-	if err := r.db.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
+	qr := sqlutil.QuerierFromContext(ctx, r.db)
+	if err := qr.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	if total == 0 {
@@ -86,7 +88,7 @@ ORDER BY u.id DESC
 LIMIT $%d OFFSET $%d;
 `, where, limitPos, offsetPos)
 
-	rows, err := r.db.QueryContext(ctx, query, argsWithPage...)
+	rows, err := qr.QueryContext(ctx, query, argsWithPage...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -212,7 +214,8 @@ LEFT JOIN sys_user AS uu ON uu.id = u.update_user
 		baseQuery += "ORDER BY u.id DESC"
 	}
 
-	rows, err := r.db.QueryContext(ctx, baseQuery, args...)
+	qr := sqlutil.QuerierFromContext(ctx, r.db)
+	rows, err := qr.QueryContext(ctx, baseQuery, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -344,7 +347,8 @@ WHERE u.id = $1;
 		password         sql.NullString
 		pwdResetTime     sql.NullTime
 	)
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
+	qr := sqlutil.QuerierFromContext(ctx, r.db)
+	err := qr.QueryRowContext(ctx, query, id).Scan(
 		&item.ID,
 		&item.Username,
 		&item.Nickname,
@@ -420,11 +424,13 @@ func (r *PgRepository) Create(ctx context.Context, u *domain.User, roleIDs []int
 	if u == nil {
 		return errors.New("nil user")
 	}
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, owned, err := beginTx(ctx, r.db)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	if owned {
+		defer tx.Rollback()
+	}
 
 	const insertUser = `
 INSERT INTO sys_user (
@@ -477,18 +483,23 @@ ON CONFLICT (user_id, role_id) DO NOTHING;
 		}
 	}
 
-	return tx.Commit()
+	if owned {
+		return tx.Commit()
+	}
+	return nil
 }
 
 func (r *PgRepository) Update(ctx context.Context, u *domain.User, roleIDs []int64, userRoleIDs []int64) error {
 	if u == nil {
 		return errors.New("nil user")
 	}
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, owned, err := beginTx(ctx, r.db)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	if owned {
+		defer tx.Rollback()
+	}
 
 	const updateUser = `
 UPDATE sys_user
@@ -551,18 +562,23 @@ ON CONFLICT (user_id, role_id) DO NOTHING;
 		}
 	}
 
-	return tx.Commit()
+	if owned {
+		return tx.Commit()
+	}
+	return nil
 }
 
 func (r *PgRepository) Delete(ctx context.Context, ids []int64) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, owned, err := beginTx(ctx, r.db)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	if owned {
+		defer tx.Rollback()
+	}
 
 	for _, idVal := range ids {
 		var isSystem bool
@@ -583,11 +599,15 @@ func (r *PgRepository) Delete(ctx context.Context, ids []int64) error {
 		}
 	}
 
-	return tx.Commit()
+	if owned {
+		return tx.Commit()
+	}
+	return nil
 }
 
 func (r *PgRepository) UpdatePassword(ctx context.Context, id int64, password string, pwdResetTime time.Time, userID int64, now time.Time) error {
-	_, err := r.db.ExecContext(
+	qr := sqlutil.QuerierFromContext(ctx, r.db)
+	_, err := qr.ExecContext(
 		ctx,
 		`UPDATE sys_user SET password = $1, pwd_reset_time = $2, update_user = $3, update_time = $4 WHERE id = $5`,
 		password,
@@ -600,11 +620,13 @@ func (r *PgRepository) UpdatePassword(ctx context.Context, id int64, password st
 }
 
 func (r *PgRepository) ReplaceRoles(ctx context.Context, userID int64, roleIDs []int64, userRoleIDs []int64) error {
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, owned, err := beginTx(ctx, r.db)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	if owned {
+		defer tx.Rollback()
+	}
 
 	if _, err := tx.ExecContext(ctx, `DELETE FROM sys_user_role WHERE user_id = $1`, userID); err != nil {
 		return err
@@ -629,11 +651,15 @@ ON CONFLICT (user_id, role_id) DO NOTHING;
 		}
 	}
 
-	return tx.Commit()
+	if owned {
+		return tx.Commit()
+	}
+	return nil
 }
 
 func (r *PgRepository) ExportRows(ctx context.Context) ([]domain.AdminUserExportRow, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT username, nickname, gender, COALESCE(email,''), COALESCE(phone,'') FROM sys_user ORDER BY id`)
+	qr := sqlutil.QuerierFromContext(ctx, r.db)
+	rows, err := qr.QueryContext(ctx, `SELECT username, nickname, gender, COALESCE(email,''), COALESCE(phone,'') FROM sys_user ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -675,4 +701,15 @@ func timeOrNow(t *time.Time, now time.Time) time.Time {
 		return now
 	}
 	return *t
+}
+
+func beginTx(ctx context.Context, db *sql.DB) (*sql.Tx, bool, error) {
+	if tx := sqlutil.TxFromContext(ctx); tx != nil {
+		return tx, false, nil
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, false, err
+	}
+	return tx, true, nil
 }

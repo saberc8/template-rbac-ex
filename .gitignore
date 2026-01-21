@@ -46,5 +46,14 @@ logs/
 *.sqlite
 *.db
 
+# 环境变量与密钥（避免提交敏感信息）
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+
 # 其他工具
 helloagents/

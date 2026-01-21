@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	domain "go-backend/internal/domain/user"
+	"go-backend/internal/infrastructure/persistence/sqlutil"
 )
 
 // PgRepository implements domain.Repository using PostgreSQL.
@@ -45,8 +46,8 @@ FROM sys_user
 WHERE username = $1
 LIMIT 1;
 `
-
-	row := r.db.QueryRowContext(ctx, query, username)
+	q := sqlutil.QuerierFromContext(ctx, r.db)
+	row := q.QueryRowContext(ctx, query, username)
 
 	var (
 		u                  domain.User
@@ -140,8 +141,8 @@ FROM sys_user
 WHERE id = $1
 LIMIT 1;
 `
-
-	row := r.db.QueryRowContext(ctx, query, id)
+	q := sqlutil.QuerierFromContext(ctx, r.db)
+	row := q.QueryRowContext(ctx, query, id)
 
 	var (
 		u                  domain.User

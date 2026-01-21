@@ -23,6 +23,7 @@ cp .env.example .env
 - `HTTP_PORT`：服务端口（默认 14398）
 - `DB_*`：PostgreSQL 连接配置
 - `REDIS_*`：Redis 连接配置
+- `DB_AUTO_MIGRATE`：是否在 `cmd/admin` 启动时自动执行迁移（生产环境默认关闭；开发环境默认开启，可显式设置 `0/false` 关闭）
 
 ### 验证码（可选）
 `/captcha/image` 默认生成更清晰的纯数字验证码，可通过以下环境变量调整参数：
@@ -40,6 +41,13 @@ cp .env.example .env
 go run ./cmd/admin
 ```
 
+生产/发布流程建议显式执行迁移：
+
+```bash
+go run ./cmd/migrate
+go run ./cmd/admin
+```
+
 启动成功后：
 - Swagger：`http://localhost:${HTTP_PORT}/swagger/index.html`
 
@@ -48,3 +56,6 @@ go run ./cmd/admin
 ```bash
 go test ./...
 ```
+
+INSERT INTO "public"."sys_storage" ("id", "name", "code", "type", "access_key", "secret_key", "endpoint", "region", "bucket_name", "domain", "description", "is_default", "sort", "status", "create_user", "create_time", "update_user", "update_time") VALUES (1, '开发环境', 'local_dev', 1, '', '', '', '', './data/file/', '/file/', '本地存储', 'f', 1, 1, 1, '2026-01-21 19:52:35.098207', 1, '2026-01-21 20:07:16.590038');
+INSERT INTO "public"."sys_storage" ("id", "name", "code", "type", "access_key", "secret_key", "endpoint", "region", "bucket_name", "domain", "description", "is_default", "sort", "status", "create_user", "create_time", "update_user", "update_time") VALUES (1768650694031, 'minio', 'minio', 2, 'zY5Ira7K8FjSNY3ozjxz', 'MwNCJ3UCNxqpaNnLYzXfapPRB4gObq7KV4zqXdXK', 'http://127.0.0.1:9000', '', 'aicut', 'http://127.0.0.1:9000/aicut', '', 't', 999, 1, 1, '2026-01-17 19:51:34.03154', 1, '2026-01-21 20:07:31.73795');

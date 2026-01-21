@@ -122,6 +122,7 @@ func (m *sysLogMiddleware) handle(c *gin.Context) {
 	// 组装日志记录。
 
 	rec := &syslog.Record{
+		TraceID:        requestIDFromContext(c),
 		RequestURL:     c.Request.URL.String(),
 		RequestMethod:  c.Request.Method,
 		RequestHeaders: marshalHeadersRedacted(c.Request.Header),
@@ -167,6 +168,23 @@ func (m *sysLogMiddleware) handle(c *gin.Context) {
 		log.Printf("[syslog] save failed: method=%s path=%s status=%d err=%v",
 			c.Request.Method, path, rec.StatusCode, err)
 	}
+}
+
+func requestIDFromContext(c *gin.Context) string {
+	if rid, ok := GetRequestID(c); ok {
+		return rid
+	}
+	// 兜底：从请求头读取，避免中间件顺序导致缺失。
+	if c == nil {
+		return ""
+	}
+	if v := strings.TrimSpace(c.GetHeader(headerRequestIDName)); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(c.GetHeader("X-Request-ID")); v != "" {
+		return v
+	}
+	return ""
 }
 
 // marshalHeaders 将 HTTP Header 转为 JSON 字符串，便于前端调试查看。
