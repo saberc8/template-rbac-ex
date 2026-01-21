@@ -246,7 +246,7 @@ func setupCORS(r *gin.Engine) {
 	r.Use(func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
 		// 只在本地开发时放开 localhost:3000，如需更多域名可按需扩展
-		if origin == "http://localhost:3000" {
+		if origin == "http://localhost:14399" {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
 			c.Writer.Header().Set("Vary", "Origin")
 		}
