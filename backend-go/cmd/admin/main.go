@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
@@ -70,11 +71,7 @@ func main() {
 		log.Fatalf("failed to auto-migrate database: %v", err)
 	}
 
-	// 2. 初始化安全组件：RSA 解密器、BCrypt 密码校验、JWT 生成器
-	rsaDecryptor, err := newRSADecryptorFromEnv()
-	if err != nil {
-		log.Fatalf("failed to init RSA decryptor: %v", err)
-	}
+	// 2. 初始化安全组件：BCrypt 密码校验、JWT 生成器
 	pwdVerifier := security.BcryptVerifier{}
 	pwdHasher := security.BcryptHasher{}
 
@@ -89,7 +86,8 @@ func main() {
 	menuRepo := rbacp.NewPgMenuRepository(pg)
 	var roleAuthRepo rbacdomain.RoleRepository = roleRepo
 	var menuAuthRepo rbacdomain.MenuRepository = menuRepo
-	authSvc := appauth.NewService(userRepo, rsaDecryptor, pwdVerifier, tokenSvc)
+	authSvc := appauth.NewService(userRepo, pwdVerifier, tokenSvc)
+	userQuerySvc := appauth.NewUserQueryService(userRepo, roleAuthRepo, menuAuthRepo)
 	dictRepo := dictp.NewPgRepository(pg)
 	dictSvc := appdict.NewService(dictRepo, id.Next)
 	deptRepo := systemp.NewPgDeptRepository(pg)
@@ -106,11 +104,79 @@ func main() {
 	sysLogSvc := appsyslog.NewService(sysLogQueryRepo)
 	menuSvc := apprbac.NewMenuService(menuRepo, id.Next)
 	roleSvc := apprbac.NewRoleService(roleRepo, id.Next)
-	userAdminSvc := appuser.NewAdminService(userPgRepo, roleRepo, id.Next, rsaDecryptor, pwdHasher)
+	userAdminSvc := appuser.NewAdminService(userPgRepo, roleRepo, id.Next, pwdHasher)
 
 	// 4. 初始化 HTTP 服务（Gin）
 	r := gin.Default()
 
+	setupCORS(r)
+
+	// 全局鉴权上下文：如携带 token 且合法，则写入 userID 到 Gin Context。
+	r.Use(httpif.AuthContext(tokenSvc))
+
+	// 系统操作日志中间件：在业务处理前后统一记录 sys_log。
+	sysLogRepo := syslogp.NewPgRepository(pg)
+	r.Use(httpif.NewSysLogMiddleware(sysLogRepo, tokenSvc))
+
+	// 在线用户内存存储（仅当前进程有效）
+	onlineStore := httpif.NewOnlineStore()
+
+	registerHandlers(r, handlerDeps{
+		redisClient: redisClient,
+		tokenSvc:    tokenSvc,
+		onlineStore: onlineStore,
+
+		authSvc:      authSvc,
+		userQuerySvc: userQuerySvc,
+		systemSvc:    systemSvc,
+		menuSvc:      menuSvc,
+		roleSvc:      roleSvc,
+		dictSvc:      dictSvc,
+		userAdminSvc: userAdminSvc,
+		storageSvc:   storageSvc,
+		fileSvc:      fileSvc,
+		clientSvc:    clientSvc,
+		sysLogSvc:    sysLogSvc,
+	})
+
+	// 5. 启动 HTTP 服务
+	port := getenvDefault("HTTP_PORT", "14398")
+	// 在启动前设置 swagger 文档的 Host，便于在 UI 中调试。
+	docs.SwaggerInfo.Host = "localhost:" + port
+	if err := r.Run(":" + port); err != nil {
+		log.Fatalf("failed to start http server: %v", err)
+	}
+}
+
+func getenvDefault(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+func mustGetenv(key string) string {
+	v := os.Getenv(key)
+	if v == "" {
+		log.Fatalf("missing required env var: %s", key)
+	}
+	return v
+}
+
+func loadDotenvForDev() {
+	env := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))
+	if env == "prod" || env == "production" {
+		return
+	}
+	if err := godotenv.Load(); err != nil {
+		// .env is optional; skip silently when missing.
+	}
+}
+
+func setupCORS(r *gin.Engine) {
+	if r == nil {
+		return
+	}
 	// 全局 CORS（开发阶段允许前端本地调试）
 	r.Use(func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
@@ -131,73 +197,87 @@ func main() {
 
 		c.Next()
 	})
+}
 
-	// 全局鉴权上下文：如携带 token 且合法，则写入 userID 到 Gin Context。
-	r.Use(httpif.AuthContext(tokenSvc))
+type handlerDeps struct {
+	redisClient *redis.Client
+	tokenSvc    *security.TokenService
+	onlineStore *httpif.OnlineStore
 
-	// 系统操作日志中间件：在业务处理前后统一记录 sys_log。
-	sysLogRepo := syslogp.NewPgRepository(pg)
-	r.Use(httpif.NewSysLogMiddleware(sysLogRepo, tokenSvc))
+	authSvc      *appauth.Service
+	userQuerySvc *appauth.UserQueryService
+	systemSvc    *appsystem.Service
+	menuSvc      *apprbac.MenuService
+	roleSvc      *apprbac.RoleService
+	dictSvc      *appdict.Service
+	userAdminSvc *appuser.AdminService
+	storageSvc   *appstorage.Service
+	fileSvc      *appstorage.FileService
+	clientSvc    *appclient.Service
+	sysLogSvc    *appsyslog.Service
+}
 
-	// 在线用户内存存储（仅当前进程有效）
-	onlineStore := httpif.NewOnlineStore()
+func registerHandlers(r *gin.Engine, d handlerDeps) {
+	if r == nil {
+		return
+	}
 
 	// 公共接口
-	commonHandler := httpif.NewCommonHandler(systemSvc, menuSvc, roleSvc, dictSvc, userAdminSvc)
+	commonHandler := httpif.NewCommonHandler(d.systemSvc, d.menuSvc, d.roleSvc, d.dictSvc, d.userAdminSvc)
 	commonHandler.RegisterCommonRoutes(r)
 
 	// 验证码接口（登录图片验证码）
-	captchaHandler := httpif.NewCaptchaHandler(systemSvc, redisClient)
+	captchaHandler := httpif.NewCaptchaHandler(d.systemSvc, d.redisClient)
 	captchaHandler.RegisterCaptchaRoutes(r)
 
 	// 登录与用户接口
-	authHandler := httpif.NewAuthHandler(authSvc, onlineStore, systemSvc, redisClient)
+	authHandler := httpif.NewAuthHandler(d.authSvc, d.onlineStore, d.systemSvc, d.redisClient)
 	authHandler.RegisterAuthRoutes(r)
-	userHandler := httpif.NewUserHandler(userRepo, roleAuthRepo, menuAuthRepo)
+	userHandler := httpif.NewUserHandler(d.userQuerySvc)
 	userHandler.RegisterUserRoutes(r)
 
 	// 系统监控：在线用户
-	onlineUserHandler := httpif.NewOnlineUserHandler(onlineStore)
+	onlineUserHandler := httpif.NewOnlineUserHandler(d.onlineStore)
 	onlineUserHandler.RegisterOnlineUserRoutes(r)
 
 	// 系统管理：菜单管理
-	menuHandler := httpif.NewMenuHandler(menuSvc)
+	menuHandler := httpif.NewMenuHandler(d.menuSvc)
 	menuHandler.RegisterMenuRoutes(r)
 
 	// 系统管理：角色管理
-	roleHandler := httpif.NewRoleHandler(roleSvc)
+	roleHandler := httpif.NewRoleHandler(d.roleSvc)
 	roleHandler.RegisterRoleRoutes(r)
 
 	// 系统管理：部门管理（仅树查询）
-	deptHandler := httpif.NewDeptHandler(systemSvc)
+	deptHandler := httpif.NewDeptHandler(d.systemSvc)
 	deptHandler.RegisterDeptRoutes(r)
 
 	// 系统管理：用户管理
-	systemUserHandler := httpif.NewSystemUserHandler(userAdminSvc)
+	systemUserHandler := httpif.NewSystemUserHandler(d.userAdminSvc)
 	systemUserHandler.RegisterSystemUserRoutes(r)
 
 	// 系统管理：字典管理
-	dictHandler := httpif.NewDictHandler(dictSvc)
+	dictHandler := httpif.NewDictHandler(d.dictSvc)
 	dictHandler.RegisterDictRoutes(r)
 
 	// 系统管理：系统配置（参数管理）
-	optionHandler := httpif.NewOptionHandler(systemSvc)
+	optionHandler := httpif.NewOptionHandler(d.systemSvc)
 	optionHandler.RegisterOptionRoutes(r)
 
 	// 系统管理：文件管理
-	fileHandler := httpif.NewFileHandler(fileSvc)
+	fileHandler := httpif.NewFileHandler(d.fileSvc)
 	fileHandler.RegisterFileRoutes(r)
 
-	// 系统管理：存储配置（需要 RSA 解密存储密钥）
-	storageHandler := httpif.NewStorageHandler(storageSvc, rsaDecryptor)
+	// 系统管理：存储配置
+	storageHandler := httpif.NewStorageHandler(d.storageSvc)
 	storageHandler.RegisterStorageRoutes(r)
 
 	// 系统管理：客户端配置
-	clientHandler := httpif.NewClientHandler(clientSvc)
+	clientHandler := httpif.NewClientHandler(d.clientSvc)
 	clientHandler.RegisterClientRoutes(r)
 
 	// 系统监控：系统日志
-	logHandler := httpif.NewLogHandler(sysLogSvc)
+	logHandler := httpif.NewLogHandler(d.sysLogSvc)
 	logHandler.RegisterLogRoutes(r)
 
 	// 静态文件访问（上传文件）
@@ -207,44 +287,4 @@ func main() {
 	// Swagger 接口文档
 	// 访问地址示例：http://localhost:14398/swagger/index.html
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-
-	// 5. 启动 HTTP 服务
-	port := getenvDefault("HTTP_PORT", "14398")
-	// 在启动前设置 swagger 文档的 Host，便于在 UI 中调试。
-	docs.SwaggerInfo.Host = "localhost:" + port
-	if err := r.Run(":" + port); err != nil {
-		log.Fatalf("failed to start http server: %v", err)
-	}
-}
-
-func getenvDefault(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
-}
-
-func newRSADecryptorFromEnv() (*security.RSADecryptor, error) {
-	if pemPath := strings.TrimSpace(os.Getenv("AUTH_RSA_PRIVATE_KEY_FILE")); pemPath != "" {
-		return security.NewRSADecryptorFromPEMFile(pemPath)
-	}
-	return security.NewRSADecryptorFromBase64(mustGetenv("AUTH_RSA_PRIVATE_KEY"))
-}
-
-func mustGetenv(key string) string {
-	v := os.Getenv(key)
-	if v == "" {
-		log.Fatalf("missing required env var: %s", key)
-	}
-	return v
-}
-
-func loadDotenvForDev() {
-	env := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))
-	if env == "prod" || env == "production" {
-		return
-	}
-	if err := godotenv.Load(); err != nil {
-		// .env is optional; skip silently when missing.
-	}
 }

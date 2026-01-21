@@ -1,7 +1,6 @@
 package http
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -9,7 +8,6 @@ import (
 
 	appstorage "voc-go-backend/internal/application/storage"
 	domainstorage "voc-go-backend/internal/domain/storage"
-	"voc-go-backend/internal/infrastructure/security"
 )
 
 // StorageResp 对应前端 StorageResp 类型，用于存储配置列表与详情展示。
@@ -53,14 +51,12 @@ type storageReq struct {
 
 // StorageHandler 提供 /system/storage 相关接口。
 type StorageHandler struct {
-	svc          *appstorage.Service
-	rsaDecryptor *security.RSADecryptor
+	svc *appstorage.Service
 }
 
-func NewStorageHandler(svc *appstorage.Service, rsa *security.RSADecryptor) *StorageHandler {
+func NewStorageHandler(svc *appstorage.Service) *StorageHandler {
 	return &StorageHandler{
-		svc:          svc,
-		rsaDecryptor: rsa,
+		svc: svc,
 	}
 }
 
@@ -73,29 +69,6 @@ func (h *StorageHandler) RegisterStorageRoutes(r *gin.Engine) {
 	r.DELETE("/system/storage", h.DeleteStorage)
 	r.PUT("/system/storage/:id/status", h.UpdateStorageStatus)
 	r.PUT("/system/storage/:id/default", h.SetDefaultStorage)
-}
-
-// decryptSecretKey 使用后端 RSA 私钥对前端加密的密钥进行解密，并做长度校验。
-// 如果 encrypted 为空或 nil，则返回 oldVal（用于更新场景保持原值）。
-func (h *StorageHandler) decryptSecretKey(encrypted *string, oldVal string) (string, error) {
-	if encrypted == nil {
-		return oldVal, nil
-	}
-	val := strings.TrimSpace(*encrypted)
-	if val == "" {
-		return "", nil
-	}
-	if h.rsaDecryptor == nil {
-		return "", fmt.Errorf("存储密钥解密器未初始化")
-	}
-	plain, err := h.rsaDecryptor.DecryptBase64(val)
-	if err != nil {
-		return "", fmt.Errorf("私有密钥解密失败")
-	}
-	if len(plain) > 255 {
-		return "", fmt.Errorf("私有密钥长度不能超过 255 个字符")
-	}
-	return plain, nil
 }
 
 // ListStorage 处理 GET /system/storage/list，支持按描述与类型筛选。
@@ -172,15 +145,16 @@ func (h *StorageHandler) CreateStorage(c *gin.Context) {
 
 	// 编码唯一性校验
 
-	// 解密 SecretKey（仅对象存储需要，解密失败按 400 返回）
+	// SecretKey（仅对象存储需要）
 	secretVal := ""
 	if req.Type == 2 {
-		plain, err := h.decryptSecretKey(req.SecretKey, "")
-		if err != nil {
-			Fail(c, "400", err.Error())
+		if req.SecretKey != nil {
+			secretVal = strings.TrimSpace(*req.SecretKey)
+		}
+		if len(secretVal) > 255 {
+			Fail(c, "400", "私有密钥长度不能超过 255 个字符")
 			return
 		}
-		secretVal = plain
 	}
 	isDefault := false
 	if req.IsDefault != nil {
@@ -245,13 +219,9 @@ func (h *StorageHandler) UpdateStorage(c *gin.Context) {
 	var secretPtr *string
 	if req.SecretKey != nil {
 		secretVal := strings.TrimSpace(*req.SecretKey)
-		if req.Type == 2 {
-			plain, err := h.decryptSecretKey(req.SecretKey, "")
-			if err != nil {
-				Fail(c, "400", err.Error())
-				return
-			}
-			secretVal = plain
+		if req.Type == 2 && len(secretVal) > 255 {
+			Fail(c, "400", "私有密钥长度不能超过 255 个字符")
+			return
 		}
 		secretPtr = &secretVal
 	}

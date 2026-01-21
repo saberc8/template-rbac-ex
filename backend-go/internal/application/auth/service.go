@@ -6,27 +6,23 @@ import (
 	"strings"
 
 	domain "voc-go-backend/internal/domain/user"
-	"voc-go-backend/internal/infrastructure/security"
 )
 
 // Service handles authentication use cases.
 type Service struct {
 	users       domain.Repository
-	decryptor   *security.RSADecryptor
-	pwdVerifier security.PasswordVerifier
-	tokenSvc    *security.TokenService
+	pwdVerifier PasswordVerifier
+	tokenSvc    TokenGenerator
 }
 
 // NewService builds a new auth Service.
 func NewService(
 	users domain.Repository,
-	decryptor *security.RSADecryptor,
-	pwdVerifier security.PasswordVerifier,
-	tokenSvc *security.TokenService,
+	pwdVerifier PasswordVerifier,
+	tokenSvc TokenGenerator,
 ) *Service {
 	return &Service{
 		users:       users,
-		decryptor:   decryptor,
 		pwdVerifier: pwdVerifier,
 		tokenSvc:    tokenSvc,
 	}
@@ -47,11 +43,10 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*LoginResponse, 
 	if strings.TrimSpace(req.Password) == "" {
 		return nil, errors.New("密码不能为空")
 	}
-
-	rawPassword, err := s.decryptor.DecryptBase64(req.Password)
-	if err != nil {
-		return nil, errors.New("密码解密失败")
+	if s.pwdVerifier == nil || s.tokenSvc == nil {
+		return nil, errors.New("认证服务未初始化")
 	}
+	rawPassword := req.Password
 
 	user, err := s.users.GetByUsername(ctx, req.Username)
 	if err != nil {

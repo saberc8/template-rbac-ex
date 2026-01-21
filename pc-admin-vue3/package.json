@@ -34,7 +34,6 @@
     "crypto-js": "^4.2.0",
     "dayjs": "^1.11.19",
     "echarts": "^6.0.0",
-    "jsencrypt": "^3.5.4",
     "lint-staged": "^16.2.7",
     "lodash-es": "^4.17.21",
     "mitt": "^3.0.1",

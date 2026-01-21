@@ -8,33 +8,29 @@ import (
 
 	domainrbac "voc-go-backend/internal/domain/rbac"
 	domainuser "voc-go-backend/internal/domain/user"
-	"voc-go-backend/internal/infrastructure/security"
 )
 
 // AdminService 提供用户管理的用例编排（sys_user + sys_user_role）。
 type AdminService struct {
-	repo         domainuser.AdminRepository
-	roleRepo     domainrbac.RoleAdminRepository
-	nextID       func() int64
-	now          func() time.Time
-	rsaDecryptor *security.RSADecryptor
-	hasher       security.PasswordHasher
+	repo     domainuser.AdminRepository
+	roleRepo domainrbac.RoleAdminRepository
+	nextID   func() int64
+	now      func() time.Time
+	hasher   PasswordHasher
 }
 
 func NewAdminService(
 	repo domainuser.AdminRepository,
 	roleRepo domainrbac.RoleAdminRepository,
 	nextID func() int64,
-	rsaDecryptor *security.RSADecryptor,
-	hasher security.PasswordHasher,
+	hasher PasswordHasher,
 ) *AdminService {
 	return &AdminService{
-		repo:         repo,
-		roleRepo:     roleRepo,
-		nextID:       nextID,
-		now:          time.Now,
-		rsaDecryptor: rsaDecryptor,
-		hasher:       hasher,
+		repo:     repo,
+		roleRepo: roleRepo,
+		nextID:   nextID,
+		now:      time.Now,
+		hasher:   hasher,
 	}
 }
 
@@ -155,7 +151,7 @@ func (s *AdminService) Create(ctx context.Context, userID int64, req UserSave) (
 		return 0, &Error{Code: "400", Msg: "密码不能为空"}
 	}
 
-	rawPwd, derr := s.decryptAndValidatePassword(req.Password)
+	rawPwd, derr := s.validatePassword(req.Password)
 	if derr != nil {
 		return 0, derr
 	}
@@ -172,16 +168,16 @@ func (s *AdminService) Create(ctx context.Context, userID int64, req UserSave) (
 	}
 
 	u := &domainuser.User{
-		ID:          idVal,
-		Username:    req.Username,
-		Nickname:    req.Nickname,
-		Password:    encodedPwd,
-		Gender:      req.Gender,
-		Status:      req.Status,
-		IsSystem:    false,
-		DeptID:      req.DeptID,
-		CreateUser:  &userID,
-		CreateTime:  now,
+		ID:           idVal,
+		Username:     req.Username,
+		Nickname:     req.Nickname,
+		Password:     encodedPwd,
+		Gender:       req.Gender,
+		Status:       req.Status,
+		IsSystem:     false,
+		DeptID:       req.DeptID,
+		CreateUser:   &userID,
+		CreateTime:   now,
 		PwdResetTime: &now,
 	}
 	if strings.TrimSpace(req.Email) != "" {
@@ -282,7 +278,7 @@ func (s *AdminService) ResetPassword(ctx context.Context, userID int64, id int64
 	if strings.TrimSpace(encrypted) == "" {
 		return &Error{Code: "400", Msg: "密码不能为空"}
 	}
-	rawPwd, derr := s.decryptAndValidatePassword(encrypted)
+	rawPwd, derr := s.validatePassword(encrypted)
 	if derr != nil {
 		return derr
 	}
@@ -381,13 +377,10 @@ func (s *AdminService) withRoles(ctx context.Context, users []domainuser.AdminUs
 	return out, total, nil
 }
 
-func (s *AdminService) decryptAndValidatePassword(encrypted string) (string, *Error) {
-	if s.rsaDecryptor == nil {
-		return "", &Error{Code: "500", Msg: "密码解密失败"}
-	}
-	rawPwd, err := s.rsaDecryptor.DecryptBase64(encrypted)
-	if err != nil {
-		return "", &Error{Code: "400", Msg: "密码解密失败"}
+func (s *AdminService) validatePassword(rawPwd string) (string, *Error) {
+	rawPwd = strings.TrimSpace(rawPwd)
+	if rawPwd == "" {
+		return "", &Error{Code: "400", Msg: "密码不能为空"}
 	}
 	if len(rawPwd) < 8 || len(rawPwd) > 32 {
 		return "", &Error{Code: "400", Msg: "密码长度为 8-32 个字符，至少包含字母和数字"}

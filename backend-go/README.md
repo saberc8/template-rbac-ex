@@ -15,15 +15,9 @@ cp .env.example .env
 `cmd/admin` 启动时会自动尝试加载当前工作目录下的 `.env`（开发环境便利性），可通过设置 `APP_ENV=production` 禁用。
 
 ### 必填
-- `AUTH_RSA_PRIVATE_KEY_FILE`：RSA 私钥 PEM 文件路径（推荐，部署更省事）
-- `AUTH_RSA_PRIVATE_KEY`：RSA 私钥 DER Base64（兼容旧配置，支持 PKCS#8/PKCS#1）
 - `AUTH_JWT_SECRET`：JWT 签名密钥
 
-如果你有 PEM 私钥文件（推荐直接用 `AUTH_RSA_PRIVATE_KEY_FILE` 指向它），也可以用下面命令生成 `AUTH_RSA_PRIVATE_KEY`（单行 Base64）：
-
-```bash
-openssl pkcs8 -topk8 -nocrypt -in dev_rsa_private_key.pem -outform DER | base64 | tr -d '\n'; echo
-```
+⚠️ 安全提示：密码/密钥字段不再使用 RSA 加密，生产环境请务必启用 HTTPS，避免明文在传输层泄露。
 
 ### 常用
 - `HTTP_PORT`：服务端口（默认 14398）
