@@ -17,11 +17,11 @@ func TestAutoMigrateContext_BeginsTxAndRollsBackOnError(t *testing.T) {
 	t.Cleanup(func() { _ = database.Close() })
 
 	mock.ExpectBegin()
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT to_regclass('public.sys_user');`)).
+	mock.ExpectExec(regexp.QuoteMeta(`CREATE TABLE IF NOT EXISTS sys_user`)).
 		WillReturnError(errors.New("boom"))
 	mock.ExpectRollback()
 
-	if err := AutoMigrateContext(context.Background(), database); err == nil {
+	if err := AutoMigrateContext(context.Background(), database, DialectPostgres); err == nil {
 		t.Fatalf("expected error, got nil")
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {

@@ -4,19 +4,24 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"strings"
 
 	domainsyslog "go-backend/internal/domain/syslog"
+	"go-backend/internal/infrastructure/persistence/sqlutil"
 )
 
 // PgQueryRepository 提供 sys_log 的查询实现。
 type PgQueryRepository struct {
-	db *sql.DB
+	db      *sql.DB
+	dialect string
+}
+
+func NewQueryRepository(db *sql.DB, dialect string) *PgQueryRepository {
+	return &PgQueryRepository{db: db, dialect: dialect}
 }
 
 func NewPgQueryRepository(db *sql.DB) *PgQueryRepository {
-	return &PgQueryRepository{db: db}
+	return NewQueryRepository(db, "postgres")
 }
 
 var _ domainsyslog.QueryRepository = (*PgQueryRepository)(nil)
@@ -26,7 +31,7 @@ func (r *PgQueryRepository) Page(ctx context.Context, f domainsyslog.QueryFilter
 
 	countSQL := "SELECT COUNT(*) " + baseFrom + where
 	var total int64
-	if err := r.db.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
+	if err := r.db.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, countSQL), args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	if total == 0 {
@@ -34,11 +39,9 @@ func (r *PgQueryRepository) Page(ctx context.Context, f domainsyslog.QueryFilter
 	}
 
 	offset := int64((f.Page - 1) * f.Size)
-	limitPos := len(args) + 1
-	offsetPos := len(args) + 2
 	argsWithPage := append(args, int64(f.Size), offset)
 
-	query := fmt.Sprintf(`
+	query := `
 SELECT t1.id,
        t1.description,
        t1.module,
@@ -51,13 +54,12 @@ SELECT t1.id,
        COALESCE(t1.error_msg, ''),
        t1.create_time,
        COALESCE(t2.nickname, '')
-%s
-%s
+` + baseFrom + where + `
 ORDER BY t1.create_time DESC, t1.id DESC
-LIMIT $%d OFFSET $%d;
-`, baseFrom, where, limitPos, offsetPos)
+LIMIT ? OFFSET ?;
+`
 
-	rows, err := r.db.QueryContext(ctx, query, argsWithPage...)
+	rows, err := r.db.QueryContext(ctx, sqlutil.Rebind(r.dialect, query), argsWithPage...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -114,11 +116,11 @@ SELECT t1.id,
        COALESCE(t2.nickname, '')
 FROM sys_log AS t1
 LEFT JOIN sys_user AS t2 ON t2.id = t1.create_user
-WHERE t1.id = $1;
+WHERE t1.id = ?;
 `
 
 	var item domainsyslog.Detail
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
+	err := r.db.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, query), id).Scan(
 		&item.ID,
 		&item.TraceID,
 		&item.Description,
@@ -167,7 +169,7 @@ SELECT t1.id,
        COALESCE(t2.nickname, '')
 ` + baseFrom + where + " ORDER BY t1.create_time DESC, t1.id DESC;"
 
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	rows, err := r.db.QueryContext(ctx, sqlutil.Rebind(r.dialect, query), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -207,38 +209,33 @@ LEFT JOIN sys_user AS t2 ON t2.id = t1.create_user
 `
 	where = "WHERE 1=1"
 	args = []any{}
-	argPos := 1
 
 	if strings.TrimSpace(f.Description) != "" {
-		where += fmt.Sprintf(" AND (t1.description ILIKE $%d OR t1.module ILIKE $%d)", argPos, argPos)
-		args = append(args, "%"+strings.TrimSpace(f.Description)+"%")
-		argPos++
+		like := "%" + strings.ToLower(strings.TrimSpace(f.Description)) + "%"
+		where += " AND (LOWER(t1.description) LIKE ? OR LOWER(t1.module) LIKE ?)"
+		args = append(args, like, like)
 	}
 	if strings.TrimSpace(f.Module) != "" {
-		where += fmt.Sprintf(" AND t1.module = $%d", argPos)
+		where += " AND t1.module = ?"
 		args = append(args, strings.TrimSpace(f.Module))
-		argPos++
 	}
 	if strings.TrimSpace(f.IP) != "" {
-		where += fmt.Sprintf(" AND (t1.ip ILIKE $%d OR t1.address ILIKE $%d)", argPos, argPos)
-		args = append(args, "%"+strings.TrimSpace(f.IP)+"%")
-		argPos++
+		like := "%" + strings.ToLower(strings.TrimSpace(f.IP)) + "%"
+		where += " AND (LOWER(t1.ip) LIKE ? OR LOWER(t1.address) LIKE ?)"
+		args = append(args, like, like)
 	}
 	if strings.TrimSpace(f.CreateUser) != "" {
-		where += fmt.Sprintf(" AND (t2.username ILIKE $%d OR t2.nickname ILIKE $%d)", argPos, argPos)
-		args = append(args, "%"+strings.TrimSpace(f.CreateUser)+"%")
-		argPos++
+		like := "%" + strings.ToLower(strings.TrimSpace(f.CreateUser)) + "%"
+		where += " AND (LOWER(t2.username) LIKE ? OR LOWER(t2.nickname) LIKE ?)"
+		args = append(args, like, like)
 	}
 	if f.Status != 0 {
-		where += fmt.Sprintf(" AND t1.status = $%d", argPos)
+		where += " AND t1.status = ?"
 		args = append(args, f.Status)
-		argPos++
 	}
 	if f.StartTime != nil && f.EndTime != nil {
-		where += fmt.Sprintf(" AND t1.create_time BETWEEN $%d AND $%d", argPos, argPos+1)
+		where += " AND t1.create_time BETWEEN ? AND ?"
 		args = append(args, *f.StartTime, *f.EndTime)
-		argPos += 2
 	}
-	_ = argPos
 	return baseFrom, where, args
 }

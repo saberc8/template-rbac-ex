@@ -4,14 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
 	domain "go-backend/internal/domain/user"
 	"go-backend/internal/infrastructure/persistence/sqlutil"
-
-	"github.com/lib/pq"
 )
 
 var _ domain.AdminRepository = (*PgRepository)(nil)
@@ -26,28 +23,25 @@ func (r *PgRepository) Page(ctx context.Context, q domain.AdminUserPageQuery) ([
 
 	where := "WHERE 1=1"
 	args := []any{}
-	argPos := 1
 
 	if strings.TrimSpace(q.Description) != "" {
-		where += fmt.Sprintf(" AND (u.username ILIKE $%d OR u.nickname ILIKE $%d OR COALESCE(u.description,'') ILIKE $%d)", argPos, argPos, argPos)
-		args = append(args, "%"+strings.TrimSpace(q.Description)+"%")
-		argPos++
+		like := "%" + strings.ToLower(strings.TrimSpace(q.Description)) + "%"
+		where += " AND (LOWER(u.username) LIKE ? OR LOWER(u.nickname) LIKE ? OR LOWER(COALESCE(u.description,'')) LIKE ?)"
+		args = append(args, like, like, like)
 	}
 	if q.Status != nil && *q.Status != 0 {
-		where += fmt.Sprintf(" AND u.status = $%d", argPos)
+		where += " AND u.status = ?"
 		args = append(args, *q.Status)
-		argPos++
 	}
 	if q.DeptID != nil && *q.DeptID != 0 {
-		where += fmt.Sprintf(" AND u.dept_id = $%d", argPos)
+		where += " AND u.dept_id = ?"
 		args = append(args, *q.DeptID)
-		argPos++
 	}
 
 	countSQL := "SELECT COUNT(*) FROM sys_user AS u " + where
 	var total int64
 	qr := sqlutil.QuerierFromContext(ctx, r.db)
-	if err := qr.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
+	if err := qr.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, countSQL), args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	if total == 0 {
@@ -55,11 +49,9 @@ func (r *PgRepository) Page(ctx context.Context, q domain.AdminUserPageQuery) ([
 	}
 
 	offset := int64((q.Page - 1) * q.Size)
-	limitPos := argPos
-	offsetPos := argPos + 1
 	argsWithPage := append(args, int64(q.Size), offset)
 
-	query := fmt.Sprintf(`
+	query := `
 SELECT u.id,
        u.username,
        u.nickname,
@@ -83,12 +75,12 @@ FROM sys_user AS u
 LEFT JOIN sys_dept AS d ON d.id = u.dept_id
 LEFT JOIN sys_user AS cu ON cu.id = u.create_user
 LEFT JOIN sys_user AS uu ON uu.id = u.update_user
-%s
+` + where + `
 ORDER BY u.id DESC
-LIMIT $%d OFFSET $%d;
-`, where, limitPos, offsetPos)
+LIMIT ? OFFSET ?;
+`
 
-	rows, err := qr.QueryContext(ctx, query, argsWithPage...)
+	rows, err := qr.QueryContext(ctx, sqlutil.Rebind(r.dialect, query), argsWithPage...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -206,16 +198,23 @@ LEFT JOIN sys_dept AS d ON d.id = u.dept_id
 LEFT JOIN sys_user AS cu ON cu.id = u.create_user
 LEFT JOIN sys_user AS uu ON uu.id = u.update_user
 `
-	args := []any{}
-	if len(ids) > 0 {
-		baseQuery += "WHERE u.id = ANY($1::bigint[])"
-		args = append(args, pq.Int64Array(ids))
-	} else {
-		baseQuery += "ORDER BY u.id DESC"
-	}
 
 	qr := sqlutil.QuerierFromContext(ctx, r.db)
-	rows, err := qr.QueryContext(ctx, baseQuery, args...)
+	var (
+		query string
+		args  []any
+		err   error
+	)
+	if len(ids) > 0 {
+		query, args, err = sqlutil.In(r.dialect, baseQuery+"WHERE u.id IN (?)", ids)
+	} else {
+		query = sqlutil.Rebind(r.dialect, baseQuery+"ORDER BY u.id DESC")
+		args = []any{}
+	}
+	if err != nil {
+		return nil, err
+	}
+	rows, err := qr.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -332,7 +331,7 @@ FROM sys_user AS u
 LEFT JOIN sys_dept AS d ON d.id = u.dept_id
 LEFT JOIN sys_user AS cu ON cu.id = u.create_user
 LEFT JOIN sys_user AS uu ON uu.id = u.update_user
-WHERE u.id = $1;
+WHERE u.id = ?;
 `
 	var (
 		item             domain.AdminUserDetailWithPwdReset
@@ -348,7 +347,7 @@ WHERE u.id = $1;
 		pwdResetTime     sql.NullTime
 	)
 	qr := sqlutil.QuerierFromContext(ctx, r.db)
-	err := qr.QueryRowContext(ctx, query, id).Scan(
+	err := qr.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, query), id).Scan(
 		&item.ID,
 		&item.Username,
 		&item.Nickname,
@@ -438,13 +437,13 @@ INSERT INTO sys_user (
     description, status, is_system, pwd_reset_time, dept_id,
     create_user, create_time
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
-        $9, $10, FALSE, $11, $12,
-        $13, $14);
+VALUES (?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, FALSE, ?, ?,
+        ?, ?);
 `
 	if _, err := tx.ExecContext(
 		ctx,
-		insertUser,
+		sqlutil.Rebind(r.dialect, insertUser),
 		u.ID,
 		u.Username,
 		u.Nickname,
@@ -464,11 +463,15 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
 	}
 
 	if len(roleIDs) > 0 {
-		const insertUserRole = `
+		insertUserRole := `
 INSERT INTO sys_user_role (id, user_id, role_id)
-VALUES ($1, $2, $3)
-ON CONFLICT (user_id, role_id) DO NOTHING;
+VALUES (?, ?, ?)
 `
+		if r.dialect == "mysql" {
+			insertUserRole += "ON DUPLICATE KEY UPDATE id = id"
+		} else {
+			insertUserRole += "ON CONFLICT (user_id, role_id) DO NOTHING"
+		}
 		n := len(roleIDs)
 		if len(userRoleIDs) < n {
 			n = len(userRoleIDs)
@@ -477,7 +480,7 @@ ON CONFLICT (user_id, role_id) DO NOTHING;
 			if roleIDs[i] <= 0 {
 				continue
 			}
-			if _, err := tx.ExecContext(ctx, insertUserRole, userRoleIDs[i], u.ID, roleIDs[i]); err != nil {
+			if _, err := tx.ExecContext(ctx, sqlutil.Rebind(r.dialect, insertUserRole), userRoleIDs[i], u.ID, roleIDs[i]); err != nil {
 				return err
 			}
 		}
@@ -503,18 +506,18 @@ func (r *PgRepository) Update(ctx context.Context, u *domain.User, roleIDs []int
 
 	const updateUser = `
 UPDATE sys_user
-   SET username    = $1,
-       nickname    = $2,
-       gender      = $3,
-       email       = $4,
-       phone       = $5,
-       avatar      = $6,
-       description = $7,
-       status      = $8,
-       dept_id     = $9,
-       update_user = $10,
-       update_time = $11
- WHERE id          = $12;
+   SET username    = ?,
+       nickname    = ?,
+       gender      = ?,
+       email       = ?,
+       phone       = ?,
+       avatar      = ?,
+       description = ?,
+       status      = ?,
+       dept_id     = ?,
+       update_user = ?,
+       update_time = ?
+ WHERE id          = ?;
 `
 	var updateTime any
 	if u.UpdateTime != nil {
@@ -522,7 +525,7 @@ UPDATE sys_user
 	}
 	if _, err := tx.ExecContext(
 		ctx,
-		updateUser,
+		sqlutil.Rebind(r.dialect, updateUser),
 		u.Username,
 		u.Nickname,
 		u.Gender,
@@ -539,15 +542,19 @@ UPDATE sys_user
 		return err
 	}
 
-	if _, err := tx.ExecContext(ctx, `DELETE FROM sys_user_role WHERE user_id = $1`, u.ID); err != nil {
+	if _, err := tx.ExecContext(ctx, sqlutil.Rebind(r.dialect, `DELETE FROM sys_user_role WHERE user_id = ?`), u.ID); err != nil {
 		return err
 	}
 	if len(roleIDs) > 0 {
-		const insertUserRole = `
+		insertUserRole := `
 INSERT INTO sys_user_role (id, user_id, role_id)
-VALUES ($1, $2, $3)
-ON CONFLICT (user_id, role_id) DO NOTHING;
+VALUES (?, ?, ?)
 `
+		if r.dialect == "mysql" {
+			insertUserRole += "ON DUPLICATE KEY UPDATE id = id"
+		} else {
+			insertUserRole += "ON CONFLICT (user_id, role_id) DO NOTHING"
+		}
 		n := len(roleIDs)
 		if len(userRoleIDs) < n {
 			n = len(userRoleIDs)
@@ -556,7 +563,7 @@ ON CONFLICT (user_id, role_id) DO NOTHING;
 			if roleIDs[i] <= 0 {
 				continue
 			}
-			if _, err := tx.ExecContext(ctx, insertUserRole, userRoleIDs[i], u.ID, roleIDs[i]); err != nil {
+			if _, err := tx.ExecContext(ctx, sqlutil.Rebind(r.dialect, insertUserRole), userRoleIDs[i], u.ID, roleIDs[i]); err != nil {
 				return err
 			}
 		}
@@ -582,7 +589,7 @@ func (r *PgRepository) Delete(ctx context.Context, ids []int64) error {
 
 	for _, idVal := range ids {
 		var isSystem bool
-		if err := tx.QueryRowContext(ctx, `SELECT is_system FROM sys_user WHERE id = $1`, idVal).Scan(&isSystem); err != nil {
+		if err := tx.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, `SELECT is_system FROM sys_user WHERE id = ?`), idVal).Scan(&isSystem); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				continue
 			}
@@ -591,10 +598,10 @@ func (r *PgRepository) Delete(ctx context.Context, ids []int64) error {
 		if isSystem {
 			continue
 		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM sys_user_role WHERE user_id = $1`, idVal); err != nil {
+		if _, err := tx.ExecContext(ctx, sqlutil.Rebind(r.dialect, `DELETE FROM sys_user_role WHERE user_id = ?`), idVal); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM sys_user WHERE id = $1`, idVal); err != nil {
+		if _, err := tx.ExecContext(ctx, sqlutil.Rebind(r.dialect, `DELETE FROM sys_user WHERE id = ?`), idVal); err != nil {
 			return err
 		}
 	}
@@ -609,7 +616,7 @@ func (r *PgRepository) UpdatePassword(ctx context.Context, id int64, password st
 	qr := sqlutil.QuerierFromContext(ctx, r.db)
 	_, err := qr.ExecContext(
 		ctx,
-		`UPDATE sys_user SET password = $1, pwd_reset_time = $2, update_user = $3, update_time = $4 WHERE id = $5`,
+		sqlutil.Rebind(r.dialect, `UPDATE sys_user SET password = ?, pwd_reset_time = ?, update_user = ?, update_time = ? WHERE id = ?`),
 		password,
 		pwdResetTime,
 		userID,
@@ -628,15 +635,19 @@ func (r *PgRepository) ReplaceRoles(ctx context.Context, userID int64, roleIDs [
 		defer tx.Rollback()
 	}
 
-	if _, err := tx.ExecContext(ctx, `DELETE FROM sys_user_role WHERE user_id = $1`, userID); err != nil {
+	if _, err := tx.ExecContext(ctx, sqlutil.Rebind(r.dialect, `DELETE FROM sys_user_role WHERE user_id = ?`), userID); err != nil {
 		return err
 	}
 	if len(roleIDs) > 0 {
-		const insertUserRole = `
+		insertUserRole := `
 INSERT INTO sys_user_role (id, user_id, role_id)
-VALUES ($1, $2, $3)
-ON CONFLICT (user_id, role_id) DO NOTHING;
+VALUES (?, ?, ?)
 `
+		if r.dialect == "mysql" {
+			insertUserRole += "ON DUPLICATE KEY UPDATE id = id"
+		} else {
+			insertUserRole += "ON CONFLICT (user_id, role_id) DO NOTHING"
+		}
 		n := len(roleIDs)
 		if len(userRoleIDs) < n {
 			n = len(userRoleIDs)
@@ -645,7 +656,7 @@ ON CONFLICT (user_id, role_id) DO NOTHING;
 			if roleIDs[i] <= 0 {
 				continue
 			}
-			if _, err := tx.ExecContext(ctx, insertUserRole, userRoleIDs[i], userID, roleIDs[i]); err != nil {
+			if _, err := tx.ExecContext(ctx, sqlutil.Rebind(r.dialect, insertUserRole), userRoleIDs[i], userID, roleIDs[i]); err != nil {
 				return err
 			}
 		}

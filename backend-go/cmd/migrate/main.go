@@ -12,14 +12,14 @@ import (
 
 func main() {
 	dbCfg := config.LoadDatabaseConfig()
-	pg, err := db.NewPostgres(dbCfg)
+	sqlDB, err := db.Open(dbCfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "connect postgres failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "connect db failed: %v\n", err)
 		os.Exit(1)
 	}
-	defer pg.Close()
+	defer sqlDB.Close()
 
-	if err := db.AutoMigrate(pg); err != nil {
+	if err := db.AutoMigrate(sqlDB, dbCfg.Dialect); err != nil {
 		fmt.Fprintf(os.Stderr, "auto-migrate failed: %v\n", err)
 		os.Exit(1)
 	}

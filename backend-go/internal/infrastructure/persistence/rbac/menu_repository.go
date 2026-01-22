@@ -7,18 +7,22 @@ import (
 	"time"
 
 	domain "go-backend/internal/domain/rbac"
-
-	"github.com/lib/pq"
+	"go-backend/internal/infrastructure/persistence/sqlutil"
 )
 
 // PgMenuRepository implements MenuRepository using PostgreSQL tables
 // sys_menu, sys_role_menu, sys_user_role, sys_role and sys_user.
 type PgMenuRepository struct {
-	db *sql.DB
+	db      *sql.DB
+	dialect string
+}
+
+func NewMenuRepository(db *sql.DB, dialect string) *PgMenuRepository {
+	return &PgMenuRepository{db: db, dialect: dialect}
 }
 
 func NewPgMenuRepository(db *sql.DB) *PgMenuRepository {
-	return &PgMenuRepository{db: db}
+	return NewMenuRepository(db, "postgres")
 }
 
 var _ domain.MenuRepository = (*PgMenuRepository)(nil)
@@ -45,9 +49,9 @@ SELECT
   m.status
 FROM sys_menu AS m
 JOIN sys_role_menu AS rm ON rm.menu_id = m.id
-WHERE rm.role_id = $1;
+WHERE rm.role_id = ?;
 `
-	rows, err := r.db.QueryContext(ctx, query, roleID)
+	rows, err := r.db.QueryContext(ctx, sqlutil.Rebind(r.dialect, query), roleID)
 	if err != nil {
 		return nil, err
 	}
@@ -117,11 +121,11 @@ LEFT JOIN sys_role_menu AS rm ON rm.menu_id = m.id
 LEFT JOIN sys_role AS r ON r.id = rm.role_id
 LEFT JOIN sys_user_role AS ur ON ur.role_id = r.id
 LEFT JOIN sys_user AS u ON u.id = ur.user_id
-WHERE u.id = $1
+WHERE u.id = ?
   AND m.status = 1
   AND m.permission IS NOT NULL;
 `
-	rows, err := r.db.QueryContext(ctx, query, userID)
+	rows, err := r.db.QueryContext(ctx, sqlutil.Rebind(r.dialect, query), userID)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +173,7 @@ LEFT JOIN sys_user AS cu ON cu.id = m.create_user
 LEFT JOIN sys_user AS uu ON uu.id = m.update_user
 ORDER BY m.sort ASC, m.id ASC;
 `
-	rows, err := r.db.QueryContext(ctx, query)
+	rows, err := r.db.QueryContext(ctx, sqlutil.Rebind(r.dialect, query))
 	if err != nil {
 		return nil, err
 	}
@@ -315,7 +319,7 @@ SELECT m.id,
 FROM sys_menu AS m
 LEFT JOIN sys_user AS cu ON cu.id = m.create_user
 LEFT JOIN sys_user AS uu ON uu.id = m.update_user
-WHERE m.id = $1;
+WHERE m.id = ?;
 `
 	var (
 		item          domain.MenuDetail
@@ -339,7 +343,7 @@ WHERE m.id = $1;
 		typeVal       int16
 		createTime    time.Time
 	)
-	if err := r.db.QueryRowContext(ctx, query, id).Scan(
+	if err := r.db.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, query), id).Scan(
 		&item.ID,
 		&item.Title,
 		&parentID,
@@ -432,9 +436,9 @@ INSERT INTO sys_menu (
     create_user, create_time
 )
 VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8,
-    $9, $10, $11, $12, $13, $14, $15,
-    $16, $17
+    ?, ?, ?, ?, ?, ?, ?, ?,
+    ?, ?, ?, ?, ?, ?, ?,
+    ?, ?
 );
 `
 
@@ -450,7 +454,7 @@ VALUES (
 	}
 	_, err := r.db.ExecContext(
 		ctx,
-		stmt,
+		sqlutil.Rebind(r.dialect, stmt),
 		m.ID,
 		strings.TrimSpace(m.Title),
 		parentID,
@@ -475,23 +479,23 @@ VALUES (
 func (r *PgMenuRepository) Update(ctx context.Context, m *domain.Menu) error {
 	const stmt = `
 UPDATE sys_menu
-   SET title       = $1,
-       parent_id   = $2,
-       type        = $3,
-       path        = $4,
-       name        = $5,
-       component   = $6,
-       redirect    = $7,
-       icon        = $8,
-       is_external = $9,
-       is_cache    = $10,
-       is_hidden   = $11,
-       permission  = $12,
-       sort        = $13,
-       status      = $14,
-       update_user = $15,
-       update_time = $16
- WHERE id          = $17;
+   SET title       = ?,
+       parent_id   = ?,
+       type        = ?,
+       path        = ?,
+       name        = ?,
+       component   = ?,
+       redirect    = ?,
+       icon        = ?,
+       is_external = ?,
+       is_cache    = ?,
+       is_hidden   = ?,
+       permission  = ?,
+       sort        = ?,
+       status      = ?,
+       update_user = ?,
+       update_time = ?
+ WHERE id          = ?;
 `
 	updateUser := any(nil)
 	if m.UpdateUser != nil {
@@ -503,7 +507,7 @@ UPDATE sys_menu
 	}
 	_, err := r.db.ExecContext(
 		ctx,
-		stmt,
+		sqlutil.Rebind(r.dialect, stmt),
 		strings.TrimSpace(m.Title),
 		m.ParentID,
 		int16(m.Type),
@@ -588,10 +592,18 @@ func (r *PgMenuRepository) DeleteCascade(ctx context.Context, ids []int64) error
 	}
 	defer tx.Rollback()
 
-	if _, err := tx.ExecContext(ctx, `DELETE FROM sys_role_menu WHERE menu_id = ANY($1::bigint[])`, pq.Int64Array(allIDs)); err != nil {
+	q1, args1, err := sqlutil.In(r.dialect, `DELETE FROM sys_role_menu WHERE menu_id IN (?)`, allIDs)
+	if err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM sys_menu WHERE id = ANY($1::bigint[])`, pq.Int64Array(allIDs)); err != nil {
+	if _, err := tx.ExecContext(ctx, q1, args1...); err != nil {
+		return err
+	}
+	q2, args2, err := sqlutil.In(r.dialect, `DELETE FROM sys_menu WHERE id IN (?)`, allIDs)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, q2, args2...); err != nil {
 		return err
 	}
 	return tx.Commit()

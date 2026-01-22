@@ -5,20 +5,25 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
 	domainclient "go-backend/internal/domain/client"
+	"go-backend/internal/infrastructure/persistence/sqlutil"
 )
 
 // PgRepository 提供 sys_client 的 PostgreSQL 实现。
 type PgRepository struct {
-	db *sql.DB
+	db      *sql.DB
+	dialect string
+}
+
+func NewRepository(db *sql.DB, dialect string) *PgRepository {
+	return &PgRepository{db: db, dialect: dialect}
 }
 
 func NewPgRepository(db *sql.DB) *PgRepository {
-	return &PgRepository{db: db}
+	return NewRepository(db, "postgres")
 }
 
 var _ domainclient.Repository = (*PgRepository)(nil)
@@ -26,17 +31,14 @@ var _ domainclient.Repository = (*PgRepository)(nil)
 func (r *PgRepository) Page(ctx context.Context, q domainclient.PageQuery) (domainclient.PageResult, error) {
 	where := "WHERE 1=1"
 	args := []any{}
-	argPos := 1
 
 	if strings.TrimSpace(q.ClientType) != "" {
-		where += fmt.Sprintf(" AND c.client_type = $%d", argPos)
+		where += " AND c.client_type = ?"
 		args = append(args, strings.TrimSpace(q.ClientType))
-		argPos++
 	}
 	if q.Status != nil {
-		where += fmt.Sprintf(" AND c.status = $%d", argPos)
+		where += " AND c.status = ?"
 		args = append(args, *q.Status)
-		argPos++
 	}
 	if len(q.AuthType) > 0 {
 		// 任意一个认证类型命中即可。
@@ -46,10 +48,14 @@ func (r *PgRepository) Page(ctx context.Context, q domainclient.PageQuery) (doma
 			if t == "" {
 				continue
 			}
-			conds = append(conds, fmt.Sprintf("c.auth_type::jsonb @> $%d::jsonb", argPos))
+			if r.dialect == "mysql" {
+				conds = append(conds, "JSON_CONTAINS(c.auth_type, JSON_QUOTE(?))")
+				args = append(args, t)
+				continue
+			}
+			conds = append(conds, "c.auth_type::jsonb @> ?::jsonb")
 			b, _ := json.Marshal([]string{t})
 			args = append(args, string(b))
-			argPos++
 		}
 		if len(conds) > 0 {
 			where += " AND (" + strings.Join(conds, " OR ") + ")"
@@ -58,7 +64,7 @@ func (r *PgRepository) Page(ctx context.Context, q domainclient.PageQuery) (doma
 
 	countSQL := "SELECT COUNT(*) FROM sys_client AS c " + where
 	var total int64
-	if err := r.db.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
+	if err := r.db.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, countSQL), args...).Scan(&total); err != nil {
 		return domainclient.PageResult{}, err
 	}
 	if total == 0 {
@@ -66,11 +72,9 @@ func (r *PgRepository) Page(ctx context.Context, q domainclient.PageQuery) (doma
 	}
 
 	offset := int64((q.Page - 1) * q.Size)
-	limitPos := argPos
-	offsetPos := argPos + 1
 	argsWithPage := append(args, int64(q.Size), offset)
 
-	query := fmt.Sprintf(`
+	query := `
 SELECT c.id,
        c.client_id,
        c.client_type,
@@ -85,12 +89,12 @@ SELECT c.id,
 FROM sys_client AS c
 LEFT JOIN sys_user AS cu ON cu.id = c.create_user
 LEFT JOIN sys_user AS uu ON uu.id = c.update_user
-%s
+` + where + `
 ORDER BY c.id DESC
-LIMIT $%d OFFSET $%d;
-`, where, limitPos, offsetPos)
+LIMIT ? OFFSET ?;
+`
 
-	rows, err := r.db.QueryContext(ctx, query, argsWithPage...)
+	rows, err := r.db.QueryContext(ctx, sqlutil.Rebind(r.dialect, query), argsWithPage...)
 	if err != nil {
 		return domainclient.PageResult{}, err
 	}
@@ -149,7 +153,7 @@ SELECT c.id,
 FROM sys_client AS c
 LEFT JOIN sys_user AS cu ON cu.id = c.create_user
 LEFT JOIN sys_user AS uu ON uu.id = c.update_user
-WHERE c.id = $1;
+WHERE c.id = ?;
 `
 
 	var (
@@ -157,7 +161,7 @@ WHERE c.id = $1;
 		authRaw  []byte
 		updateAt sql.NullTime
 	)
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
+	err := r.db.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, query), id).Scan(
 		&item.ID,
 		&item.ClientID,
 		&item.ClientType,
@@ -198,14 +202,14 @@ INSERT INTO sys_client (
     active_timeout, timeout, status,
     create_user, create_time
 ) VALUES (
-    $1, $2, $3, $4,
-    $5, $6, $7,
-    $8, $9
+    ?, ?, ?, ?,
+    ?, ?, ?,
+    ?, ?
 );
 `
 	_, err = r.db.ExecContext(
 		ctx,
-		stmt,
+		sqlutil.Rebind(r.dialect, stmt),
 		c.ID,
 		c.ClientID,
 		c.ClientType,
@@ -227,18 +231,18 @@ func (r *PgRepository) Update(ctx context.Context, c *domainclient.Client) error
 
 	const stmt = `
 UPDATE sys_client
-   SET client_type = $1,
-       auth_type = $2,
-       active_timeout = $3,
-       timeout = $4,
-       status = $5,
-       update_user = $6,
-       update_time = $7
- WHERE id = $8;
+   SET client_type = ?,
+       auth_type = ?,
+       active_timeout = ?,
+       timeout = ?,
+       status = ?,
+       update_user = ?,
+       update_time = ?
+ WHERE id = ?;
 `
 	_, err = r.db.ExecContext(
 		ctx,
-		stmt,
+		sqlutil.Rebind(r.dialect, stmt),
 		c.ClientType,
 		string(authJSON),
 		c.ActiveTimeout,
@@ -259,7 +263,7 @@ func (r *PgRepository) Delete(ctx context.Context, ids []int64) error {
 	defer tx.Rollback()
 
 	for _, idVal := range ids {
-		if _, err := tx.ExecContext(ctx, `DELETE FROM sys_client WHERE id = $1`, idVal); err != nil {
+		if _, err := tx.ExecContext(ctx, sqlutil.Rebind(r.dialect, `DELETE FROM sys_client WHERE id = ?`), idVal); err != nil {
 			return err
 		}
 	}

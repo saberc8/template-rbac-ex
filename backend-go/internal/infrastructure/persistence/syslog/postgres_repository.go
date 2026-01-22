@@ -7,16 +7,23 @@ import (
 
 	domain "go-backend/internal/domain/syslog"
 	"go-backend/internal/infrastructure/id"
+	"go-backend/internal/infrastructure/persistence/sqlutil"
 )
 
 // PgRepository 基于 PostgreSQL 的系统日志仓储实现。
 type PgRepository struct {
-	db *sql.DB
+	db      *sql.DB
+	dialect string
+}
+
+// NewPgRepository 创建基于 PostgreSQL 的系统日志仓储。
+func NewLogRepository(db *sql.DB, dialect string) *PgRepository {
+	return &PgRepository{db: db, dialect: dialect}
 }
 
 // NewPgRepository 创建基于 PostgreSQL 的系统日志仓储。
 func NewPgRepository(db *sql.DB) *PgRepository {
-	return &PgRepository{db: db}
+	return NewLogRepository(db, "postgres")
 }
 
 var _ domain.Repository = (*PgRepository)(nil)
@@ -56,10 +63,10 @@ INSERT INTO sys_log (
     create_user,
     create_time
 ) VALUES (
-    $1, $2, $3, $4, $5,
-    $6, $7, $8, $9, $10,
-    $11, $12, $13, $14, $15,
-    $16, $17, $18, $19, $20
+    ?, ?, ?, ?, ?,
+    ?, ?, ?, ?, ?,
+    ?, ?, ?, ?, ?,
+    ?, ?, ?, ?, ?
 );
 `
 
@@ -73,7 +80,7 @@ INSERT INTO sys_log (
 
 	_, err := r.db.ExecContext(
 		ctx,
-		query,
+		sqlutil.Rebind(r.dialect, query),
 		rec.ID,
 		rec.TraceID,
 		rec.Description,

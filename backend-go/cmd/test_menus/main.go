@@ -11,14 +11,14 @@ import (
 
 func main() {
 	cfg := db.LoadConfigFromEnv()
-	pg, err := db.NewPostgres(cfg)
+	sqlDB, err := db.Open(cfg)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "connect db failed: %v\n", err)
 		os.Exit(1)
 	}
-	defer pg.Close()
+	defer sqlDB.Close()
 
-	repo := rbacp.NewPgMenuRepository(pg)
+	repo := rbacp.NewMenuRepository(sqlDB, cfg.Dialect)
 	menus, err := repo.ListByRoleID(context.Background(), 1)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "list menus failed: %v\n", err)

@@ -9,16 +9,20 @@ import (
 	"time"
 
 	domaindict "go-backend/internal/domain/dict"
-
-	"github.com/lib/pq"
+	"go-backend/internal/infrastructure/persistence/sqlutil"
 )
 
 type PgRepository struct {
-	db *sql.DB
+	db      *sql.DB
+	dialect string
+}
+
+func NewRepository(db *sql.DB, dialect string) *PgRepository {
+	return &PgRepository{db: db, dialect: dialect}
 }
 
 func NewPgRepository(db *sql.DB) *PgRepository {
-	return &PgRepository{db: db}
+	return NewRepository(db, "postgres")
 }
 
 var _ domaindict.Repository = (*PgRepository)(nil)
@@ -26,9 +30,10 @@ var _ domaindict.Repository = (*PgRepository)(nil)
 func (r *PgRepository) ListDict(ctx context.Context, description string) ([]domaindict.Dict, error) {
 	args := []any{}
 	where := ""
-	if description != "" {
-		where = "WHERE (d.name ILIKE $1 OR COALESCE(d.description,'') ILIKE $1)"
-		args = append(args, "%"+description+"%")
+	if strings.TrimSpace(description) != "" {
+		like := "%" + strings.ToLower(strings.TrimSpace(description)) + "%"
+		where = "WHERE (LOWER(d.name) LIKE ? OR LOWER(COALESCE(d.description,'')) LIKE ?)"
+		args = append(args, like, like)
 	}
 
 	query := fmt.Sprintf(`
@@ -48,7 +53,7 @@ LEFT JOIN sys_user AS uu ON uu.id = d.update_user
 ORDER BY d.create_time DESC, d.id DESC;
 `, where)
 
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	rows, err := r.db.QueryContext(ctx, sqlutil.Rebind(r.dialect, query), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -99,13 +104,13 @@ SELECT d.id,
 FROM sys_dict AS d
 LEFT JOIN sys_user AS cu ON cu.id = d.create_user
 LEFT JOIN sys_user AS uu ON uu.id = d.update_user
-WHERE d.id = $1;
+WHERE d.id = ?;
 `
 	var (
 		item     domaindict.Dict
 		updateAt sql.NullTime
 	)
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
+	err := r.db.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, query), id).Scan(
 		&item.ID,
 		&item.Name,
 		&item.Code,
@@ -130,9 +135,9 @@ WHERE d.id = $1;
 }
 
 func (r *PgRepository) DictNameExists(ctx context.Context, name string) (bool, error) {
-	const q = `SELECT 1 FROM sys_dict WHERE name = $1 LIMIT 1;`
+	const q = `SELECT 1 FROM sys_dict WHERE name = ? LIMIT 1;`
 	var tmp int
-	err := r.db.QueryRowContext(ctx, q, name).Scan(&tmp)
+	err := r.db.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, q), name).Scan(&tmp)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -143,9 +148,9 @@ func (r *PgRepository) DictNameExists(ctx context.Context, name string) (bool, e
 }
 
 func (r *PgRepository) DictCodeExists(ctx context.Context, code string) (bool, error) {
-	const q = `SELECT 1 FROM sys_dict WHERE code = $1 LIMIT 1;`
+	const q = `SELECT 1 FROM sys_dict WHERE code = ? LIMIT 1;`
 	var tmp int
-	err := r.db.QueryRowContext(ctx, q, code).Scan(&tmp)
+	err := r.db.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, q), code).Scan(&tmp)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -158,36 +163,47 @@ func (r *PgRepository) DictCodeExists(ctx context.Context, code string) (bool, e
 func (r *PgRepository) CreateDict(ctx context.Context, id int64, name, code, description string, userID int64, now time.Time) error {
 	const stmt = `
 INSERT INTO sys_dict (id, name, code, description, is_system, create_user, create_time)
-VALUES ($1, $2, $3, $4, FALSE, $5, $6);
+VALUES (?, ?, ?, ?, FALSE, ?, ?);
 `
-	_, err := r.db.ExecContext(ctx, stmt, id, name, code, description, userID, now)
+	_, err := r.db.ExecContext(ctx, sqlutil.Rebind(r.dialect, stmt), id, name, code, description, userID, now)
 	return err
 }
 
 func (r *PgRepository) UpdateDict(ctx context.Context, id int64, name, description string, userID int64, now time.Time) error {
 	const stmt = `
 UPDATE sys_dict
-   SET name = $1,
-       description = $2,
-       update_user = $3,
-       update_time = $4
- WHERE id = $5;
+   SET name = ?,
+       description = ?,
+       update_user = ?,
+       update_time = ?
+ WHERE id = ?;
 `
-	_, err := r.db.ExecContext(ctx, stmt, name, description, userID, now, id)
+	_, err := r.db.ExecContext(ctx, sqlutil.Rebind(r.dialect, stmt), name, description, userID, now, id)
 	return err
 }
 
 func (r *PgRepository) DeleteDict(ctx context.Context, ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	if _, err := tx.ExecContext(ctx, `DELETE FROM sys_dict_item WHERE dict_id = ANY($1::bigint[])`, pq.Int64Array(ids)); err != nil {
+	q1, args1, err := sqlutil.In(r.dialect, `DELETE FROM sys_dict_item WHERE dict_id IN (?)`, ids)
+	if err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM sys_dict WHERE id = ANY($1::bigint[])`, pq.Int64Array(ids)); err != nil {
+	if _, err := tx.ExecContext(ctx, q1, args1...); err != nil {
+		return err
+	}
+	q2, args2, err := sqlutil.In(r.dialect, `DELETE FROM sys_dict WHERE id IN (?)`, ids)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, q2, args2...); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -201,27 +217,24 @@ LEFT JOIN sys_user AS uu ON uu.id = di.update_user
 `
 	where := "WHERE 1=1"
 	args := []any{}
-	argPos := 1
 
 	if q.DictID != nil && *q.DictID != 0 {
-		where += fmt.Sprintf(" AND di.dict_id = $%d", argPos)
+		where += " AND di.dict_id = ?"
 		args = append(args, *q.DictID)
-		argPos++
 	}
 	if strings.TrimSpace(q.Description) != "" {
-		where += fmt.Sprintf(" AND (di.label ILIKE $%d OR COALESCE(di.description,'') ILIKE $%d)", argPos, argPos)
-		args = append(args, "%"+strings.TrimSpace(q.Description)+"%")
-		argPos++
+		like := "%" + strings.ToLower(strings.TrimSpace(q.Description)) + "%"
+		where += " AND (LOWER(di.label) LIKE ? OR LOWER(COALESCE(di.description,'')) LIKE ?)"
+		args = append(args, like, like)
 	}
 	if q.Status != nil && *q.Status != 0 {
-		where += fmt.Sprintf(" AND di.status = $%d", argPos)
+		where += " AND di.status = ?"
 		args = append(args, *q.Status)
-		argPos++
 	}
 
 	countSQL := "SELECT COUNT(*) " + baseFrom + where
 	var total int64
-	if err := r.db.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
+	if err := r.db.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, countSQL), args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	if total == 0 {
@@ -229,11 +242,9 @@ LEFT JOIN sys_user AS uu ON uu.id = di.update_user
 	}
 
 	offset := int64((q.Page - 1) * q.Size)
-	limitPos := argPos
-	offsetPos := argPos + 1
 	argsWithPage := append(args, int64(q.Size), offset)
 
-	query := fmt.Sprintf(`
+	query := `
 SELECT di.id,
        di.label,
        di.value,
@@ -246,13 +257,12 @@ SELECT di.id,
        COALESCE(cu.nickname, ''),
        di.update_time,
        COALESCE(uu.nickname, '')
-%s
-%s
+` + baseFrom + where + `
 ORDER BY di.sort ASC, di.id ASC
-LIMIT $%d OFFSET $%d;
-`, baseFrom, where, limitPos, offsetPos)
+LIMIT ? OFFSET ?;
+`
 
-	rows, err := r.db.QueryContext(ctx, query, argsWithPage...)
+	rows, err := r.db.QueryContext(ctx, sqlutil.Rebind(r.dialect, query), argsWithPage...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -309,13 +319,13 @@ SELECT di.id,
 FROM sys_dict_item AS di
 LEFT JOIN sys_user AS cu ON cu.id = di.create_user
 LEFT JOIN sys_user AS uu ON uu.id = di.update_user
-WHERE di.id = $1;
+WHERE di.id = ?;
 `
 	var (
 		item     domaindict.DictItem
 		updateAt sql.NullTime
 	)
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
+	err := r.db.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, query), id).Scan(
 		&item.ID,
 		&item.Label,
 		&item.Value,
@@ -348,11 +358,11 @@ INSERT INTO sys_dict_item (
     id, label, value, color, sort, description, status, dict_id,
     create_user, create_time
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 `
 	_, err := r.db.ExecContext(
 		ctx,
-		stmt,
+		sqlutil.Rebind(r.dialect, stmt),
 		id,
 		req.Label,
 		req.Value,
@@ -370,19 +380,19 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
 func (r *PgRepository) UpdateDictItem(ctx context.Context, id int64, req domaindict.DictItemUpdateRequest, userID int64, now time.Time) error {
 	const stmt = `
 UPDATE sys_dict_item
-   SET label       = $1,
-       value       = $2,
-       color       = $3,
-       sort        = $4,
-       description = $5,
-       status      = $6,
-       update_user = $7,
-       update_time = $8
- WHERE id          = $9;
+   SET label       = ?,
+       value       = ?,
+       color       = ?,
+       sort        = ?,
+       description = ?,
+       status      = ?,
+       update_user = ?,
+       update_time = ?
+ WHERE id          = ?;
 `
 	_, err := r.db.ExecContext(
 		ctx,
-		stmt,
+		sqlutil.Rebind(r.dialect, stmt),
 		req.Label,
 		req.Value,
 		req.Color,
@@ -397,13 +407,20 @@ UPDATE sys_dict_item
 }
 
 func (r *PgRepository) DeleteDictItem(ctx context.Context, ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	if _, err := tx.ExecContext(ctx, `DELETE FROM sys_dict_item WHERE id = ANY($1::bigint[])`, pq.Int64Array(ids)); err != nil {
+	q1, args1, err := sqlutil.In(r.dialect, `DELETE FROM sys_dict_item WHERE id IN (?)`, ids)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, q1, args1...); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -428,10 +445,10 @@ LEFT JOIN sys_dict AS t2 ON t1.dict_id = t2.id
 LEFT JOIN sys_user AS cu ON cu.id = t1.create_user
 LEFT JOIN sys_user AS uu ON uu.id = t1.update_user
 WHERE t1.status = 1
-  AND t2.code = $1
+  AND t2.code = ?
 ORDER BY t1.sort ASC, t1.id ASC;
 `
-	rows, err := r.db.QueryContext(ctx, query, strings.TrimSpace(code))
+	rows, err := r.db.QueryContext(ctx, sqlutil.Rebind(r.dialect, query), strings.TrimSpace(code))
 	if err != nil {
 		return nil, err
 	}

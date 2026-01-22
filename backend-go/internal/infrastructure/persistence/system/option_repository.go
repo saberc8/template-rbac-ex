@@ -4,21 +4,25 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
 	domainsys "go-backend/internal/domain/system"
+	"go-backend/internal/infrastructure/persistence/sqlutil"
 )
 
 // PgOptionRepository 提供 sys_option 的 PostgreSQL 实现。
 type PgOptionRepository struct {
-	db *sql.DB
+	db      *sql.DB
+	dialect string
+}
+
+func NewOptionRepository(db *sql.DB, dialect string) *PgOptionRepository {
+	return &PgOptionRepository{db: db, dialect: dialect}
 }
 
 func NewPgOptionRepository(db *sql.DB) *PgOptionRepository {
-	return &PgOptionRepository{db: db}
+	return NewOptionRepository(db, "postgres")
 }
 
 var _ domainsys.OptionRepository = (*PgOptionRepository)(nil)
@@ -27,11 +31,11 @@ func (r *PgOptionRepository) GetMergedValue(ctx context.Context, code string) (s
 	const q = `
 SELECT COALESCE(value, default_value, '') AS val
 FROM sys_option
-WHERE code = $1
+WHERE code = ?
 LIMIT 1;
 `
 	var val string
-	err := r.db.QueryRowContext(ctx, q, strings.TrimSpace(code)).Scan(&val)
+	err := r.db.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, q), strings.TrimSpace(code)).Scan(&val)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, nil
 	}
@@ -44,27 +48,24 @@ LIMIT 1;
 func (r *PgOptionRepository) List(ctx context.Context, f domainsys.OptionListFilter) ([]domainsys.OptionView, error) {
 	where := "WHERE 1=1"
 	args := []any{}
-	argPos := 1
+	var codes []string
 
 	if len(f.Codes) > 0 {
-		placeholders := make([]string, 0, len(f.Codes))
 		for _, code := range f.Codes {
 			code = strings.TrimSpace(code)
 			if code == "" {
 				continue
 			}
-			placeholders = append(placeholders, "$"+strconv.Itoa(argPos))
-			args = append(args, code)
-			argPos++
-		}
-		if len(placeholders) > 0 {
-			where += " AND code IN (" + strings.Join(placeholders, ",") + ")"
+			codes = append(codes, code)
 		}
 	}
 	if strings.TrimSpace(f.Category) != "" {
-		where += fmt.Sprintf(" AND category = $%d", argPos)
+		where += " AND category = ?"
 		args = append(args, strings.TrimSpace(f.Category))
-		argPos++
+	}
+	if len(codes) > 0 {
+		where += " AND code IN (?)"
+		args = append(args, codes)
 	}
 
 	query := `
@@ -76,7 +77,21 @@ FROM sys_option
 ORDER BY id ASC;
 `
 
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	var (
+		sqlQuery string
+		sqlArgs  []any
+		err      error
+	)
+	if len(codes) > 0 {
+		sqlQuery, sqlArgs, err = sqlutil.In(r.dialect, query, args...)
+	} else {
+		sqlQuery = sqlutil.Rebind(r.dialect, query)
+		sqlArgs = args
+	}
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.db.QueryContext(ctx, sqlQuery, sqlArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -105,14 +120,14 @@ func (r *PgOptionRepository) UpdateValues(ctx context.Context, userID int64, upd
 
 	const stmt = `
 UPDATE sys_option
-   SET value = $1,
-       update_user = $2,
-       update_time = $3
- WHERE id = $4 AND code = $5;
+   SET value = ?,
+       update_user = ?,
+       update_time = ?
+ WHERE id = ? AND code = ?;
 `
 	now := time.Now()
 	for _, u := range updates {
-		if _, err := tx.ExecContext(ctx, stmt, u.Value, userID, now, u.ID, u.Code); err != nil {
+		if _, err := tx.ExecContext(ctx, sqlutil.Rebind(r.dialect, stmt), u.Value, userID, now, u.ID, u.Code); err != nil {
 			return err
 		}
 	}
@@ -120,33 +135,35 @@ UPDATE sys_option
 }
 
 func (r *PgOptionRepository) ResetValues(ctx context.Context, f domainsys.OptionResetFilter) error {
-	where := ""
+	stmt := "UPDATE sys_option SET value = NULL"
 	args := []any{}
-	argPos := 1
-	if strings.TrimSpace(f.Category) != "" {
-		where = fmt.Sprintf("category = $%d", argPos)
-		args = append(args, strings.TrimSpace(f.Category))
-		argPos++
-	} else if len(f.Codes) > 0 {
-		placeholders := make([]string, 0, len(f.Codes))
-		for _, code := range f.Codes {
-			code = strings.TrimSpace(code)
-			if code == "" {
-				continue
-			}
-			placeholders = append(placeholders, "$"+strconv.Itoa(argPos))
-			args = append(args, code)
-			argPos++
-		}
-		if len(placeholders) > 0 {
-			where = "code IN (" + strings.Join(placeholders, ",") + ")"
-		}
+	cat := strings.TrimSpace(f.Category)
+	if cat != "" {
+		stmt += " WHERE category = ?"
+		args = append(args, cat)
+		q := sqlutil.Rebind(r.dialect, stmt)
+		_, err := r.db.ExecContext(ctx, q, args...)
+		return err
 	}
 
-	stmt := "UPDATE sys_option SET value = NULL"
-	if where != "" {
-		stmt += " WHERE " + where
+	var codes []string
+	for _, code := range f.Codes {
+		code = strings.TrimSpace(code)
+		if code == "" {
+			continue
+		}
+		codes = append(codes, code)
 	}
-	_, err := r.db.ExecContext(ctx, stmt, args...)
+	if len(codes) == 0 {
+		_, err := r.db.ExecContext(ctx, stmt)
+		return err
+	}
+
+	stmt += " WHERE code IN (?)"
+	q, sqlArgs, err := sqlutil.In(r.dialect, stmt, codes)
+	if err != nil {
+		return err
+	}
+	_, err = r.db.ExecContext(ctx, q, sqlArgs...)
 	return err
 }

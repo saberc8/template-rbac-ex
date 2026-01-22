@@ -4,22 +4,25 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
 	domainstorage "go-backend/internal/domain/storage"
-
-	"github.com/lib/pq"
+	"go-backend/internal/infrastructure/persistence/sqlutil"
 )
 
 // PgFileRepository 提供 sys_file 的 PostgreSQL 实现。
 type PgFileRepository struct {
-	db *sql.DB
+	db      *sql.DB
+	dialect string
+}
+
+func NewFileRepository(db *sql.DB, dialect string) *PgFileRepository {
+	return &PgFileRepository{db: db, dialect: dialect}
 }
 
 func NewPgFileRepository(db *sql.DB) *PgFileRepository {
-	return &PgFileRepository{db: db}
+	return NewFileRepository(db, "postgres")
 }
 
 var _ domainstorage.FileRepository = (*PgFileRepository)(nil)
@@ -34,27 +37,24 @@ func (r *PgFileRepository) Page(ctx context.Context, q domainstorage.FilePageQue
 
 	where := "WHERE 1=1"
 	args := []any{}
-	argPos := 1
 
 	if strings.TrimSpace(q.OriginalName) != "" {
-		where += fmt.Sprintf(" AND f.original_name ILIKE $%d", argPos)
-		args = append(args, "%"+strings.TrimSpace(q.OriginalName)+"%")
-		argPos++
+		like := "%" + strings.ToLower(strings.TrimSpace(q.OriginalName)) + "%"
+		where += " AND LOWER(f.original_name) LIKE ?"
+		args = append(args, like)
 	}
 	if q.Type != 0 {
-		where += fmt.Sprintf(" AND f.type = $%d", argPos)
+		where += " AND f.type = ?"
 		args = append(args, q.Type)
-		argPos++
 	}
 	if strings.TrimSpace(q.ParentPath) != "" {
-		where += fmt.Sprintf(" AND f.parent_path = $%d", argPos)
+		where += " AND f.parent_path = ?"
 		args = append(args, strings.TrimSpace(q.ParentPath))
-		argPos++
 	}
 
 	countSQL := "SELECT COUNT(*) FROM sys_file AS f " + where
 	var total int64
-	if err := r.db.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
+	if err := r.db.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, countSQL), args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	if total == 0 {
@@ -62,11 +62,9 @@ func (r *PgFileRepository) Page(ctx context.Context, q domainstorage.FilePageQue
 	}
 
 	offset := int64((q.Page - 1) * q.Size)
-	limitPos := argPos
-	offsetPos := argPos + 1
 	argsWithPage := append(args, int64(q.Size), offset)
 
-	query := fmt.Sprintf(`
+	query := `
 SELECT f.id,
        f.name,
        f.original_name,
@@ -91,12 +89,12 @@ FROM sys_file AS f
 LEFT JOIN sys_user AS cu ON cu.id = f.create_user
 LEFT JOIN sys_user AS uu ON uu.id = f.update_user
 LEFT JOIN sys_storage AS s ON s.id = f.storage_id
-%s
-ORDER BY f.type ASC, f.update_time DESC NULLS LAST, f.id DESC
-LIMIT $%d OFFSET $%d;
-`, where, limitPos, offsetPos)
+` + where + `
+ORDER BY f.type ASC, (f.update_time IS NULL) ASC, f.update_time DESC, f.id DESC
+LIMIT ? OFFSET ?;
+`
 
-	rows, err := r.db.QueryContext(ctx, query, argsWithPage...)
+	rows, err := r.db.QueryContext(ctx, sqlutil.Rebind(r.dialect, query), argsWithPage...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -192,7 +190,7 @@ FROM sys_file AS f
 LEFT JOIN sys_user AS cu ON cu.id = f.create_user
 LEFT JOIN sys_user AS uu ON uu.id = f.update_user
 LEFT JOIN sys_storage AS s ON s.id = f.storage_id
-WHERE f.id = $1;
+WHERE f.id = ?;
 `
 
 	var (
@@ -201,7 +199,7 @@ WHERE f.id = $1;
 		thumbSize sql.NullInt64
 		updateAt  sql.NullTime
 	)
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
+	err := r.db.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, query), id).Scan(
 		&item.ID,
 		&item.Name,
 		&item.OriginalName,
@@ -270,7 +268,7 @@ FROM sys_file AS f
 LEFT JOIN sys_user AS cu ON cu.id = f.create_user
 LEFT JOIN sys_user AS uu ON uu.id = f.update_user
 LEFT JOIN sys_storage AS s ON s.id = f.storage_id
-WHERE f.sha256 = $1
+WHERE f.sha256 = ?
 LIMIT 1;
 `
 	var (
@@ -279,7 +277,7 @@ LIMIT 1;
 		thumbSize sql.NullInt64
 		updateAt  sql.NullTime
 	)
-	err := r.db.QueryRowContext(ctx, query, strings.TrimSpace(sha256)).Scan(
+	err := r.db.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, query), strings.TrimSpace(sha256)).Scan(
 		&item.ID,
 		&item.Name,
 		&item.OriginalName,
@@ -325,11 +323,11 @@ LIMIT 1;
 func (r *PgFileRepository) DirExists(ctx context.Context, parentPath, name string) (bool, error) {
 	const q = `
 SELECT 1 FROM sys_file
-WHERE parent_path = $1 AND name = $2 AND type = 0
+WHERE parent_path = ? AND name = ? AND type = 0
 LIMIT 1;
 `
 	var tmp int
-	err := r.db.QueryRowContext(ctx, q, parentPath, name).Scan(&tmp)
+	err := r.db.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, q), parentPath, name).Scan(&tmp)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -346,13 +344,13 @@ INSERT INTO sys_file (
     type, sha256, metadata, thumbnail_name, thumbnail_size, thumbnail_metadata,
     storage_id, create_user, create_time
 ) VALUES (
-    $1, $2, $3, NULL, $4, $5, NULL, NULL,
+    ?, ?, ?, NULL, ?, ?, NULL, NULL,
     0, '', '', '', NULL, '',
-    $6, $7, $8
+    ?, ?, ?
 );`
 	_, err := r.db.ExecContext(
 		ctx,
-		insertSQL,
+		sqlutil.Rebind(r.dialect, insertSQL),
 		dir.ID,
 		dir.Name,
 		dir.OriginalName,
@@ -372,13 +370,13 @@ INSERT INTO sys_file (
     type, sha256, metadata, thumbnail_name, thumbnail_size, thumbnail_metadata,
     storage_id, create_user, create_time
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8,
-    $9, $10, $11, $12, $13, $14,
-    $15, $16, $17
+    ?, ?, ?, ?, ?, ?, ?, ?,
+    ?, ?, ?, ?, ?, ?,
+    ?, ?, ?
 );`
 	_, err := r.db.ExecContext(
 		ctx,
-		insertSQL,
+		sqlutil.Rebind(r.dialect, insertSQL),
 		f.ID,
 		f.Name,
 		f.OriginalName,
@@ -403,12 +401,12 @@ INSERT INTO sys_file (
 func (r *PgFileRepository) UpdateOriginalName(ctx context.Context, id int64, originalName string, userID int64) error {
 	const q = `
 UPDATE sys_file
-   SET original_name = $1,
-       update_user   = $2,
-       update_time   = $3
- WHERE id            = $4;
+   SET original_name = ?,
+       update_user   = ?,
+       update_time   = ?
+ WHERE id            = ?;
 `
-	_, err := r.db.ExecContext(ctx, q, originalName, userID, time.Now(), id)
+	_, err := r.db.ExecContext(ctx, sqlutil.Rebind(r.dialect, q), originalName, userID, time.Now(), id)
 	return err
 }
 
@@ -416,10 +414,10 @@ func (r *PgFileRepository) SumSizeByPathPrefix(ctx context.Context, prefix strin
 	const q = `
 SELECT COALESCE(SUM(size), 0)
 FROM sys_file
-WHERE type <> 0 AND path LIKE $1;
+WHERE type <> 0 AND path LIKE ?;
 `
 	var total int64
-	if err := r.db.QueryRowContext(ctx, q, prefix).Scan(&total); err != nil {
+	if err := r.db.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, q), prefix).Scan(&total); err != nil {
 		return 0, err
 	}
 	return total, nil
@@ -474,8 +472,8 @@ func (r *PgFileRepository) DeleteWithChecks(ctx context.Context, ids []int64) ([
 	var toDelete []domainstorage.FileDeleteTarget
 	for _, idVal := range ids {
 		var row fileRow
-		const selectSQL = `SELECT id, name, path, type, storage_id FROM sys_file WHERE id = $1;`
-		if err := tx.QueryRowContext(ctx, selectSQL, idVal).Scan(&row.id, &row.name, &row.path, &row.fileType, &row.storageID); err != nil {
+		const selectSQL = `SELECT id, name, path, type, storage_id FROM sys_file WHERE id = ?;`
+		if err := tx.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, selectSQL), idVal).Scan(&row.id, &row.name, &row.path, &row.fileType, &row.storageID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				continue
 			}
@@ -483,9 +481,9 @@ func (r *PgFileRepository) DeleteWithChecks(ctx context.Context, ids []int64) ([
 		}
 
 		if row.fileType == 0 {
-			const childSQL = `SELECT 1 FROM sys_file WHERE parent_path = $1 LIMIT 1;`
+			const childSQL = `SELECT 1 FROM sys_file WHERE parent_path = ? LIMIT 1;`
 			var dummy int
-			if err := tx.QueryRowContext(ctx, childSQL, row.path).Scan(&dummy); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			if err := tx.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, childSQL), row.path).Scan(&dummy); err != nil && !errors.Is(err, sql.ErrNoRows) {
 				return nil, err
 			} else if err == nil {
 				return nil, &domainstorage.DirNotEmptyError{Name: row.name}
@@ -498,8 +496,11 @@ func (r *PgFileRepository) DeleteWithChecks(ctx context.Context, ids []int64) ([
 		})
 	}
 
-	const deleteSQL = `DELETE FROM sys_file WHERE id = ANY($1);`
-	if _, err := tx.ExecContext(ctx, deleteSQL, pq.Int64Array(ids)); err != nil {
+	deleteSQL, deleteArgs, err := sqlutil.In(r.dialect, `DELETE FROM sys_file WHERE id IN (?)`, ids)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := tx.ExecContext(ctx, deleteSQL, deleteArgs...); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {

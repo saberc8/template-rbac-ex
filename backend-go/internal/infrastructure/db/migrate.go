@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 // AutoMigrate performs minimal automatic migrations required for the Go service
@@ -11,8 +12,8 @@ import (
 // It is designed to be safe to call on every startup: it only creates the
 // table and indexes if they do not exist, and only inserts the admin user
 // when it is missing.
-func AutoMigrate(database *sql.DB) error {
-	return AutoMigrateContext(context.Background(), database)
+func AutoMigrate(database *sql.DB, dialect string) error {
+	return AutoMigrateContext(context.Background(), database, dialect)
 }
 
 type sqlExecutor interface {
@@ -20,10 +21,11 @@ type sqlExecutor interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-func AutoMigrateContext(ctx context.Context, database *sql.DB) error {
+func AutoMigrateContext(ctx context.Context, database *sql.DB, dialect string) error {
 	if database == nil {
 		return nil
 	}
+	dialect = NormalizeDialect(dialect)
 
 	tx, err := database.BeginTx(ctx, nil)
 	if err != nil {
@@ -37,46 +39,46 @@ func AutoMigrateContext(ctx context.Context, database *sql.DB) error {
 		_ = tx.Rollback()
 	}()
 
-	if err := ensureSysUser(ctx, tx); err != nil {
+	if err := ensureSysUser(ctx, tx, dialect); err != nil {
 		return err
 	}
-	if err := ensureSysRole(ctx, tx); err != nil {
+	if err := ensureSysRole(ctx, tx, dialect); err != nil {
 		return err
 	}
-	if err := ensureSysRoleDept(ctx, tx); err != nil {
+	if err := ensureSysRoleDept(ctx, tx, dialect); err != nil {
 		return err
 	}
-	if err := ensureSysUserRole(ctx, tx); err != nil {
+	if err := ensureSysUserRole(ctx, tx, dialect); err != nil {
 		return err
 	}
-	if err := ensureSysMenu(ctx, tx); err != nil {
+	if err := ensureSysMenu(ctx, tx, dialect); err != nil {
 		return err
 	}
-	if err := ensureSysRoleMenu(ctx, tx); err != nil {
+	if err := ensureSysRoleMenu(ctx, tx, dialect); err != nil {
 		return err
 	}
-	if err := ensureSysDept(ctx, tx); err != nil {
+	if err := ensureSysDept(ctx, tx, dialect); err != nil {
 		return err
 	}
-	if err := ensureSysDict(ctx, tx); err != nil {
+	if err := ensureSysDict(ctx, tx, dialect); err != nil {
 		return err
 	}
-	if err := ensureSysDictItem(ctx, tx); err != nil {
+	if err := ensureSysDictItem(ctx, tx, dialect); err != nil {
 		return err
 	}
-	if err := ensureSysLog(ctx, tx); err != nil {
+	if err := ensureSysLog(ctx, tx, dialect); err != nil {
 		return err
 	}
-	if err := ensureSysFile(ctx, tx); err != nil {
+	if err := ensureSysFile(ctx, tx, dialect); err != nil {
 		return err
 	}
-	if err := ensureSysOption(ctx, tx); err != nil {
+	if err := ensureSysOption(ctx, tx, dialect); err != nil {
 		return err
 	}
-	if err := ensureSysStorage(ctx, tx); err != nil {
+	if err := ensureSysStorage(ctx, tx, dialect); err != nil {
 		return err
 	}
-	if err := ensureSysClient(ctx, tx); err != nil {
+	if err := ensureSysClient(ctx, tx, dialect); err != nil {
 		return err
 	}
 
@@ -87,15 +89,8 @@ func AutoMigrateContext(ctx context.Context, database *sql.DB) error {
 	return nil
 }
 
-func ensureSysUser(ctx context.Context, q sqlExecutor) error {
-	const checkTable = `SELECT to_regclass('public.sys_user');`
-	var tableName sql.NullString
-	if err := q.QueryRowContext(ctx, checkTable).Scan(&tableName); err != nil {
-		return err
-	}
-
-	if !tableName.Valid {
-		const ddl = `
+func ensureSysUser(ctx context.Context, q sqlExecutor, dialect string) error {
+	const ddl = `
 CREATE TABLE IF NOT EXISTS sys_user (
     id              BIGINT       PRIMARY KEY,
     username        VARCHAR(64)  NOT NULL,
@@ -122,9 +117,8 @@ CREATE INDEX IF NOT EXISTS idx_user_dept_id        ON sys_user (dept_id);
 CREATE INDEX IF NOT EXISTS idx_user_create_user    ON sys_user (create_user);
 CREATE INDEX IF NOT EXISTS idx_user_update_user    ON sys_user (update_user);
 `
-		if _, err := q.ExecContext(ctx, ddl); err != nil {
-			return err
-		}
+	if err := execStatements(ctx, q, dialect, ddl); err != nil {
+		return err
 	}
 
 	const seedAdmin = `
@@ -150,22 +144,13 @@ SELECT
     NOW()
 WHERE NOT EXISTS (SELECT 1 FROM sys_user WHERE username = 'admin');
 `
-	if _, err := q.ExecContext(ctx, seedAdmin); err != nil {
+	if err := execStatements(ctx, q, dialect, seedAdmin); err != nil {
 		return err
 	}
 	return nil
 }
 
-func ensureSysRole(ctx context.Context, q sqlExecutor) error {
-	const checkTable = `SELECT to_regclass('public.sys_role');`
-	var tableName sql.NullString
-	if err := q.QueryRowContext(ctx, checkTable).Scan(&tableName); err != nil {
-		return err
-	}
-	if tableName.Valid {
-		return nil
-	}
-
+func ensureSysRole(ctx context.Context, q sqlExecutor, dialect string) error {
 	const ddl = `
 CREATE TABLE IF NOT EXISTS sys_role (
     id                  BIGINT       NOT NULL,
@@ -188,7 +173,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_role_code  ON sys_role (code);
 CREATE INDEX IF NOT EXISTS idx_role_create_user ON sys_role (create_user);
 CREATE INDEX IF NOT EXISTS idx_role_update_user ON sys_role (update_user);
 `
-	if _, err := q.ExecContext(ctx, ddl); err != nil {
+	if err := execStatements(ctx, q, dialect, ddl); err != nil {
 		return err
 	}
 
@@ -202,20 +187,14 @@ INSERT INTO sys_role (id, name, code, data_scope, description, sort, is_system, 
 SELECT 2, '普通用户', 'general', 4, '系统初始角色', 2, TRUE, 1, NOW()
 WHERE NOT EXISTS (SELECT 1 FROM sys_role WHERE id = 2);
 `
-	if _, err := q.ExecContext(ctx, seedRoles); err != nil {
+	if err := execStatements(ctx, q, dialect, seedRoles); err != nil {
 		return err
 	}
 	return nil
 }
 
-func ensureSysUserRole(ctx context.Context, q sqlExecutor) error {
-	const checkTable = `SELECT to_regclass('public.sys_user_role');`
-	var tableName sql.NullString
-	if err := q.QueryRowContext(ctx, checkTable).Scan(&tableName); err != nil {
-		return err
-	}
-	if !tableName.Valid {
-		const ddl = `
+func ensureSysUserRole(ctx context.Context, q sqlExecutor, dialect string) error {
+	const ddl = `
 CREATE TABLE IF NOT EXISTS sys_user_role (
     id      BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
@@ -224,9 +203,8 @@ CREATE TABLE IF NOT EXISTS sys_user_role (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uk_user_id_role_id ON sys_user_role (user_id, role_id);
 `
-		if _, err := q.ExecContext(ctx, ddl); err != nil {
-			return err
-		}
+	if err := execStatements(ctx, q, dialect, ddl); err != nil {
+		return err
 	}
 	// Ensure admin -> admin role association exists.
 	const seed = `
@@ -234,20 +212,52 @@ INSERT INTO sys_user_role (id, user_id, role_id)
 SELECT 1, 1, 1
 WHERE NOT EXISTS (SELECT 1 FROM sys_user_role WHERE user_id = 1 AND role_id = 1);
 `
-	if _, err := q.ExecContext(ctx, seed); err != nil {
+	if err := execStatements(ctx, q, dialect, seed); err != nil {
 		return err
 	}
 	return nil
 }
 
-func ensureSysMenu(ctx context.Context, q sqlExecutor) error {
-	const checkTable = `SELECT to_regclass('public.sys_menu');`
-	var tableName sql.NullString
-	if err := q.QueryRowContext(ctx, checkTable).Scan(&tableName); err != nil {
-		return err
+func execStatements(ctx context.Context, q sqlExecutor, dialect string, statements string) error {
+	for _, stmt := range strings.Split(statements, ";") {
+		sqlStmt := strings.TrimSpace(stmt)
+		if sqlStmt == "" {
+			continue
+		}
+		if dialect == DialectMySQL {
+			sqlStmt = rewriteMySQLStatement(sqlStmt)
+		}
+		if _, err := q.ExecContext(ctx, sqlStmt); err != nil {
+			if dialect == DialectMySQL && isIgnorableMySQLError(err, sqlStmt) {
+				continue
+			}
+			return err
+		}
 	}
-	if !tableName.Valid {
-		const ddl = `
+	return nil
+}
+
+func rewriteMySQLStatement(stmt string) string {
+	up := strings.ToUpper(strings.TrimSpace(stmt))
+	if strings.HasPrefix(up, "CREATE UNIQUE INDEX IF NOT EXISTS ") {
+		return strings.Replace(stmt, "CREATE UNIQUE INDEX IF NOT EXISTS ", "CREATE UNIQUE INDEX ", 1)
+	}
+	if strings.HasPrefix(up, "CREATE INDEX IF NOT EXISTS ") {
+		return strings.Replace(stmt, "CREATE INDEX IF NOT EXISTS ", "CREATE INDEX ", 1)
+	}
+	return stmt
+}
+
+func isIgnorableMySQLError(err error, stmt string) bool {
+	up := strings.ToUpper(strings.TrimSpace(stmt))
+	if strings.HasPrefix(up, "CREATE INDEX ") || strings.HasPrefix(up, "CREATE UNIQUE INDEX ") {
+		return IsMySQLDuplicateIndexError(err)
+	}
+	return false
+}
+
+func ensureSysMenu(ctx context.Context, q sqlExecutor, dialect string) error {
+	const ddl = `
 CREATE TABLE IF NOT EXISTS sys_menu (
     id          BIGINT       NOT NULL,
     title       VARCHAR(30)  NOT NULL,
@@ -275,9 +285,8 @@ CREATE INDEX IF NOT EXISTS idx_menu_create_user ON sys_menu (create_user);
 CREATE INDEX IF NOT EXISTS idx_menu_update_user ON sys_menu (update_user);
 CREATE UNIQUE INDEX IF NOT EXISTS uk_menu_title_parent_id ON sys_menu (title, parent_id);
 `
-		if _, err := q.ExecContext(ctx, ddl); err != nil {
-			return err
-		}
+	if err := execStatements(ctx, q, dialect, ddl); err != nil {
+		return err
 	}
 
 	// Seed 系统管理 / 用户 / 角色 / 菜单 / 部门 / 字典 / 字典项 菜单与按钮，权限码对齐前端 v-permission。
@@ -917,22 +926,13 @@ SELECT 2033, '导出', 2030, 3, NULL, NULL, NULL, NULL, NULL,
        NULL, NULL, NULL, 'monitor:log:export', 3, 1, 1, NOW()
 WHERE NOT EXISTS (SELECT 1 FROM sys_menu WHERE id = 2033);
 `
-	if _, err := q.ExecContext(ctx, seedMenus); err != nil {
+	if err := execStatements(ctx, q, dialect, seedMenus); err != nil {
 		return err
 	}
 	return nil
 }
 
-func ensureSysFile(ctx context.Context, q sqlExecutor) error {
-	const checkTable = `SELECT to_regclass('public.sys_file');`
-	var tableName sql.NullString
-	if err := q.QueryRowContext(ctx, checkTable).Scan(&tableName); err != nil {
-		return err
-	}
-	if tableName.Valid {
-		return nil
-	}
-
+func ensureSysFile(ctx context.Context, q sqlExecutor, dialect string) error {
 	const ddl = `
 CREATE TABLE IF NOT EXISTS sys_file (
     id                 BIGINT       NOT NULL,
@@ -961,21 +961,12 @@ CREATE INDEX IF NOT EXISTS idx_file_sha256     ON sys_file (sha256);
 CREATE INDEX IF NOT EXISTS idx_file_storage_id ON sys_file (storage_id);
 CREATE INDEX IF NOT EXISTS idx_file_create_user ON sys_file (create_user);
 `
-	if _, err := q.ExecContext(ctx, ddl); err != nil {
-		return err
-	}
-	return nil
+	return execStatements(ctx, q, dialect, ddl)
 }
 
 // ensureSysOption creates sys_option table and seeds default options.
-func ensureSysOption(ctx context.Context, q sqlExecutor) error {
-	const checkTable = `SELECT to_regclass('public.sys_option');`
-	var tableName sql.NullString
-	if err := q.QueryRowContext(ctx, checkTable).Scan(&tableName); err != nil {
-		return err
-	}
-	if !tableName.Valid {
-		const ddl = `
+func ensureSysOption(ctx context.Context, q sqlExecutor, dialect string) error {
+	const ddl = `
 CREATE TABLE IF NOT EXISTS sys_option (
     id            BIGINT       NOT NULL,
     category      VARCHAR(50)  NOT NULL,
@@ -990,9 +981,8 @@ CREATE TABLE IF NOT EXISTS sys_option (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uk_option_category_code ON sys_option (category, code);
 `
-		if _, err := q.ExecContext(ctx, ddl); err != nil {
-			return err
-		}
+	if err := execStatements(ctx, q, dialect, ddl); err != nil {
+		return err
 	}
 
 	// Seed a subset of default options from Java main_data.sql.
@@ -1057,7 +1047,7 @@ INSERT INTO sys_option (id, category, name, code, value, default_value, descript
 SELECT 27, 'LOGIN', '是否启用验证码', 'LOGIN_CAPTCHA_ENABLED', NULL, '1', NULL
 WHERE NOT EXISTS (SELECT 1 FROM sys_option WHERE id = 27);
 `
-	if _, err := q.ExecContext(ctx, seed); err != nil {
+	if err := execStatements(ctx, q, dialect, seed); err != nil {
 		return err
 	}
 
@@ -1065,14 +1055,8 @@ WHERE NOT EXISTS (SELECT 1 FROM sys_option WHERE id = 27);
 }
 
 // ensureSysStorage 创建 sys_storage 表并写入与 Java 版一致的默认存储配置（简化版）。
-func ensureSysStorage(ctx context.Context, q sqlExecutor) error {
-	const checkTable = `SELECT to_regclass('public.sys_storage');`
-	var tableName sql.NullString
-	if err := q.QueryRowContext(ctx, checkTable).Scan(&tableName); err != nil {
-		return err
-	}
-	if !tableName.Valid {
-		const ddl = `
+func ensureSysStorage(ctx context.Context, q sqlExecutor, dialect string) error {
+	const ddl = `
 CREATE TABLE IF NOT EXISTS sys_storage (
     id          BIGINT       NOT NULL,
     name        VARCHAR(100) NOT NULL,
@@ -1098,26 +1082,33 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_storage_code  ON sys_storage (code);
 CREATE INDEX IF NOT EXISTS idx_storage_create_user ON sys_storage (create_user);
 CREATE INDEX IF NOT EXISTS idx_storage_update_user ON sys_storage (update_user);
 `
-		if _, err := q.ExecContext(ctx, ddl); err != nil {
-			return err
-		}
-	} else {
-		// 已存在表时，确保新增的 region 字段已创建，用于兼容七牛等需要 Region 的对象存储。
-		const checkRegion = `
+	if err := execStatements(ctx, q, dialect, ddl); err != nil {
+		return err
+	}
+
+	// 已存在表时，确保新增的 region 字段已创建，用于兼容七牛等需要 Region 的对象存储。
+	checkRegion := `
 SELECT 1
 FROM information_schema.columns
-WHERE table_name = 'sys_storage' AND column_name = 'region'
+WHERE table_schema = 'public' AND table_name = 'sys_storage' AND column_name = 'region'
 LIMIT 1;
 `
-		var dummy int
-		err := q.QueryRowContext(ctx, checkRegion).Scan(&dummy)
-		if err != nil && err != sql.ErrNoRows {
+	if dialect == DialectMySQL {
+		checkRegion = `
+SELECT 1
+FROM information_schema.columns
+WHERE table_schema = DATABASE() AND table_name = 'sys_storage' AND column_name = 'region'
+LIMIT 1;
+`
+	}
+	var dummy int
+	err := q.QueryRowContext(ctx, checkRegion).Scan(&dummy)
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+	if err == sql.ErrNoRows {
+		if _, err := q.ExecContext(ctx, `ALTER TABLE sys_storage ADD COLUMN region VARCHAR(100) DEFAULT NULL`); err != nil {
 			return err
-		}
-		if err == sql.ErrNoRows {
-			if _, err := q.ExecContext(ctx, `ALTER TABLE sys_storage ADD COLUMN region VARCHAR(100) DEFAULT NULL;`); err != nil {
-				return err
-			}
 		}
 	}
 
@@ -1145,21 +1136,15 @@ SELECT 1,
        NOW()
 WHERE NOT EXISTS (SELECT 1 FROM sys_storage WHERE id = 1);
 `
-	if _, err := q.ExecContext(ctx, seed); err != nil {
+	if err := execStatements(ctx, q, dialect, seed); err != nil {
 		return err
 	}
 	return nil
 }
 
 // ensureSysClient 创建 sys_client 表并写入一个默认客户端配置。
-func ensureSysClient(ctx context.Context, q sqlExecutor) error {
-	const checkTable = `SELECT to_regclass('public.sys_client');`
-	var tableName sql.NullString
-	if err := q.QueryRowContext(ctx, checkTable).Scan(&tableName); err != nil {
-		return err
-	}
-	if !tableName.Valid {
-		const ddl = `
+func ensureSysClient(ctx context.Context, q sqlExecutor, dialect string) error {
+	const ddl = `
 CREATE TABLE IF NOT EXISTS sys_client (
     id             BIGINT       NOT NULL,
     client_id      VARCHAR(50)  NOT NULL,
@@ -1178,9 +1163,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_client_client_id  ON sys_client (client_id)
 CREATE INDEX IF NOT EXISTS idx_client_create_user ON sys_client (create_user);
 CREATE INDEX IF NOT EXISTS idx_client_update_user ON sys_client (update_user);
 `
-		if _, err := q.ExecContext(ctx, ddl); err != nil {
-			return err
-		}
+	if err := execStatements(ctx, q, dialect, ddl); err != nil {
+		return err
 	}
 
 	const authTypeGinIndex = `
@@ -1188,8 +1172,10 @@ CREATE INDEX IF NOT EXISTS idx_client_auth_type_gin
     ON sys_client
     USING GIN ((auth_type::jsonb));
 `
-	if _, err := q.ExecContext(ctx, authTypeGinIndex); err != nil {
-		return err
+	if dialect == DialectPostgres {
+		if err := execStatements(ctx, q, dialect, authTypeGinIndex); err != nil {
+			return err
+		}
 	}
 
 	// 默认客户端，行为与 Java 版保持一致（PC + ACCOUNT）。
@@ -1202,7 +1188,7 @@ INSERT INTO sys_client (
 SELECT 1,
        'ef51c9a3e9046c4f2ea45142c8a8344a',
        'PC',
-       '["ACCOUNT"]'::json,
+       CAST('["ACCOUNT"]' AS JSON),
        1800,
        86400,
        1,
@@ -1210,29 +1196,22 @@ SELECT 1,
        NOW()
 WHERE NOT EXISTS (SELECT 1 FROM sys_client WHERE id = 1);
 `
-	if _, err := q.ExecContext(ctx, seed); err != nil {
+	if err := execStatements(ctx, q, dialect, seed); err != nil {
 		return err
 	}
 	return nil
 }
 
-func ensureSysRoleMenu(ctx context.Context, q sqlExecutor) error {
-	const checkTable = `SELECT to_regclass('public.sys_role_menu');`
-	var tableName sql.NullString
-	if err := q.QueryRowContext(ctx, checkTable).Scan(&tableName); err != nil {
-		return err
-	}
-	if !tableName.Valid {
-		const ddl = `
+func ensureSysRoleMenu(ctx context.Context, q sqlExecutor, dialect string) error {
+	const ddl = `
 CREATE TABLE IF NOT EXISTS sys_role_menu (
     role_id BIGINT NOT NULL,
     menu_id BIGINT NOT NULL,
     PRIMARY KEY (role_id, menu_id)
 );
 `
-		if _, err := q.ExecContext(ctx, ddl); err != nil {
-			return err
-		}
+	if err := execStatements(ctx, q, dialect, ddl); err != nil {
+		return err
 	}
 	// 让默认管理员角色（ID=1）拥有当前所有菜单权限。
 	const bindAllMenus = `
@@ -1243,22 +1222,13 @@ WHERE NOT EXISTS (
     SELECT 1 FROM sys_role_menu rm WHERE rm.role_id = 1 AND rm.menu_id = m.id
 );
 `
-	if _, err := q.ExecContext(ctx, bindAllMenus); err != nil {
+	if err := execStatements(ctx, q, dialect, bindAllMenus); err != nil {
 		return err
 	}
 	return nil
 }
 
-func ensureSysRoleDept(ctx context.Context, q sqlExecutor) error {
-	const checkTable = `SELECT to_regclass('public.sys_role_dept');`
-	var tableName sql.NullString
-	if err := q.QueryRowContext(ctx, checkTable).Scan(&tableName); err != nil {
-		return err
-	}
-	if tableName.Valid {
-		return nil
-	}
-
+func ensureSysRoleDept(ctx context.Context, q sqlExecutor, dialect string) error {
 	const ddl = `
 CREATE TABLE IF NOT EXISTS sys_role_dept (
     role_id BIGINT NOT NULL,
@@ -1268,22 +1238,13 @@ CREATE TABLE IF NOT EXISTS sys_role_dept (
 CREATE INDEX IF NOT EXISTS idx_role_dept_role_id ON sys_role_dept (role_id);
 CREATE INDEX IF NOT EXISTS idx_role_dept_dept_id ON sys_role_dept (dept_id);
 `
-	if _, err := q.ExecContext(ctx, ddl); err != nil {
-		return err
-	}
-	return nil
+	return execStatements(ctx, q, dialect, ddl)
 }
 
 // ensureSysDept creates a minimal sys_dept table if it does not exist,
 // and seeds a default root department so that sys_user.dept_id has a target.
-func ensureSysDept(ctx context.Context, q sqlExecutor) error {
-	const checkTable = `SELECT to_regclass('public.sys_dept');`
-	var tableName sql.NullString
-	if err := q.QueryRowContext(ctx, checkTable).Scan(&tableName); err != nil {
-		return err
-	}
-	if !tableName.Valid {
-		const ddl = `
+func ensureSysDept(ctx context.Context, q sqlExecutor, dialect string) error {
+	const ddl = `
 CREATE TABLE IF NOT EXISTS sys_dept (
     id          BIGINT       NOT NULL,
     name        VARCHAR(30)  NOT NULL,
@@ -1302,9 +1263,8 @@ CREATE INDEX IF NOT EXISTS idx_dept_parent_id   ON sys_dept (parent_id);
 CREATE INDEX IF NOT EXISTS idx_dept_create_user ON sys_dept (create_user);
 CREATE INDEX IF NOT EXISTS idx_dept_update_user ON sys_dept (update_user);
 `
-		if _, err := q.ExecContext(ctx, ddl); err != nil {
-			return err
-		}
+	if err := execStatements(ctx, q, dialect, ddl); err != nil {
+		return err
 	}
 
 	// Seed a simple root department.
@@ -1313,23 +1273,15 @@ INSERT INTO sys_dept (id, name, parent_id, sort, status, is_system, description,
 SELECT 1, '默认部门', 0, 1, 1, TRUE, '系统初始部门', 1, NOW()
 WHERE NOT EXISTS (SELECT 1 FROM sys_dept WHERE id = 1);
 `
-	if _, err := q.ExecContext(ctx, seed); err != nil {
+	if err := execStatements(ctx, q, dialect, seed); err != nil {
 		return err
 	}
 	return nil
 }
 
 // ensureSysDict creates sys_dict table for dictionary definitions.
-func ensureSysDict(ctx context.Context, q sqlExecutor) error {
-	const checkTable = `SELECT to_regclass('public.sys_dict');`
-	var tableName sql.NullString
-	if err := q.QueryRowContext(ctx, checkTable).Scan(&tableName); err != nil {
-		return err
-	}
-
-	// 如果表不存在则先创建
-	if !tableName.Valid {
-		const ddl = `
+func ensureSysDict(ctx context.Context, q sqlExecutor, dialect string) error {
+	const ddl = `
 CREATE TABLE IF NOT EXISTS sys_dict (
     id          BIGINT       NOT NULL,
     name        VARCHAR(30)  NOT NULL,
@@ -1346,9 +1298,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_dict_code ON sys_dict (code);
 CREATE INDEX IF NOT EXISTS idx_dict_create_user ON sys_dict (create_user);
 CREATE INDEX IF NOT EXISTS idx_dict_update_user ON sys_dict (update_user);
 `
-		if _, err := q.ExecContext(ctx, ddl); err != nil {
-			return err
-		}
+	if err := execStatements(ctx, q, dialect, ddl); err != nil {
+		return err
 	}
 
 	// 同步 Java 版 main_data.sql 中的默认字典：
@@ -1366,7 +1317,7 @@ INSERT INTO sys_dict (id, name, code, description, is_system, create_user, creat
 SELECT 4, '存储类型', 'storage_type_enum', NULL, TRUE, 1, NOW()
 WHERE NOT EXISTS (SELECT 1 FROM sys_dict WHERE id = 4 OR code = 'storage_type_enum');
 `
-	if _, err := q.ExecContext(ctx, seed); err != nil {
+	if err := execStatements(ctx, q, dialect, seed); err != nil {
 		return err
 	}
 
@@ -1374,16 +1325,8 @@ WHERE NOT EXISTS (SELECT 1 FROM sys_dict WHERE id = 4 OR code = 'storage_type_en
 }
 
 // ensureSysDictItem creates sys_dict_item table for dictionary values.
-func ensureSysDictItem(ctx context.Context, q sqlExecutor) error {
-	const checkTable = `SELECT to_regclass('public.sys_dict_item');`
-	var tableName sql.NullString
-	if err := q.QueryRowContext(ctx, checkTable).Scan(&tableName); err != nil {
-		return err
-	}
-
-	// 如果表不存在则先创建
-	if !tableName.Valid {
-		const ddl = `
+func ensureSysDictItem(ctx context.Context, q sqlExecutor, dialect string) error {
+	const ddl = `
 CREATE TABLE IF NOT EXISTS sys_dict_item (
     id          BIGINT       NOT NULL,
     label       VARCHAR(30)  NOT NULL,
@@ -1403,9 +1346,8 @@ CREATE INDEX IF NOT EXISTS idx_dict_item_dict_id ON sys_dict_item (dict_id);
 CREATE INDEX IF NOT EXISTS idx_dict_item_create_user ON sys_dict_item (create_user);
 CREATE INDEX IF NOT EXISTS idx_dict_item_update_user ON sys_dict_item (update_user);
 `
-		if _, err := q.ExecContext(ctx, ddl); err != nil {
-			return err
-		}
+	if err := execStatements(ctx, q, dialect, ddl); err != nil {
+		return err
 	}
 
 	// 初始化默认字典项：
@@ -1488,7 +1430,7 @@ SELECT 11, '对象存储', '2', 'primary', 2, NULL, 1,
        4, 1, NOW()
 WHERE NOT EXISTS (SELECT 1 FROM sys_dict_item WHERE id = 11);
 `
-	if _, err := q.ExecContext(ctx, seedItems); err != nil {
+	if err := execStatements(ctx, q, dialect, seedItems); err != nil {
 		return err
 	}
 
@@ -1496,16 +1438,7 @@ WHERE NOT EXISTS (SELECT 1 FROM sys_dict_item WHERE id = 11);
 }
 
 // ensureSysLog 创建 sys_log 表（结构参考 Java Postgres main_table.sql）。
-func ensureSysLog(ctx context.Context, q sqlExecutor) error {
-	const checkTable = `SELECT to_regclass('public.sys_log');`
-	var tableName sql.NullString
-	if err := q.QueryRowContext(ctx, checkTable).Scan(&tableName); err != nil {
-		return err
-	}
-	if tableName.Valid {
-		return nil
-	}
-
+func ensureSysLog(ctx context.Context, q sqlExecutor, dialect string) error {
 	const ddl = `
 CREATE TABLE IF NOT EXISTS sys_log (
     id               BIGINT       NOT NULL,
@@ -1514,18 +1447,18 @@ CREATE TABLE IF NOT EXISTS sys_log (
     module           VARCHAR(100) NOT NULL,
     request_url      VARCHAR(512) NOT NULL,
     request_method   VARCHAR(10)  NOT NULL,
-    request_headers  TEXT         DEFAULT NULL,
-    request_body     TEXT         DEFAULT NULL,
+    request_headers  TEXT,
+    request_body     TEXT,
     status_code      INTEGER      NOT NULL,
-    response_headers TEXT         DEFAULT NULL,
-    response_body    TEXT         DEFAULT NULL,
+    response_headers TEXT,
+    response_body    TEXT,
     time_taken       BIGINT       NOT NULL,
     ip               VARCHAR(100) DEFAULT NULL,
     address          VARCHAR(255) DEFAULT NULL,
     browser          VARCHAR(100) DEFAULT NULL,
     os               VARCHAR(100) DEFAULT NULL,
     status           SMALLINT     NOT NULL DEFAULT 1,
-    error_msg        TEXT         DEFAULT NULL,
+    error_msg        TEXT,
     create_user      BIGINT       DEFAULT NULL,
     create_time      TIMESTAMP    NOT NULL,
     PRIMARY KEY (id)
@@ -1535,8 +1468,5 @@ CREATE INDEX IF NOT EXISTS idx_log_ip          ON sys_log (ip);
 CREATE INDEX IF NOT EXISTS idx_log_address     ON sys_log (address);
 CREATE INDEX IF NOT EXISTS idx_log_create_time ON sys_log (create_time);
 `
-	if _, err := q.ExecContext(ctx, ddl); err != nil {
-		return err
-	}
-	return nil
+	return execStatements(ctx, q, dialect, ddl)
 }

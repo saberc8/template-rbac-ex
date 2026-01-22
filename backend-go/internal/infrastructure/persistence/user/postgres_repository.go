@@ -11,12 +11,17 @@ import (
 
 // PgRepository implements domain.Repository using PostgreSQL.
 type PgRepository struct {
-	db *sql.DB
+	db      *sql.DB
+	dialect string
+}
+
+func NewRepository(db *sql.DB, dialect string) *PgRepository {
+	return &PgRepository{db: db, dialect: dialect}
 }
 
 // NewPgRepository creates a new PgRepository.
 func NewPgRepository(db *sql.DB) *PgRepository {
-	return &PgRepository{db: db}
+	return NewRepository(db, "postgres")
 }
 
 var _ domain.Repository = (*PgRepository)(nil)
@@ -43,11 +48,11 @@ SELECT
     update_user,
     update_time
 FROM sys_user
-WHERE username = $1
+WHERE username = ?
 LIMIT 1;
 `
 	q := sqlutil.QuerierFromContext(ctx, r.db)
-	row := q.QueryRowContext(ctx, query, username)
+	row := q.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, query), username)
 
 	var (
 		u                  domain.User
@@ -138,11 +143,11 @@ SELECT
     update_user,
     update_time
 FROM sys_user
-WHERE id = $1
+WHERE id = ?
 LIMIT 1;
 `
 	q := sqlutil.QuerierFromContext(ctx, r.db)
-	row := q.QueryRowContext(ctx, query, id)
+	row := q.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, query), id)
 
 	var (
 		u                  domain.User

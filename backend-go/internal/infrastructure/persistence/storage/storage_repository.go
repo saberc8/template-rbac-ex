@@ -9,17 +9,21 @@ import (
 	"time"
 
 	domainstorage "go-backend/internal/domain/storage"
-
-	"github.com/lib/pq"
+	"go-backend/internal/infrastructure/persistence/sqlutil"
 )
 
 // PgStorageRepository 提供 sys_storage 的 PostgreSQL 实现。
 type PgStorageRepository struct {
-	db *sql.DB
+	db      *sql.DB
+	dialect string
+}
+
+func NewStorageRepository(db *sql.DB, dialect string) *PgStorageRepository {
+	return &PgStorageRepository{db: db, dialect: dialect}
 }
 
 func NewPgStorageRepository(db *sql.DB) *PgStorageRepository {
-	return &PgStorageRepository{db: db}
+	return NewStorageRepository(db, "postgres")
 }
 
 var _ domainstorage.StorageRepository = (*PgStorageRepository)(nil)
@@ -27,17 +31,15 @@ var _ domainstorage.StorageRepository = (*PgStorageRepository)(nil)
 func (r *PgStorageRepository) List(ctx context.Context, f domainstorage.StorageListFilter) ([]domainstorage.StorageDetail, error) {
 	where := "WHERE 1=1"
 	args := []any{}
-	argPos := 1
 
 	if strings.TrimSpace(f.Description) != "" {
-		where += fmt.Sprintf(" AND (s.name ILIKE $%d OR s.code ILIKE $%d OR COALESCE(s.description,'') ILIKE $%d)", argPos, argPos, argPos)
-		args = append(args, "%"+strings.TrimSpace(f.Description)+"%")
-		argPos++
+		like := "%" + strings.ToLower(strings.TrimSpace(f.Description)) + "%"
+		where += " AND (LOWER(s.name) LIKE ? OR LOWER(s.code) LIKE ? OR LOWER(COALESCE(s.description,'')) LIKE ?)"
+		args = append(args, like, like, like)
 	}
 	if f.Type != 0 {
-		where += fmt.Sprintf(" AND s.type = $%d", argPos)
+		where += " AND s.type = ?"
 		args = append(args, f.Type)
-		argPos++
 	}
 
 	query := fmt.Sprintf(`
@@ -66,7 +68,7 @@ LEFT JOIN sys_user AS uu ON uu.id = s.update_user
 ORDER BY s.sort ASC, s.id ASC;
 `, where)
 
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	rows, err := r.db.QueryContext(ctx, sqlutil.Rebind(r.dialect, query), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -135,14 +137,14 @@ SELECT s.id,
 FROM sys_storage AS s
 LEFT JOIN sys_user AS cu ON cu.id = s.create_user
 LEFT JOIN sys_user AS uu ON uu.id = s.update_user
-WHERE s.id = $1;
+WHERE s.id = ?;
 `
 
 	var (
 		item     domainstorage.StorageDetail
 		updateAt sql.NullTime
 	)
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
+	err := r.db.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, query), id).Scan(
 		&item.ID,
 		&item.Name,
 		&item.Code,
@@ -262,7 +264,7 @@ func (r *PgStorageRepository) ListByIDs(ctx context.Context, ids []int64) ([]dom
 	if len(ids) == 0 {
 		return []domainstorage.StorageDetail{}, nil
 	}
-	const query = `
+	query := `
 SELECT s.id,
        s.name,
        s.code,
@@ -284,9 +286,13 @@ SELECT s.id,
 FROM sys_storage AS s
 LEFT JOIN sys_user AS cu ON cu.id = s.create_user
 LEFT JOIN sys_user AS uu ON uu.id = s.update_user
-WHERE s.id = ANY($1::bigint[]);
+WHERE s.id IN (?);
 `
-	rows, err := r.db.QueryContext(ctx, query, pq.Int64Array(ids))
+	sqlQuery, sqlArgs, err := sqlutil.In(r.dialect, query, ids)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.db.QueryContext(ctx, sqlQuery, sqlArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -336,15 +342,15 @@ WHERE s.id = ANY($1::bigint[]);
 }
 
 func (r *PgStorageRepository) CodeExists(ctx context.Context, code string, excludeID *int64) (bool, error) {
-	where := "code = $1"
+	where := "code = ?"
 	args := []any{code}
 	if excludeID != nil && *excludeID > 0 {
-		where += " AND id <> $2"
+		where += " AND id <> ?"
 		args = append(args, *excludeID)
 	}
 	q := "SELECT 1 FROM sys_storage WHERE " + where + " LIMIT 1;"
 	var tmp int
-	err := r.db.QueryRowContext(ctx, q, args...).Scan(&tmp)
+	err := r.db.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, q), args...).Scan(&tmp)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -362,15 +368,15 @@ INSERT INTO sys_storage (
     bucket_name, domain, description, is_default, sort, status,
     create_user, create_time
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7,
-    $8,
-    $9, $10, $11, $12, $13, $14,
-    $15, $16
+    ?, ?, ?, ?, ?, ?, ?,
+    ?,
+    ?, ?, ?, ?, ?, ?,
+    ?, ?
 );
 `
 	_, err := r.db.ExecContext(
 		ctx,
-		stmt,
+		sqlutil.Rebind(r.dialect, stmt),
 		s.ID,
 		s.Name,
 		s.Code,
@@ -394,26 +400,26 @@ INSERT INTO sys_storage (
 func (r *PgStorageRepository) Update(ctx context.Context, s *domainstorage.Storage) error {
 	const stmt = `
 UPDATE sys_storage
-   SET name = $1,
-       code = $2,
-       type = $3,
-       access_key = $4,
-       secret_key = $5,
-       endpoint = $6,
-       region = $7,
-       bucket_name = $8,
-       domain = $9,
-       description = $10,
-       is_default = $11,
-       sort = $12,
-       status = $13,
-       update_user = $14,
-       update_time = $15
- WHERE id = $16;
+   SET name = ?,
+       code = ?,
+       type = ?,
+       access_key = ?,
+       secret_key = ?,
+       endpoint = ?,
+       region = ?,
+       bucket_name = ?,
+       domain = ?,
+       description = ?,
+       is_default = ?,
+       sort = ?,
+       status = ?,
+       update_user = ?,
+       update_time = ?
+ WHERE id = ?;
 `
 	_, err := r.db.ExecContext(
 		ctx,
-		stmt,
+		sqlutil.Rebind(r.dialect, stmt),
 		s.Name,
 		s.Code,
 		s.Type,
@@ -443,7 +449,7 @@ func (r *PgStorageRepository) Delete(ctx context.Context, ids []int64) error {
 
 	for _, idVal := range ids {
 		var isDefault bool
-		if err := tx.QueryRowContext(ctx, `SELECT is_default FROM sys_storage WHERE id = $1`, idVal).Scan(&isDefault); err != nil {
+		if err := tx.QueryRowContext(ctx, sqlutil.Rebind(r.dialect, `SELECT is_default FROM sys_storage WHERE id = ?`), idVal).Scan(&isDefault); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				continue
 			}
@@ -452,7 +458,7 @@ func (r *PgStorageRepository) Delete(ctx context.Context, ids []int64) error {
 		if isDefault {
 			return domainstorage.ErrDefaultStorage
 		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM sys_storage WHERE id = $1`, idVal); err != nil {
+		if _, err := tx.ExecContext(ctx, sqlutil.Rebind(r.dialect, `DELETE FROM sys_storage WHERE id = ?`), idVal); err != nil {
 			return err
 		}
 	}
@@ -462,12 +468,12 @@ func (r *PgStorageRepository) Delete(ctx context.Context, ids []int64) error {
 func (r *PgStorageRepository) UpdateStatus(ctx context.Context, id int64, status int16, userID int64) error {
 	const stmt = `
 UPDATE sys_storage
-   SET status = $1,
-       update_user = $2,
-       update_time = $3
- WHERE id = $4;
+   SET status = ?,
+       update_user = ?,
+       update_time = ?
+ WHERE id = ?;
 `
-	_, err := r.db.ExecContext(ctx, stmt, status, userID, time.Now(), id)
+	_, err := r.db.ExecContext(ctx, sqlutil.Rebind(r.dialect, stmt), status, userID, time.Now(), id)
 	return err
 }
 
@@ -481,7 +487,7 @@ func (r *PgStorageRepository) SetDefault(ctx context.Context, id int64, userID i
 	if _, err := tx.ExecContext(ctx, `UPDATE sys_storage SET is_default = FALSE`); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE sys_storage SET is_default = TRUE, update_user = $1, update_time = $2 WHERE id = $3`, userID, time.Now(), id); err != nil {
+	if _, err := tx.ExecContext(ctx, sqlutil.Rebind(r.dialect, `UPDATE sys_storage SET is_default = TRUE, update_user = ?, update_time = ? WHERE id = ?`), userID, time.Now(), id); err != nil {
 		return err
 	}
 	return tx.Commit()

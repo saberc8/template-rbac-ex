@@ -39,8 +39,8 @@ import (
 
 // BuildAdminApp 构建 admin HTTP 应用并返回关闭函数。
 func BuildAdminApp(cfg config.Config) (*gin.Engine, func(), error) {
-	// 1. 初始化数据库连接（PostgreSQL）
-	pg, err := db.NewPostgres(cfg.DB)
+	// 1. 初始化数据库连接（PostgreSQL/MySQL）
+	sqlDB, err := db.Open(cfg.DB)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -48,18 +48,18 @@ func BuildAdminApp(cfg config.Config) (*gin.Engine, func(), error) {
 	// 1.0 初始化 Redis 连接（验证码等缓存使用）
 	redisClient, err := cache.NewRedis(cfg.Redis)
 	if err != nil {
-		_ = pg.Close()
+		_ = sqlDB.Close()
 		return nil, nil, err
 	}
 
 	closeFn := func() {
 		_ = redisClient.Close()
-		_ = pg.Close()
+		_ = sqlDB.Close()
 	}
 
 	// 1.1 自动迁移/初始化数据库（默认仅开发环境启用，生产需显式开关）
 	if cfg.AutoMigrate {
-		if err := db.AutoMigrate(pg); err != nil {
+		if err := db.AutoMigrate(sqlDB, cfg.DB.Dialect); err != nil {
 			closeFn()
 			return nil, nil, err
 		}
@@ -73,27 +73,27 @@ func BuildAdminApp(cfg config.Config) (*gin.Engine, func(), error) {
 	tokenSvc := security.NewTokenService(cfg.AuthJWTSecret, tokenTTL)
 
 	// 3. 初始化领域仓储和应用服务
-	userPgRepo := persistence.NewPgRepository(pg)
+	userPgRepo := persistence.NewRepository(sqlDB, cfg.DB.Dialect)
 	var userRepo user.Repository = userPgRepo
-	roleRepo := rbacp.NewPgRoleRepository(pg)
-	menuRepo := rbacp.NewPgMenuRepository(pg)
+	roleRepo := rbacp.NewRoleRepository(sqlDB, cfg.DB.Dialect)
+	menuRepo := rbacp.NewMenuRepository(sqlDB, cfg.DB.Dialect)
 	var roleAuthRepo rbacdomain.RoleRepository = roleRepo
 	var menuAuthRepo rbacdomain.MenuRepository = menuRepo
 	authSvc := appauth.NewService(userRepo, pwdVerifier, tokenSvc)
 	userQuerySvc := appauth.NewUserQueryService(userRepo, roleAuthRepo, menuAuthRepo)
-	dictRepo := dictp.NewPgRepository(pg)
+	dictRepo := dictp.NewRepository(sqlDB, cfg.DB.Dialect)
 	dictSvc := appdict.NewService(dictRepo, id.Next)
-	deptRepo := systemp.NewPgDeptRepository(pg)
-	optionRepo := systemp.NewPgOptionRepository(pg)
+	deptRepo := systemp.NewDeptRepository(sqlDB, cfg.DB.Dialect)
+	optionRepo := systemp.NewOptionRepository(sqlDB, cfg.DB.Dialect)
 	systemSvc := appsystem.NewService(deptRepo, optionRepo, id.Next)
-	storageRepo := storagep.NewPgStorageRepository(pg)
+	storageRepo := storagep.NewStorageRepository(sqlDB, cfg.DB.Dialect)
 	storageSvc := appstorage.NewService(storageRepo, id.Next)
-	fileRepo := storagep.NewPgFileRepository(pg)
+	fileRepo := storagep.NewFileRepository(sqlDB, cfg.DB.Dialect)
 	fileStore := filestore.NewDefaultFileContentStore()
 	fileSvc := appstorage.NewFileService(storageRepo, fileRepo, fileStore, id.Next)
-	clientRepo := clientp.NewPgRepository(pg)
+	clientRepo := clientp.NewRepository(sqlDB, cfg.DB.Dialect)
 	clientSvc := appclient.NewService(clientRepo, id.Next)
-	sysLogQueryRepo := syslogp.NewPgQueryRepository(pg)
+	sysLogQueryRepo := syslogp.NewQueryRepository(sqlDB, cfg.DB.Dialect)
 	sysLogSvc := appsyslog.NewService(sysLogQueryRepo)
 	menuSvc := apprbac.NewMenuService(menuRepo, id.Next)
 	roleSvc := apprbac.NewRoleService(roleRepo, id.Next)
@@ -117,7 +117,7 @@ func BuildAdminApp(cfg config.Config) (*gin.Engine, func(), error) {
 	r.Use(httpif.AuthContext(tokenSvc))
 
 	// 系统操作日志中间件：在业务处理前后统一记录 sys_log。
-	sysLogRepo := syslogp.NewPgRepository(pg)
+	sysLogRepo := syslogp.NewLogRepository(sqlDB, cfg.DB.Dialect)
 	r.Use(httpif.NewSysLogMiddleware(sysLogRepo, tokenSvc))
 
 	// 在线用户内存存储（仅当前进程有效）
