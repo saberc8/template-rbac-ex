@@ -1,20 +1,15 @@
-import userService from "@/api/services/userService";
 import { Button } from "@/ui/button";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/ui/form";
 import { Input } from "@/ui/input";
-import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import { ReturnButton } from "./components/ReturnButton";
 import { LoginStateEnum, useLoginStateContext } from "./providers/login-provider";
 
 function RegisterForm() {
 	const { t } = useTranslation();
 	const { loginState, backToLogin } = useLoginStateContext();
-
-	const signUpMutation = useMutation({
-		mutationFn: userService.signup,
-	});
 
 	const form = useForm({
 		defaultValues: {
@@ -27,7 +22,7 @@ function RegisterForm() {
 
 	const onFinish = async (values: any) => {
 		console.log("Received values of form: ", values);
-		await signUpMutation.mutateAsync(values);
+		toast.error("当前后端未提供注册接口（占位）", { position: "top-center" });
 		backToLogin();
 	};
 

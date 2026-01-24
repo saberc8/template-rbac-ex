@@ -1,4 +1,3 @@
-// import { USER_LIST } from "@/_mock/assets";
 import { Icon } from "@/components/icon";
 import { usePathname, useRouter } from "@/routes/hooks";
 import { Badge } from "@/ui/badge";

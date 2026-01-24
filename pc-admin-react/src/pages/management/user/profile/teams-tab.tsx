@@ -1,9 +1,11 @@
-import { fakeAvatars } from "@/_mock/utils";
 import { Icon } from "@/components/icon";
 import { Avatar, AvatarImage } from "@/ui/avatar";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent } from "@/ui/card";
+
+const DEFAULT_AVATAR_URL = "https://avatars.githubusercontent.com/u/583231?v=4";
+const repeatAvatars = (count: number) => Array.from({ length: count }).map(() => DEFAULT_AVATAR_URL);
 
 export default function TeamsTab() {
 	const items = [
@@ -11,35 +13,35 @@ export default function TeamsTab() {
 			icon: <Icon icon="logos:react" size={40} />,
 			name: "React Developers",
 			desc: "We don’t make assumptions about the rest of your technology stack, so you can develop new features in React.",
-			members: fakeAvatars(25),
+			members: repeatAvatars(25),
 			tags: ["React", "AntD"],
 		},
 		{
 			icon: <Icon icon="logos:vue" size={40} />,
 			name: "Vue.js Dev Team",
 			desc: "The development of Vue and its ecosystem is guided by an international team, some of whom have chosen to be featured below.",
-			members: fakeAvatars(20),
+			members: repeatAvatars(20),
 			tags: ["Vue.js", "Developer"],
 		},
 		{
 			icon: <Icon icon="logos:figma" size={40} />,
 			name: "Figma Resources",
 			desc: "Explore, install, use, and remix thousands of plugins and files published to the Figma Community by designers and developers.",
-			members: fakeAvatars(45),
+			members: repeatAvatars(45),
 			tags: ["UI/UX", "Figma"],
 		},
 		{
 			icon: <Icon icon="logos:html-5" size={40} />,
 			name: "Only Beginners",
 			desc: "Learn the basics of how websites work, front-end vs back-end, and using a code editor. Learn basic HTML, CSS, and…",
-			members: fakeAvatars(50),
+			members: repeatAvatars(50),
 			tags: ["CSS", "HTML"],
 		},
 		{
 			icon: <Icon icon="logos:adobe-xd" size={40} />,
 			name: "Creative Designers",
 			desc: "A design or product team is more than just the people on it. A team includes the people, the roles they play.  ",
-			members: fakeAvatars(55),
+			members: repeatAvatars(55),
 			tags: ["Sketch", "XD"],
 		},
 	];
@@ -63,8 +65,8 @@ export default function TeamsTab() {
 						</header>
 						<main className="my-4 opacity-70">{item.desc}</main>
 						<footer className="flex w-full items-center">
-							{item.members.slice(0, 4).map((memberAvatar) => (
-								<Avatar key={memberAvatar}>
+							{item.members.slice(0, 4).map((memberAvatar, index) => (
+								<Avatar key={`${item.name}-${index}`}>
 									<AvatarImage src={memberAvatar} />
 								</Avatar>
 							))}

@@ -1,4 +1,5 @@
 import { lazy } from "react";
+import MissingPage from "@/routes/components/missing-page";
 
 const Pages = import.meta.glob("/src/pages/**/*.tsx");
 const lazyComponentCache = new Map<string, React.LazyExoticComponent<any>>();
@@ -20,7 +21,7 @@ export const Component = (path = "", props?: any): React.ReactNode => {
 	if (!importFn) importFn = Pages[`/src${path}/index.tsx`];
 	if (!importFn) {
 		console.warn("Component not found for path:", path);
-		return null;
+		return <MissingPage componentPath={path} {...props} />;
 	}
 
 	let Element = lazyComponentCache.get(path);

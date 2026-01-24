@@ -1,16 +1,23 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/ui/card";
-import { faker } from "@faker-js/faker";
+
+const CARDS = Array.from({ length: 10 }).map((_, index) => ({
+	id: `card-${index + 1}`,
+	title: `Card ${index + 1}`,
+	description: "用于演示页面与权限占位内容（已移除 mock 数据生成）。",
+	content:
+		"这里是静态示例内容。\n\n如果需要真实业务数据，请将该页面替换为实际后端接口驱动的实现。",
+}));
 
 export default function PermissionPageTest() {
 	return (
 		<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-			{Array.from({ length: 10 }).map((_, index) => (
-				<Card key={faker.string.uuid()}>
+			{CARDS.map((card) => (
+				<Card key={card.id}>
 					<CardHeader>
-						<CardTitle>Card {index + 1}</CardTitle>
-						<CardDescription>{faker.lorem.paragraph()}</CardDescription>
+						<CardTitle>{card.title}</CardTitle>
+						<CardDescription>{card.description}</CardDescription>
 					</CardHeader>
-					<CardContent>{faker.lorem.paragraphs(3)}</CardContent>
+					<CardContent className="whitespace-pre-line">{card.content}</CardContent>
 				</Card>
 			))}
 		</div>

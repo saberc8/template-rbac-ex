@@ -2,7 +2,6 @@ import { Tree } from "antd";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 
-import { PERMISSION_LIST } from "@/_mock/assets";
 import { Button } from "@/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel } from "@/ui/form";
@@ -22,7 +21,7 @@ export type RoleModalProps = {
 	onOk: VoidFunction;
 	onCancel: VoidFunction;
 };
-const PERMISSIONS: Permission_Old[] = PERMISSION_LIST as Permission_Old[];
+const PERMISSIONS: Permission_Old[] = [];
 export function RoleModal({ title, show, formValue, onOk, onCancel }: RoleModalProps) {
 	const form = useForm<Role_Old>({
 		defaultValues: formValue,

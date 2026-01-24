@@ -16,6 +16,8 @@ export type GlobalConfig = {
 	apiBaseUrl: string;
 	/** Routing mode: frontend routing or backend routing */
 	routerMode: "frontend" | "backend";
+	/** ClientId for /auth/login */
+	clientId: string;
 };
 
 /**
@@ -32,4 +34,5 @@ export const GLOBAL_CONFIG: GlobalConfig = {
 	publicPath: import.meta.env.VITE_APP_PUBLIC_PATH || "/",
 	apiBaseUrl: import.meta.env.VITE_APP_API_BASE_URL || "/api",
 	routerMode: import.meta.env.VITE_APP_ROUTER_MODE || "frontend",
+	clientId: import.meta.env.VITE_CLIENT_ID || "",
 };

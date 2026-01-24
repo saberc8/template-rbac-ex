@@ -4,7 +4,6 @@ import { Button } from "@/ui/button";
 import { Card, CardContent } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/tooltip";
-import { faker } from "@faker-js/faker";
 import { type ChangeEvent, useState } from "react";
 
 export default function ClipboardPage() {
@@ -12,7 +11,8 @@ export default function ClipboardPage() {
 
 	const [value, setValue] = useState("https://www.npmjs.com/package/");
 
-	const textOnClick = faker.lorem.paragraphs({ min: 3, max: 5 });
+	const textOnClick =
+		"Double click this text to copy.\n\nThis page is a clipboard demo and does not generate mock content at runtime.\n\nYou can replace this paragraph with any content you want to test copying.";
 
 	const handleChange = (e: ChangeEvent<HTMLInputElement>) => setValue(e.target.value);
 	const CopyButton = (
@@ -37,7 +37,9 @@ export default function ClipboardPage() {
 				</div>
 				<div>
 					<h5 className="mb-2 font-medium">ON DOUBLE CLICK</h5>
-					<div onDoubleClick={() => copyFn(textOnClick)}>{textOnClick}</div>
+					<div className="whitespace-pre-line" onDoubleClick={() => copyFn(textOnClick)}>
+						{textOnClick}
+					</div>
 				</div>
 			</CardContent>
 		</Card>

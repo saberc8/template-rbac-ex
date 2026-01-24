@@ -47,7 +47,7 @@
 - Supports internationalization for easy language switching.
 - Includes common admin features like user management, role management, and permission management.
 - Customizable themes and styles to meet your branding needs.
-- Mocking solution based on MSW and Faker.js.
+- Integrated API client for real backend integration.
 - State management using Zustand.
 - Data fetching using React-Query.
 

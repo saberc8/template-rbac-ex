@@ -1,33 +1,19 @@
 import apiClient from "../apiClient";
 
-import type { UserInfo, UserToken } from "#/entity";
-
-export interface SignInReq {
-	username: string;
-	password: string;
-}
-
-export interface SignUpReq extends SignInReq {
-	email: string;
-}
-export type SignInRes = UserToken & { user: UserInfo };
+import type { AccountLoginReq, BackendUserInfo, LoginResp } from "#/backend";
 
 export enum UserApi {
-	SignIn = "/auth/signin",
-	SignUp = "/auth/signup",
+	Login = "/auth/login",
 	Logout = "/auth/logout",
-	Refresh = "/auth/refresh",
-	User = "/user",
+	UserInfo = "/auth/user/info",
 }
 
-const signin = (data: SignInReq) => apiClient.post<SignInRes>({ url: UserApi.SignIn, data });
-const signup = (data: SignUpReq) => apiClient.post<SignInRes>({ url: UserApi.SignUp, data });
-const logout = () => apiClient.get({ url: UserApi.Logout });
-const findById = (id: string) => apiClient.get<UserInfo[]>({ url: `${UserApi.User}/${id}` });
+const login = (data: AccountLoginReq) => apiClient.post<LoginResp>({ url: UserApi.Login, data });
+const logout = () => apiClient.post<boolean>({ url: UserApi.Logout });
+const getUserInfo = () => apiClient.get<BackendUserInfo>({ url: UserApi.UserInfo });
 
 export default {
-	signin,
-	signup,
-	findById,
+	login,
+	getUserInfo,
 	logout,
 };

@@ -5,36 +5,36 @@ import Page403 from "@/pages/sys/error/Page403";
 import { useSettings } from "@/store/settingStore";
 import { cn } from "@/utils";
 import { flattenTrees } from "@/utils/tree";
-import { clone, concat } from "ramda";
-import { Suspense } from "react";
+import { concat } from "ramda";
+import { Suspense, useMemo } from "react";
 import { Outlet, ScrollRestoration, useLocation } from "react-router";
-import { backendNavData } from "./nav/nav-data/nav-data-backend";
-import { frontendNavData } from "./nav/nav-data/nav-data-frontend";
+import { useFilteredNavData } from "./nav";
 
 /**
  * find auth by path
  * @param path
  * @returns
  */
-function findAuthByPath(path: string): string[] {
+function findAuthByPath(path: string, allItems: any[]): string[] {
 	const foundItem = allItems.find((item) => item.path === path);
 	return foundItem?.auth || [];
 }
 
-const navData = GLOBAL_CONFIG.routerMode === "frontend" ? clone(frontendNavData) : backendNavData;
-const allItems = navData.reduce((acc: any[], group) => {
-	const flattenedItems = flattenTrees(group.items);
-	return concat(acc, flattenedItems);
-}, []);
-
 const Main = () => {
 	const { themeStretch } = useSettings();
 
-	const { pathname } = useLocation();
-	const currentNavAuth = findAuthByPath(pathname);
+	const navData = useFilteredNavData();
+	const allItems = useMemo(() => {
+		return navData.reduce((acc: any[], group) => {
+			const flattenedItems = flattenTrees(group.items);
+			return concat(acc, flattenedItems);
+		}, []);
+	}, [navData]);
 
-	return (
-		<AuthGuard checkAny={currentNavAuth} fallback={<Page403 />}>
+	const { pathname, search } = useLocation();
+	const currentNavAuth = findAuthByPath(`${pathname}${search}`, allItems);
+
+	const content = (
 			<main
 				data-slot="slash-layout-main"
 				className={cn(
@@ -55,6 +55,16 @@ const Main = () => {
 					<ScrollRestoration />
 				</Suspense>
 			</main>
+	);
+
+	// 后端路由模式：路由数据已经由后端按角色过滤，避免重复拦截导致误判。
+	if (GLOBAL_CONFIG.routerMode === "backend") {
+		return content;
+	}
+
+	return (
+		<AuthGuard checkAny={currentNavAuth} fallback={<Page403 />}>
+			{content}
 		</AuthGuard>
 	);
 };
