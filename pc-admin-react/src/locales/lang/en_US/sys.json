@@ -122,6 +122,7 @@
 				"organization": "Organization",
 				"permission": "Permission",
 				"role": "Role",
+				"dict": "Dict",
 				"user": "User",
 				"user_detail": "User Detail"
 			},

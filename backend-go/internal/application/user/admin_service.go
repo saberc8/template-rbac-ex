@@ -261,6 +261,22 @@ func (s *AdminService) Update(ctx context.Context, userID int64, id int64, req U
 	return nil
 }
 
+func (s *AdminService) UpdateAvatar(ctx context.Context, userID int64, avatar string) *Error {
+	if userID <= 0 {
+		return &Error{Code: "401", Msg: "未授权，请重新登录"}
+	}
+	avatar = strings.TrimSpace(avatar)
+	if avatar == "" {
+		return &Error{Code: "400", Msg: "头像不能为空"}
+	}
+
+	now := s.now()
+	if err := s.repo.UpdateAvatar(ctx, userID, avatar, userID, now); err != nil {
+		return &Error{Code: "500", Msg: "更新头像失败"}
+	}
+	return nil
+}
+
 func (s *AdminService) Delete(ctx context.Context, ids []int64) *Error {
 	if len(ids) == 0 {
 		return &Error{Code: "400", Msg: "ID 列表不能为空"}

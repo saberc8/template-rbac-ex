@@ -18,6 +18,10 @@ cp .env.example .env
 
 必填：`AUTH_JWT_SECRET`
 
+可选：`ADMIN_FRONTEND_TYPE`
+- `vue3`（默认）：对齐 `backend-go` 的接口集合与统一响应包装
+- `react`：启用 slash-admin(React) 兼容接口（如 `/auth/signin`、`/menu`）
+
 ## 3. 初始化/迁移数据库（推荐显式执行）
 
 ```bash
@@ -32,7 +36,7 @@ uvicorn app.main:app --host 0.0.0.0 --port ${HTTP_PORT:-14396} --reload
 
 建议端口：
 - Go 后端：`14398`（默认）
-- React 前端：`14397`
+- React 前端：`3001`（默认，可自行调整端口）
 - Vue3 前端：`14399`（仓库默认）
 - Python 后端：`14396`（避免与前端端口冲突）
 ```

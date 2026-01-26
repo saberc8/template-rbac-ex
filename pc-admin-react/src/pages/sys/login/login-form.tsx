@@ -1,5 +1,4 @@
-import { DB_USER } from "@/_mock/assets_backup";
-import type { SignInReq } from "@/api/services/userService";
+import { captchaService } from "@/api/services/captchaService";
 import { Icon } from "@/components/icon";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { useSignIn } from "@/store/userStore";
@@ -9,39 +8,77 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/ui/input";
 import { cn } from "@/utils";
 import { Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { LoginStateEnum, useLoginStateContext } from "./providers/login-provider";
 
+type LoginFormValues = {
+	username: string;
+	password: string;
+	captcha?: string;
+};
+
 export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRef<"form">) {
 	const { t } = useTranslation();
 	const [loading, setLoading] = useState(false);
 	const [remember, setRemember] = useState(true);
 	const navigatge = useNavigate();
+	const [captchaEnabled, setCaptchaEnabled] = useState(false);
+	const [captchaImg, setCaptchaImg] = useState("");
+	const [captchaUuid, setCaptchaUuid] = useState("");
 
 	const { loginState, setLoginState } = useLoginStateContext();
 	const signIn = useSignIn();
 
-	const form = useForm<SignInReq>({
+	const form = useForm<LoginFormValues>({
 		defaultValues: {
-			username: DB_USER[0].username,
-			password: DB_USER[0].password,
+			username: "admin",
+			password: "Abcdefg1",
+			captcha: "",
 		},
 	});
 
 	if (loginState !== LoginStateEnum.LOGIN) return null;
 
-	const handleFinish = async (values: SignInReq) => {
+	const loadCaptcha = async () => {
+		try {
+			const data = await captchaService.getImage();
+			setCaptchaEnabled(Boolean(data?.isEnabled));
+			setCaptchaImg(data?.img || "");
+			setCaptchaUuid(data?.uuid || "");
+			form.setValue("captcha", "");
+		} catch {
+			setCaptchaEnabled(false);
+			setCaptchaImg("");
+			setCaptchaUuid("");
+		}
+	};
+
+	useEffect(() => {
+		loadCaptcha();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
+
+	const handleFinish = async (values: LoginFormValues) => {
 		setLoading(true);
 		try {
-			await signIn(values);
+			await signIn({
+				username: values.username,
+				password: values.password,
+				captcha: captchaEnabled ? values.captcha : undefined,
+				uuid: captchaEnabled ? captchaUuid : undefined,
+			});
 			navigatge(GLOBAL_CONFIG.defaultRoute, { replace: true });
 			toast.success(t("sys.login.loginSuccessTitle"), {
 				closeButton: true,
 			});
+		} catch {
+			if (captchaEnabled) {
+				await loadCaptcha();
+			}
 		} finally {
 			setLoading(false);
 		}
@@ -64,7 +101,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 							<FormItem>
 								<FormLabel>{t("sys.login.userName")}</FormLabel>
 								<FormControl>
-									<Input placeholder={DB_USER.map((user) => user.username).join("/")} {...field} />
+									<Input placeholder="admin" {...field} />
 								</FormControl>
 								<FormMessage />
 							</FormItem>
@@ -79,12 +116,45 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 							<FormItem>
 								<FormLabel>{t("sys.login.password")}</FormLabel>
 								<FormControl>
-									<Input type="password" placeholder={DB_USER[0].password} {...field} suppressHydrationWarning />
+									<Input type="password" placeholder="Abcdefg1" {...field} suppressHydrationWarning />
 								</FormControl>
 								<FormMessage />
 							</FormItem>
 						)}
 					/>
+
+					{captchaEnabled && (
+						<div className="grid gap-2">
+							<FormField
+								control={form.control}
+								name="captcha"
+								rules={{ required: "Captcha is required" }}
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>Captcha</FormLabel>
+										<div className="flex items-center gap-2">
+											<FormControl>
+												<Input placeholder="请输入验证码" autoComplete="off" {...field} />
+											</FormControl>
+											<button
+												type="button"
+												className="h-10 w-[140px] overflow-hidden rounded-md border bg-white"
+												onClick={loadCaptcha}
+												aria-label="Refresh captcha"
+											>
+												{captchaImg ? (
+													<img src={captchaImg} alt="captcha" className="h-full w-full object-contain" />
+												) : (
+													<span className="text-xs text-gray-500">点击刷新</span>
+												)}
+											</button>
+										</div>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+						</div>
+					)}
 
 					{/* 记住我/忘记密码 */}
 					<div className="flex flex-row justify-between">

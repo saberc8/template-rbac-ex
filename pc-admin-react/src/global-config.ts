@@ -14,6 +14,8 @@ export type GlobalConfig = {
 	publicPath: string;
 	/** Base URL for API endpoints */
 	apiBaseUrl: string;
+	/** Client id used by backend auth */
+	clientId: string;
 	/** Routing mode: frontend routing or backend routing */
 	routerMode: "frontend" | "backend";
 };
@@ -31,5 +33,6 @@ export const GLOBAL_CONFIG: GlobalConfig = {
 	defaultRoute: import.meta.env.VITE_APP_DEFAULT_ROUTE || "/workbench",
 	publicPath: import.meta.env.VITE_APP_PUBLIC_PATH || "/",
 	apiBaseUrl: import.meta.env.VITE_APP_API_BASE_URL || "/api",
+	clientId: import.meta.env.VITE_CLIENT_ID || import.meta.env.VITE_APP_CLIENT_ID || "",
 	routerMode: import.meta.env.VITE_APP_ROUTER_MODE || "frontend",
 };

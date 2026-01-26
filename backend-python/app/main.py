@@ -35,8 +35,12 @@ from app.http.routes import (
     option,
     role,
     storage,
+    user_profile,
     system_user,
 )
+from app.http.react_routes import auth as react_auth
+from app.http.react_routes import menu as react_menu
+from app.http.react_routes import user as react_user
 
 
 def create_app() -> FastAPI:
@@ -54,6 +58,7 @@ def create_app() -> FastAPI:
             "http://localhost:14397",
             "http://localhost:14399",
             "http://localhost:3000",
+            "http://localhost:3001",
         ],
         allow_credentials=True,
         allow_methods=["*"],
@@ -88,6 +93,7 @@ def create_app() -> FastAPI:
     app.mount("/file", StaticFiles(directory=file_root), name="file")
 
     # 路由注册（路径与 Go 保持一致）
+    # - 迁移期允许 React 前端逐步切换真实接口，因此即使 ADMIN_FRONTEND_TYPE=react 也保留该集合。
     app.include_router(common.router)
     app.include_router(captcha.router)
     app.include_router(auth.router)
@@ -103,6 +109,13 @@ def create_app() -> FastAPI:
     app.include_router(storage.router)
     app.include_router(client.router)
     app.include_router(log_api.router)
+    app.include_router(user_profile.router)
+
+    if settings.admin_frontend_type == "react":
+        # slash-admin(React) 兼容路由（与对齐接口并存）
+        app.include_router(react_auth.router)
+        app.include_router(react_menu.router)
+        app.include_router(react_user.router)
 
     @app.on_event("startup")
     def _startup_auto_migrate() -> None:

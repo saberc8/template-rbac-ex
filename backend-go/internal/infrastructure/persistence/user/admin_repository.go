@@ -626,6 +626,19 @@ func (r *PgRepository) UpdatePassword(ctx context.Context, id int64, password st
 	return err
 }
 
+func (r *PgRepository) UpdateAvatar(ctx context.Context, id int64, avatar string, userID int64, now time.Time) error {
+	qr := sqlutil.QuerierFromContext(ctx, r.db)
+	_, err := qr.ExecContext(
+		ctx,
+		sqlutil.Rebind(r.dialect, `UPDATE sys_user SET avatar = ?, update_user = ?, update_time = ? WHERE id = ?`),
+		avatar,
+		userID,
+		now,
+		id,
+	)
+	return err
+}
+
 func (r *PgRepository) ReplaceRoles(ctx context.Context, userID int64, roleIDs []int64, userRoleIDs []int64) error {
 	tx, owned, err := beginTx(ctx, r.db)
 	if err != nil {

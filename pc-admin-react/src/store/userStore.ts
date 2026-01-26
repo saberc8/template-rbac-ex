@@ -2,7 +2,8 @@ import { useMutation } from "@tanstack/react-query";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-import userService, { type SignInReq } from "@/api/services/userService";
+import { authService } from "@/api/services/authService";
+import { GLOBAL_CONFIG } from "@/global-config";
 
 import { toast } from "sonner";
 import type { UserInfo, UserToken } from "#/entity";
@@ -57,17 +58,45 @@ export const useSignIn = () => {
 	const { setUserToken, setUserInfo } = useUserActions();
 
 	const signInMutation = useMutation({
-		mutationFn: userService.signin,
+		mutationFn: authService.login,
 	});
 
-	const signIn = async (data: SignInReq) => {
+	const signIn = async (data: { username: string; password: string; captcha?: string; uuid?: string }) => {
 		try {
-			const res = await signInMutation.mutateAsync(data);
-			const { user, accessToken, refreshToken } = res;
-			setUserToken({ accessToken, refreshToken });
-			setUserInfo(user);
-		} catch (err) {
-			toast.error(err.message, {
+			if (!GLOBAL_CONFIG.clientId) {
+				throw new Error("Missing client id");
+			}
+
+			const loginResp = await signInMutation.mutateAsync({
+				clientId: GLOBAL_CONFIG.clientId,
+				authType: "ACCOUNT",
+				username: data.username,
+				password: data.password,
+				captcha: data.captcha,
+				uuid: data.uuid,
+			});
+
+			const token = loginResp.token;
+			setUserToken({ accessToken: token, refreshToken: token });
+
+			try {
+				const info = await authService.getUserInfo();
+				const roles = (info.roles || []).map((code) => ({ id: code, name: code, code }));
+				const permissions = (info.permissions || []).map((code) => ({ id: code, name: code, code }));
+				setUserInfo({
+					id: String(info.id),
+					username: info.username,
+					email: info.email || "",
+					avatar: info.avatar || "",
+					roles,
+					permissions,
+				});
+			} catch (e) {
+				setUserToken({});
+				throw e;
+			}
+		} catch (err: any) {
+			toast.error(err?.message || "Login failed", {
 				position: "top-center",
 			});
 			throw err;

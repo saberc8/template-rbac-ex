@@ -104,50 +104,6 @@ def list_dict(description: Optional[str] = None, db: Session = Depends(get_db)):
     return ok(out)
 
 
-@router.get("/system/dict/{id}")
-def get_dict(id: int, db: Session = Depends(get_db)):
-    if id <= 0:
-        return fail("400", "ID 参数不正确")
-
-    cu = aliased(SysUser)
-    uu = aliased(SysUser)
-    row = db.execute(
-        select(
-            SysDict.id,
-            SysDict.name,
-            SysDict.code,
-            func.coalesce(SysDict.description, ""),
-            func.coalesce(SysDict.is_system, False),
-            SysDict.create_time,
-            func.coalesce(cu.nickname, ""),
-            SysDict.update_time,
-            func.coalesce(uu.nickname, ""),
-        )
-        .select_from(SysDict)
-        .join(cu, cu.id == SysDict.create_user, isouter=True)
-        .join(uu, uu.id == SysDict.update_user, isouter=True)
-        .where(SysDict.id == int(id))
-        .limit(1)
-    ).first()
-    if row is None:
-        return fail("404", "字典不存在")
-    return ok(
-        _dict_resp(
-            {
-                "id": row[0],
-                "name": row[1],
-                "code": row[2],
-                "description": row[3],
-                "is_system": row[4],
-                "create_time": row[5],
-                "create_user_string": row[6],
-                "update_time": row[7],
-                "update_user_string": row[8],
-            }
-        )
-    )
-
-
 @router.post("/system/dict")
 def create_dict(
     body: Optional[dict] = Body(default=None),
@@ -190,36 +146,6 @@ def create_dict(
         db.rollback()
         return fail("500", "新增字典失败")
     return ok({"id": did})
-
-
-@router.put("/system/dict/{id}")
-def update_dict(
-    id: int,
-    body: Optional[dict] = Body(default=None),
-    db: Session = Depends(get_db),
-    user_id: int = Depends(require_user_id),
-):
-    if id <= 0:
-        return fail("400", "ID 参数不正确")
-    if not isinstance(body, dict):
-        return fail("400", "请求参数不正确")
-    name = str(body.get("name") or "").strip()
-    description = str(body.get("description") or "").strip()
-    if name == "":
-        return fail("400", "名称不能为空")
-
-    now = datetime.now()
-    try:
-        db.execute(
-            update(SysDict)
-            .where(SysDict.id == int(id))
-            .values(name=name, description=description, update_user=int(user_id), update_time=now)
-        )
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "修改字典失败")
-    return ok(True)
 
 
 @router.delete("/system/dict")
@@ -540,4 +466,78 @@ def delete_dict_item(
     except Exception:
         db.rollback()
         return fail("500", "删除字典项失败")
+    return ok(True)
+
+
+@router.get("/system/dict/{id}")
+def get_dict(id: int, db: Session = Depends(get_db)):
+    if id <= 0:
+        return fail("400", "ID 参数不正确")
+
+    cu = aliased(SysUser)
+    uu = aliased(SysUser)
+    row = db.execute(
+        select(
+            SysDict.id,
+            SysDict.name,
+            SysDict.code,
+            func.coalesce(SysDict.description, ""),
+            func.coalesce(SysDict.is_system, False),
+            SysDict.create_time,
+            func.coalesce(cu.nickname, ""),
+            SysDict.update_time,
+            func.coalesce(uu.nickname, ""),
+        )
+        .select_from(SysDict)
+        .join(cu, cu.id == SysDict.create_user, isouter=True)
+        .join(uu, uu.id == SysDict.update_user, isouter=True)
+        .where(SysDict.id == int(id))
+        .limit(1)
+    ).first()
+    if row is None:
+        return fail("404", "字典不存在")
+    return ok(
+        _dict_resp(
+            {
+                "id": row[0],
+                "name": row[1],
+                "code": row[2],
+                "description": row[3],
+                "is_system": row[4],
+                "create_time": row[5],
+                "create_user_string": row[6],
+                "update_time": row[7],
+                "update_user_string": row[8],
+            }
+        )
+    )
+
+
+@router.put("/system/dict/{id}")
+def update_dict(
+    id: int,
+    body: Optional[dict] = Body(default=None),
+    db: Session = Depends(get_db),
+    user_id: int = Depends(require_user_id),
+):
+    if id <= 0:
+        return fail("400", "ID 参数不正确")
+    if not isinstance(body, dict):
+        return fail("400", "请求参数不正确")
+    name = str(body.get("name") or "").strip()
+    description = str(body.get("description") or "").strip()
+    if name == "":
+        return fail("400", "名称不能为空")
+
+    now = datetime.now()
+    try:
+        db.execute(
+            update(SysDict)
+            .where(SysDict.id == int(id))
+            .values(name=name, description=description, update_user=int(user_id), update_time=now)
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        return fail("500", "修改字典失败")
     return ok(True)

@@ -102,6 +102,7 @@
 				"organization": "组织",
 				"permission": "权限",
 				"role": "角色",
+				"dict": "字典",
 				"user": "用户",
 				"user_detail": "用户详情"
 			},

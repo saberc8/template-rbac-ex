@@ -43,6 +43,7 @@ def _load_dotenv_for_dev() -> None:
 class Settings:
     app_env: str
     http_port: str
+    admin_frontend_type: str
     file_storage_dir: str
     auto_migrate: bool
 
@@ -94,6 +95,9 @@ def load_settings() -> Settings:
 
     app_env = (os.getenv("APP_ENV") or "").strip().lower() or "dev"
     http_port = _getenv_default("HTTP_PORT", "14396").strip() or "14396"
+    admin_frontend_type = (_getenv_default("ADMIN_FRONTEND_TYPE", "vue3") or "vue3").strip().lower()
+    if admin_frontend_type not in {"vue3", "react"}:
+        raise RuntimeError("invalid ADMIN_FRONTEND_TYPE: must be 'vue3' or 'react'")
     file_storage_dir = _getenv_default("FILE_STORAGE_DIR", "./data/file").strip() or "./data/file"
 
     auth_jwt_secret = (os.getenv("AUTH_JWT_SECRET") or "").strip()
@@ -121,6 +125,7 @@ def load_settings() -> Settings:
     return Settings(
         app_env=app_env,
         http_port=http_port,
+        admin_frontend_type=admin_frontend_type,
         file_storage_dir=file_storage_dir,
         auto_migrate=auto_migrate,
         auth_jwt_secret=auth_jwt_secret,

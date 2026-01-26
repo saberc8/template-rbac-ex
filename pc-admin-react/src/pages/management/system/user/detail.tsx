@@ -1,18 +1,19 @@
+import { systemUserService } from "@/api/services/systemUserService";
 import { useParams } from "@/routes/hooks";
 import { Card, CardContent } from "@/ui/card";
-import type { UserInfo } from "#/entity";
-
-// TODO: fix
-// const USERS: UserInfo[] = USER_LIST as UserInfo[];
-const USERS: UserInfo[] = [];
+import { useQuery } from "@tanstack/react-query";
 
 export default function UserDetail() {
 	const { id } = useParams();
-	const user = USERS.find((user) => user.id === id);
+	const { data, isFetching } = useQuery({
+		queryKey: ["systemUser.get", id],
+		queryFn: () => systemUserService.get(String(id)),
+		enabled: Boolean(id),
+	});
 	return (
 		<Card>
 			<CardContent>
-				<p>This is the detail page of {user?.username}</p>
+				<p>{isFetching ? "Loading..." : `This is the detail page of ${data?.username || "-"}`}</p>
 			</CardContent>
 		</Card>
 	);

@@ -57,6 +57,10 @@ export const frontendNavData: NavProps["data"] = [
 								title: "sys.nav.system.user",
 								path: "/management/system/user",
 							},
+							{
+								title: "sys.nav.system.dict",
+								path: "/management/system/dict",
+							},
 						],
 					},
 				],

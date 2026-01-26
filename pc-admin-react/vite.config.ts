@@ -9,6 +9,7 @@ export default defineConfig(({ mode }) => {
 	const env = loadEnv(mode, process.cwd(), "");
 	const base = env.VITE_APP_PUBLIC_PATH || "/";
 	const isProduction = mode === "production";
+	const apiProxyTarget = env.VITE_APP_API_PROXY_TARGET || "http://localhost:14396";
 
 	return {
 		base,
@@ -35,7 +36,7 @@ export default defineConfig(({ mode }) => {
 			port: 3001,
 			proxy: {
 				"/api": {
-					target: "http://localhost:3000",
+					target: apiProxyTarget,
 					changeOrigin: true,
 					rewrite: (path) => path.replace(/^\/api/, ""),
 					secure: false,

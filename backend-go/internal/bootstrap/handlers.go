@@ -75,6 +75,10 @@ func registerHandlers(r *gin.Engine, d handlerDeps) {
 	systemUserHandler := httpif.NewSystemUserHandler(d.userAdminSvc)
 	systemUserHandler.RegisterSystemUserRoutes(r)
 
+	// 用户中心：个人资料（头像等）
+	userProfileHandler := httpif.NewUserProfileHandler(d.fileSvc, d.userAdminSvc)
+	userProfileHandler.RegisterUserProfileRoutes(r)
+
 	// 系统管理：字典管理
 	dictHandler := httpif.NewDictHandler(d.dictSvc)
 	dictHandler.RegisterDictRoutes(r)
@@ -106,4 +110,3 @@ func registerHandlers(r *gin.Engine, d handlerDeps) {
 	}
 	r.Static("/file", fileRoot)
 }
-

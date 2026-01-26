@@ -46,8 +46,8 @@ type AdminRepository interface {
 	Delete(ctx context.Context, ids []int64) error
 
 	UpdatePassword(ctx context.Context, id int64, password string, pwdResetTime time.Time, userID int64, now time.Time) error
+	UpdateAvatar(ctx context.Context, id int64, avatar string, userID int64, now time.Time) error
 	ReplaceRoles(ctx context.Context, userID int64, roleIDs []int64, userRoleIDs []int64) error
 
 	ExportRows(ctx context.Context) ([]AdminUserExportRow, error)
 }
-
