@@ -55,7 +55,7 @@ func NormalizeDialect(raw string) string {
 	switch v {
 	case "", DialectPostgres, "postgresql", "pgsql":
 		return DialectPostgres
-	case DialectMySQL:
+	case DialectMySQL, "mariadb":
 		return DialectMySQL
 	default:
 		return v

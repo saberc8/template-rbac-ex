@@ -2,7 +2,7 @@
 
 ## 1. 前置依赖
 - Go（建议 1.21+）
-- PostgreSQL / MySQL（本地或容器，使用 `DB_DIALECT` 切换）
+- PostgreSQL / MySQL / MariaDB（本地或容器，使用 `DB_DIALECT` 切换）
 - Redis（用于验证码等缓存）
 
 ## 2. 环境变量
@@ -21,8 +21,8 @@ cp .env.example .env
 
 ### 常用
 - `HTTP_PORT`：服务端口（默认 14398）
-- `DB_DIALECT`：数据库类型（`postgres`/`mysql`）
-- `DB_*`：数据库连接配置（PostgreSQL/MySQL）
+- `DB_DIALECT`：数据库类型（`postgres`/`mysql`/`mariadb`，其中 `mariadb` 作为 mysql 兼容别名）
+- `DB_*`：数据库连接配置（PostgreSQL/MySQL/MariaDB）
 - `REDIS_*`：Redis 连接配置
 - `DB_AUTO_MIGRATE`：是否在 `cmd/admin` 启动时自动执行迁移（生产环境默认关闭；开发环境默认开启，可显式设置 `0/false` 关闭）
 

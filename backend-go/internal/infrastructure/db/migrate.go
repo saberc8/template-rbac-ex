@@ -1188,7 +1188,7 @@ INSERT INTO sys_client (
 SELECT 1,
        'ef51c9a3e9046c4f2ea45142c8a8344a',
        'PC',
-       CAST('["ACCOUNT"]' AS JSON),
+       '["ACCOUNT"]',
        1800,
        86400,
        1,
