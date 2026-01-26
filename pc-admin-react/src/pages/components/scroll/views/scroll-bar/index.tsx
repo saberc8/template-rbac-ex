@@ -2,9 +2,9 @@ import { themeVars } from "@/theme/theme.css";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { ScrollArea, ScrollBar } from "@/ui/scroll-area";
+import { faker } from "@faker-js/faker";
 
-const TEXT =
-	"该页面用于演示滚动条组件。\n\n为了避免引入 mock 数据生成依赖，这里使用静态长文本作为示例内容。\n\n你可以在此替换为真实业务内容或后端接口返回的数据。\n\n".repeat(12);
+const TEXT = faker.lorem.paragraphs({ min: 20, max: 30 });
 export default function ScrollbarView() {
 	return (
 		<>
@@ -23,7 +23,7 @@ export default function ScrollbarView() {
 						<CardTitle>Vertical</CardTitle>
 					</CardHeader>
 					<CardContent>
-						<ScrollArea className="h-[420px] whitespace-pre-line">{TEXT}</ScrollArea>
+						<ScrollArea className="h-[420px]">{TEXT}</ScrollArea>
 					</CardContent>
 				</Card>
 				<Card title="Horizontal">
@@ -32,9 +32,7 @@ export default function ScrollbarView() {
 					</CardHeader>
 					<CardContent>
 						<ScrollArea className="w-full pb-2">
-							<div className="whitespace-pre-line" style={{ width: "200%" }}>
-								{TEXT}
-							</div>
+							<div style={{ width: "200%" }}>{TEXT}</div>
 							<ScrollBar orientation="horizontal" />
 						</ScrollArea>
 					</CardContent>

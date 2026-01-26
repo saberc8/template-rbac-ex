@@ -5,14 +5,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from "@/ui/input";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { faker } from "@faker-js/faker";
 import { type CSSProperties, useRef, useState } from "react";
 import { useEvent } from "react-use";
 import { ThemeMode } from "#/enum";
 import KanbanTask from "./kanban-task";
 import { type Column, type Task, TaskPriority } from "./types";
-
-const DEFAULT_AVATAR_URL = "https://avatars.githubusercontent.com/u/583231?v=4";
-const createId = () => globalThis.crypto?.randomUUID?.() ?? `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 type Props = {
 	id: string;
@@ -112,10 +110,10 @@ export default function KanbanColumn({
 			const addTaskInputVal = addTaskInputRef.current.value;
 			if (addTaskInputVal) {
 				createTask(column.id, {
-					id: createId(),
+					id: faker.string.uuid(),
 					title: addTaskInputVal,
-					reporter: DEFAULT_AVATAR_URL,
-					priority: TaskPriority.MEDIUM,
+					reporter: faker.image.avatarGitHub(),
+					priority: faker.helpers.enumValue(TaskPriority),
 				});
 			}
 			setAddingTask(false);

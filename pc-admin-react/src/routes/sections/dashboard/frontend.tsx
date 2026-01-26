@@ -24,6 +24,7 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 			children: [
 				{ index: true, element: <Navigate to="clipboard" replace /> },
 				{ path: "clipboard", element: Component("/pages/functions/clipboard") },
+				{ path: "token_expired", element: Component("/pages/functions/token-expired") },
 			],
 		},
 		{

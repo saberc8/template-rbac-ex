@@ -1,22 +1,62 @@
-import { type DndDataType, type TaskComment, TaskPriority, TaskTag } from "./types";
+import { faker } from "@faker-js/faker";
 
-const DEFAULT_AVATAR_URL = "https://avatars.githubusercontent.com/u/583231?v=4";
+import {
+	type DndDataType,
+	type TaskComment,
+	TaskPriority,
+	TaskTag,
+} from "./types";
 
-const comments: TaskComment[] = [
-	{
-		username: "系统",
-		avatar: DEFAULT_AVATAR_URL,
-		content: "这是一个示例评论（已移除 mock 数据生成）。",
-		time: new Date(),
-	},
-];
+const fakeComment = (count: number): TaskComment[] => {
+	const result = [];
+	for (let index = 0; index < count; index += 1) {
+		result.push({
+			username: faker.person.fullName(),
+			avatar: faker.image.avatarGitHub(),
+			content: faker.lorem.lines({ min: 1, max: 3 }),
+			time: faker.date.past(),
+		});
+	}
+	return result;
+};
+
+const fakeAttachment = (count: number) => {
+	const result = [];
+	for (let index = 0; index < count; index += 1) {
+		result.push(faker.image.urlPicsumPhotos());
+	}
+	return result;
+};
+
+const fakeAssignee = (count: number) => {
+	const result = [];
+	for (let index = 0; index < count; index += 1) {
+		result.push(faker.image.avatarGitHub());
+	}
+	return result;
+};
+
+const fakeTag = (count: number) => {
+	const uniqueArray = [];
+	const set = new Set();
+
+	while (uniqueArray.length < count) {
+		const randomElement = faker.helpers.enumValue(TaskTag);
+		if (!set.has(randomElement)) {
+			uniqueArray.push(randomElement);
+			set.add(randomElement);
+		}
+	}
+
+	return uniqueArray;
+};
 
 export const initialData: DndDataType = {
 	tasks: {
 		"task-1": {
 			id: "task-1",
-			title: "完善用户列表页面",
-			reporter: DEFAULT_AVATAR_URL,
+			title: faker.lorem.words(3),
+			reporter: faker.image.avatarGitHub(),
 			priority: TaskPriority.LOW,
 			tags: [],
 			comments: [],
@@ -24,61 +64,62 @@ export const initialData: DndDataType = {
 		},
 		"task-2": {
 			id: "task-2",
-			title: "对接角色接口并支持编辑",
-			reporter: DEFAULT_AVATAR_URL,
-			assignee: [DEFAULT_AVATAR_URL],
-			date: new Date(Date.now() + 7 * 24 * 3600 * 1000),
+			title: faker.lorem.words(3),
+			reporter: faker.image.avatarGitHub(),
+			assignee: fakeAssignee(1),
+			date: faker.date.future(),
 			priority: TaskPriority.HIGH,
-			tags: [TaskTag.fullstack, TaskTag.UI],
-			comments,
-			attachments: [],
+			tags: fakeTag(3),
+			comments: fakeComment(1),
+			attachments: fakeAttachment(4),
 		},
 		"task-3": {
 			id: "task-3",
-			title: "清理 mock 依赖与入口",
-			reporter: DEFAULT_AVATAR_URL,
-			assignee: [DEFAULT_AVATAR_URL],
+			title: faker.lorem.words(4),
+			reporter: faker.image.avatarGitHub(),
+			assignee: fakeAssignee(2),
 			priority: TaskPriority.MEDIUM,
-			date: new Date(Date.now() + 3 * 24 * 3600 * 1000),
-			tags: [TaskTag.DevOps],
-			comments,
+			date: faker.date.future(),
+			tags: fakeTag(2),
+			comments: fakeComment(2),
 			attachments: [],
 		},
 		"task-4": {
 			id: "task-4",
-			title: "实现菜单树展示与操作",
-			reporter: DEFAULT_AVATAR_URL,
-			assignee: [DEFAULT_AVATAR_URL, DEFAULT_AVATAR_URL],
+			title: faker.lorem.words(5),
+			reporter: faker.image.avatarGitHub(),
+			assignee: fakeAssignee(3),
 			priority: TaskPriority.MEDIUM,
-			tags: [TaskTag.backend],
-			date: new Date(Date.now() + 10 * 24 * 3600 * 1000),
-			description: "支持树形展示、基础新增/编辑/删除能力，并对齐后端接口。",
+			tags: fakeTag(3),
+			date: faker.date.future(),
+			description: faker.lorem.lines(5),
 			attachments: [],
-			comments,
+			comments: fakeComment(3),
 		},
 		"task-5": {
 			id: "task-5",
-			title: "在线用户监控页面",
-			reporter: DEFAULT_AVATAR_URL,
+			title: faker.lorem.words(4),
+			reporter: faker.image.avatarGitHub(),
 			priority: TaskPriority.HIGH,
-			assignee: [DEFAULT_AVATAR_URL],
-			tags: [TaskTag.frontend, TaskTag.UI],
-			date: new Date(Date.now() + 2 * 24 * 3600 * 1000),
-			description: "展示在线用户列表并支持强退（调用后端接口）。",
+			assignee: fakeAssignee(4),
+			tags: fakeTag(4),
+			date: faker.date.future(),
+			description: faker.lorem.lines(3),
 			attachments: [],
-			comments,
+			comments: fakeComment(4),
 		},
 		"task-6": {
 			id: "task-6",
-			title: "系统日志列表与详情",
-			reporter: DEFAULT_AVATAR_URL,
+			title: faker.lorem.words(5),
+			reporter: faker.image.avatarGitHub(),
 			priority: TaskPriority.LOW,
-			assignee: [DEFAULT_AVATAR_URL],
-			tags: [TaskTag.QA, TaskTag.UI],
-			date: new Date(Date.now() + 5 * 24 * 3600 * 1000),
-			description: "展示系统日志列表，并提供查看详情能力。",
-			attachments: [],
-			comments,
+
+			assignee: fakeAssignee(5),
+			tags: fakeTag(5),
+			date: faker.date.future(),
+			description: faker.lorem.lines(4),
+			attachments: fakeAttachment(5),
+			comments: fakeComment(4),
 		},
 	},
 	columns: {

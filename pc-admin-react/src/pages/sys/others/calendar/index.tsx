@@ -1,6 +1,7 @@
 import { down, useMediaQuery } from "@/hooks";
 import { useSettings } from "@/store/settingStore";
 import { Card, CardContent } from "@/ui/card";
+import { faker } from "@faker-js/faker";
 import type { DateSelectArg, EventClickArg, EventInput } from "@fullcalendar/core";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -15,10 +16,8 @@ import CalendarHeader, { type HandleMoveArg, type ViewType } from "./calendar-he
 import { INITIAL_EVENTS } from "./event-utils";
 import { StyledCalendar } from "./styles";
 
-const createId = () => globalThis.crypto?.randomUUID?.() ?? `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
 const DefaultEventInitValue = {
-	id: createId(),
+	id: faker.string.uuid(),
 	title: "",
 	description: "",
 	allDay: false,
@@ -85,7 +84,7 @@ export default function Calendar() {
 		setOpen(true);
 		setEventFormType("add");
 		setEventInitValue({
-			id: createId(),
+			id: faker.string.uuid(),
 			title: "",
 			description: "",
 			start: dayjs(selectInfo.startStr),
@@ -152,7 +151,7 @@ export default function Calendar() {
 		const { title = "", description, start, end, allDay = false, color } = values;
 
 		const newEvent: EventInput = {
-			id: createId(),
+			id: faker.string.uuid(),
 			title,
 			allDay,
 			color,

@@ -7,6 +7,7 @@ import { Input } from "@/ui/input";
 import { Switch } from "@/ui/switch";
 import { Textarea } from "@/ui/textarea";
 import { Text } from "@/ui/typography";
+import { faker } from "@faker-js/faker";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -26,11 +27,11 @@ export default function GeneralTab() {
 		defaultValues: {
 			name: username,
 			email,
-			phone: "",
-			address: "",
-			city: "",
-			code: "",
-			about: "",
+			phone: faker.phone.number(),
+			address: faker.location.county(),
+			city: faker.location.city(),
+			code: faker.location.zipCode(),
+			about: faker.lorem.paragraphs(),
 		},
 	});
 

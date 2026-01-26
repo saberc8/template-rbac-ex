@@ -1,7 +1,5 @@
-import userService from "@/api/services/userService";
 import { useLoginStateContext } from "@/pages/sys/login/providers/login-provider";
 import { useRouter } from "@/routes/hooks";
-import { useRouteActions } from "@/store/routeStore";
 import { useUserActions, useUserInfo } from "@/store/userStore";
 import { Button } from "@/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/ui/dropdown-menu";
@@ -15,14 +13,11 @@ export default function AccountDropdown() {
 	const { replace } = useRouter();
 	const { username, email, avatar } = useUserInfo();
 	const { clearUserInfoAndToken } = useUserActions();
-	const { clearRoutes } = useRouteActions();
 	const { backToLogin } = useLoginStateContext();
 	const { t } = useTranslation();
-	const logout = async () => {
+	const logout = () => {
 		try {
-			await userService.logout();
 			clearUserInfoAndToken();
-			clearRoutes();
 			backToLogin();
 		} catch (error) {
 			console.log(error);

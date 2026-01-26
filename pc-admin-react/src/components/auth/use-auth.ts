@@ -31,7 +31,7 @@ export const useAuthCheck = (baseOn: "role" | "permission" = "permission") => {
 		if (!accessToken) {
 			return false;
 		}
-		return resourcePool.includes(item);
+		return resourcePool.some((p) => p.code === item);
 	};
 
 	// check if any item exists

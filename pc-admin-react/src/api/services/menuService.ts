@@ -1,13 +1,13 @@
 import apiClient from "../apiClient";
 
-import type { BackendRouteItem } from "#/backend";
+import type { Menu } from "#/entity";
 
 export enum MenuApi {
-	UserRoute = "/auth/user/route",
+	Menu = "/menu",
 }
 
-const getUserRoute = () => apiClient.get<BackendRouteItem[]>({ url: MenuApi.UserRoute });
+const getMenuList = () => apiClient.get<Menu[]>({ url: MenuApi.Menu });
 
 export default {
-	getUserRoute,
+	getMenuList,
 };

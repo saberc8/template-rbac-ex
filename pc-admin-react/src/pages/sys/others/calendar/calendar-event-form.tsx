@@ -5,6 +5,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel } from "@/ui/form";
 import { Input } from "@/ui/input";
 import { Switch } from "@/ui/switch";
 import { Textarea } from "@/ui/textarea";
+import { faker } from "@faker-js/faker";
 import type { EventInput } from "@fullcalendar/core";
 import { zodResolver } from "@hookform/resolvers/zod";
 import dayjs from "dayjs";
@@ -31,7 +32,6 @@ type Props = {
 };
 
 const COLORS = ["#00a76f", "#8e33ff", "#00b8d9", "#003768", "#22c55e", "#ffab00", "#ff5630", "#7a0916"];
-const createId = () => globalThis.crypto?.randomUUID?.() ?? `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 const formSchema = z.object({
 	title: z.string().min(1, "Title is required"),
@@ -48,7 +48,7 @@ export default function CalendarEventForm({
 	type,
 	open,
 	onCancel,
-	initValues = { id: createId() },
+	initValues = { id: faker.string.uuid() },
 	onEdit,
 	onCreate,
 	onDelete,

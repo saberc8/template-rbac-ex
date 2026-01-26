@@ -3,14 +3,13 @@ import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card } from "@/ui/card";
 import { Text } from "@/ui/typography";
-
-const DEFAULT_AVATAR_URL = "https://avatars.githubusercontent.com/u/583231?v=4";
+import { faker } from "@faker-js/faker";
 
 export default function ConnectionsTab() {
 	const items = [
 		{
-			avatar: DEFAULT_AVATAR_URL,
-			name: "Alex Chen",
+			avatar: faker.image.avatarGitHub(),
+			name: faker.person.fullName(),
 			title: "UI Designer",
 			tags: ["Figma", "Sketch"],
 			projects: "18",
@@ -19,8 +18,8 @@ export default function ConnectionsTab() {
 			connected: true,
 		},
 		{
-			avatar: DEFAULT_AVATAR_URL,
-			name: "Taylor Lee",
+			avatar: faker.image.avatarGitHub(),
+			name: faker.person.fullName(),
 			title: "Developer",
 			tags: ["Angular", "React"],
 			projects: "118",
@@ -29,8 +28,8 @@ export default function ConnectionsTab() {
 			connected: false,
 		},
 		{
-			avatar: DEFAULT_AVATAR_URL,
-			name: "Morgan Wang",
+			avatar: faker.image.avatarGitHub(),
+			name: faker.person.fullName(),
 			title: "Developer",
 			tags: ["Html", "React"],
 			projects: "32",
@@ -39,8 +38,8 @@ export default function ConnectionsTab() {
 			connected: false,
 		},
 		{
-			avatar: DEFAULT_AVATAR_URL,
-			name: "Jordan Kim",
+			avatar: faker.image.avatarGitHub(),
+			name: faker.person.fullName(),
 			title: "UI/UX Designer",
 			tags: ["Figma", "Sketch", "Photoshop"],
 			projects: "86",
@@ -49,8 +48,8 @@ export default function ConnectionsTab() {
 			connected: false,
 		},
 		{
-			avatar: DEFAULT_AVATAR_URL,
-			name: "Sam Rivera",
+			avatar: faker.image.avatarGitHub(),
+			name: faker.person.fullName(),
 			title: "Full Stack Developer",
 			tags: ["React", "Html", "Node.js"],
 			projects: "244",
@@ -59,8 +58,8 @@ export default function ConnectionsTab() {
 			connected: true,
 		},
 		{
-			avatar: DEFAULT_AVATAR_URL,
-			name: "Robin Zhao",
+			avatar: faker.image.avatarGitHub(),
+			name: faker.person.fullName(),
 			title: "SEO",
 			tags: ["Analysis", "Writing"],
 			projects: "32",

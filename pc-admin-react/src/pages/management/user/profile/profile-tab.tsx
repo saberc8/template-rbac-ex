@@ -5,9 +5,8 @@ import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/ui/card";
 import { Text } from "@/ui/typography";
+import { faker } from "@faker-js/faker";
 import { Timeline } from "antd";
-
-const DEFAULT_AVATAR_URL = "https://avatars.githubusercontent.com/u/583231?v=4";
 
 export default function ProfileTab() {
 	const { username } = useUserInfo();
@@ -46,38 +45,38 @@ export default function ProfileTab() {
 
 	const ConnectionsItems = [
 		{
-			avatar: DEFAULT_AVATAR_URL,
-			name: "Alex Chen",
-			connections: "86 Connections",
-			connected: true,
+			avatar: faker.image.avatarGitHub(),
+			name: faker.person.fullName(),
+			connections: `${faker.number.int(100)} Connections`,
+			connected: faker.datatype.boolean(),
 		},
 
 		{
-			avatar: DEFAULT_AVATAR_URL,
-			name: "Taylor Lee",
-			connections: "42 Connections",
-			connected: false,
+			avatar: faker.image.avatarGitHub(),
+			name: faker.person.fullName(),
+			connections: `${faker.number.int(100)} Connections`,
+			connected: faker.datatype.boolean(),
 		},
 
 		{
-			avatar: DEFAULT_AVATAR_URL,
-			name: "Morgan Wang",
-			connections: "119 Connections",
-			connected: true,
+			avatar: faker.image.avatarGitHub(),
+			name: faker.person.fullName(),
+			connections: `${faker.number.int(100)} Connections`,
+			connected: faker.datatype.boolean(),
 		},
 
 		{
-			avatar: DEFAULT_AVATAR_URL,
-			name: "Jordan Kim",
-			connections: "64 Connections",
-			connected: false,
+			avatar: faker.image.avatarGitHub(),
+			name: faker.person.fullName(),
+			connections: `${faker.number.int(100)} Connections`,
+			connected: faker.datatype.boolean(),
 		},
 
 		{
-			avatar: DEFAULT_AVATAR_URL,
-			name: "Sam Rivera",
-			connections: "31 Connections",
-			connected: false,
+			avatar: faker.image.avatarGitHub(),
+			name: faker.person.fullName(),
+			connections: `${faker.number.int(100)} Connections`,
+			connected: faker.datatype.boolean(),
 		},
 	];
 
@@ -85,32 +84,32 @@ export default function ProfileTab() {
 		{
 			avatar: <Icon icon="devicon:react" size={36} />,
 			name: "React Developers",
-			members: "24 Members",
+			members: `${faker.number.int(100)} Members`,
 			tag: <Badge variant="warning">Developer</Badge>,
 		},
 		{
 			avatar: <Icon icon="devicon:figma" size={36} />,
 			name: "UI Designer",
-			members: "12 Members",
+			members: `${faker.number.int()} Members`,
 			tag: <Badge variant="info">Designer</Badge>,
 		},
 		{
 			avatar: <Icon icon="logos:jest" size={36} />,
 			name: "Test Team",
-			members: "8 Members",
+			members: `${faker.number.int(100)} Members`,
 			tag: <Badge variant="success">Test</Badge>,
 		},
 		{
 			avatar: <Icon icon="logos:nestjs" size={36} />,
 			name: "Nest.js Developers",
-			members: "16 Members",
+			members: `${faker.number.int(100)} Members`,
 			tag: <Badge variant="warning">Developer</Badge>,
 		},
 
 		{
 			avatar: <Icon icon="logos:twitter" size={36} />,
 			name: "Digital Marketing",
-			members: "10 Members",
+			members: `${faker.number.int(100)} Members`,
 			tag: <Badge variant="info">Marketing</Badge>,
 		},
 	];
@@ -121,7 +120,7 @@ export default function ProfileTab() {
 				<Card className="col-span-1">
 					<CardHeader>
 						<CardTitle>About</CardTitle>
-						<CardDescription>这里展示用户基本信息与时间线（示例内容已移除 mock 数据生成）。</CardDescription>
+						<CardDescription>{faker.lorem.paragraph()}</CardDescription>
 					</CardHeader>
 					<CardContent>
 						<div className="flex flex-col gap-4">
@@ -175,8 +174,8 @@ export default function ProfileTab() {
 												Invoices have been paid to the company.
 											</Text>
 											<div className="mt-2 flex items-center gap-2">
-												<img alt="" src={DEFAULT_AVATAR_URL} className="h-8 w-8 rounded-full" />
-												<span className="font-medium opacity-60">Client A</span>
+												<img alt="" src={faker.image.avatarGitHub()} className="h-8 w-8 rounded-full" />
+												<span className="font-medium opacity-60">{faker.person.fullName()} (client)</span>
 											</div>
 										</div>
 									),

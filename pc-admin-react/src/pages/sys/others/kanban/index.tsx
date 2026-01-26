@@ -12,14 +12,13 @@ import {
 	useSensors,
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, horizontalListSortingStrategy } from "@dnd-kit/sortable";
+import { faker } from "@faker-js/faker";
 import { useRef, useState } from "react";
 import { useEvent } from "react-use";
 import KanbanColumn from "./kanban-column";
 import KanbanTask from "./kanban-task";
 import { initialData } from "./task-utils";
 import type { Column, Columns, DndDataType, Task, Tasks } from "./types";
-
-const createId = () => globalThis.crypto?.randomUUID?.() ?? `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 export default function Kanban() {
 	const [state, setState] = useState(initialData);
@@ -128,7 +127,7 @@ export default function Kanban() {
 			const inputVal = inputRef.current.value;
 			if (inputVal) {
 				createColumn({
-					id: createId(),
+					id: faker.string.uuid(),
 					title: inputVal,
 					taskIds: [],
 				});

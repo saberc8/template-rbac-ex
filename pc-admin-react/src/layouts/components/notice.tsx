@@ -10,9 +10,8 @@ import { ScrollArea } from "@/ui/scroll-area";
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/ui/tabs";
 import { Text } from "@/ui/typography";
+import { faker } from "@faker-js/faker";
 import { type CSSProperties, useState } from "react";
-
-const DEFAULT_AVATAR_URL = "https://avatars.githubusercontent.com/u/583231?v=4";
 
 export default function NoticeButton() {
 	const [drawerOpen, setDrawerOpen] = useState(false);
@@ -424,7 +423,7 @@ function NoticeTab() {
 								<AvatarGroup max={{ count: 4 }} size="small">
 									{Array.from({ length: notification.attendees }).map((_, i) => (
 										<Avatar key={`attendee-${notification.id}-${i}`}>
-											<AvatarImage src={DEFAULT_AVATAR_URL} />
+											<AvatarImage src={faker.image.avatarGitHub()} />
 										</Avatar>
 									))}
 								</AvatarGroup>

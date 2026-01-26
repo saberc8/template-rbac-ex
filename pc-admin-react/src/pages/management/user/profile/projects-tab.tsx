@@ -1,3 +1,4 @@
+import { fakeAvatars } from "@/_mock/utils";
 import { AvatarGroup } from "@/components/avatar-group";
 import { Icon } from "@/components/icon";
 import { Avatar, AvatarImage } from "@/ui/avatar";
@@ -5,77 +6,75 @@ import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent } from "@/ui/card";
 import { Text } from "@/ui/typography";
+import { faker } from "@faker-js/faker";
 import dayjs from "dayjs";
-
-const DEFAULT_AVATAR_URL = "https://avatars.githubusercontent.com/u/583231?v=4";
-const repeatAvatars = (count: number) => Array.from({ length: count }).map(() => DEFAULT_AVATAR_URL);
 
 export default function ProjectsTab() {
 	const items = [
 		{
 			icon: <Icon icon="logos:react" size={40} />,
 			name: "Admin Template",
-			client: "Client A",
+			client: faker.person.fullName(),
 			desc: "Time is our most valuable asset, that is why we want to help you save it by creating…",
-			members: repeatAvatars(5),
-			startDate: dayjs().subtract(6, "month"),
-			deadline: dayjs().add(3, "month"),
+			members: fakeAvatars(5),
+			startDate: dayjs(faker.date.past({ years: 1 })),
+			deadline: dayjs(faker.date.future({ years: 1 })),
 			messages: 236,
 			allHours: "98/135",
-			allTasks: 86,
-			closedTasks: 44,
+			allTasks: faker.number.int({ min: 60, max: 99 }),
+			closedTasks: faker.number.int({ min: 30, max: 60 }),
 		},
 		{
 			icon: <Icon icon="logos:vue" size={40} />,
 			name: "App Design",
 			desc: "App design combines the user interface (UI) and user experience (UX).  ",
-			client: "Client B",
-			members: repeatAvatars(7),
-			startDate: dayjs().subtract(2, "month"),
-			deadline: dayjs().add(1, "month"),
+			client: faker.person.fullName(),
+			members: fakeAvatars(7),
+			startDate: dayjs(faker.date.past({ years: 1 })),
+			deadline: dayjs(faker.date.future({ years: 1 })),
 			messages: 236,
 			allHours: "880/421",
-			allTasks: 72,
-			closedTasks: 35,
+			allTasks: faker.number.int({ min: 60, max: 99 }),
+			closedTasks: faker.number.int({ min: 30, max: 60 }),
 		},
 		{
 			icon: <Icon icon="logos:figma" size={40} />,
 			name: "Figma Dashboard",
 			desc: "Use this template to organize your design project. Some of the key features are… ",
-			client: "Client C",
-			members: repeatAvatars(3),
-			startDate: dayjs().subtract(1, "month"),
-			deadline: dayjs().add(2, "month"),
+			client: faker.person.fullName(),
+			members: fakeAvatars(3),
+			startDate: dayjs(faker.date.past({ years: 1 })),
+			deadline: dayjs(faker.date.future({ years: 1 })),
 			messages: 236,
 			allHours: "1.2k/820",
-			allTasks: 91,
-			closedTasks: 58,
+			allTasks: faker.number.int({ min: 60, max: 99 }),
+			closedTasks: faker.number.int({ min: 30, max: 60 }),
 		},
 		{
 			icon: <Icon icon="logos:html-5" size={40} />,
 			name: "Create Website",
 			desc: "Your domain name should reflect your products or services so that your...  ",
-			client: "Client D",
-			members: repeatAvatars(11),
-			startDate: dayjs().subtract(8, "month"),
-			deadline: dayjs().add(6, "week"),
+			client: faker.person.fullName(),
+			members: fakeAvatars(11),
+			startDate: dayjs(faker.date.past({ years: 1 })),
+			deadline: dayjs(faker.date.future({ years: 1 })),
 			messages: 236,
 			allHours: "142/420",
-			allTasks: 64,
-			closedTasks: 30,
+			allTasks: faker.number.int({ min: 60, max: 99 }),
+			closedTasks: faker.number.int({ min: 30, max: 60 }),
 		},
 		{
 			icon: <Icon icon="logos:adobe-xd" size={40} />,
 			name: "Logo Design",
 			desc: "Premium logo designs created by top logo designers. Create the branding of business.  ",
-			client: "Client E",
-			members: repeatAvatars(5),
-			startDate: dayjs().subtract(3, "month"),
-			deadline: dayjs().add(2, "week"),
+			client: faker.person.fullName(),
+			members: fakeAvatars(5),
+			startDate: dayjs(faker.date.past({ years: 1 })),
+			deadline: dayjs(faker.date.future({ years: 1 })),
 			messages: 232,
 			allHours: "580/445",
-			allTasks: 80,
-			closedTasks: 50,
+			allTasks: faker.number.int({ min: 60, max: 99 }),
+			closedTasks: faker.number.int({ min: 30, max: 60 }),
 		},
 	];
 	return (

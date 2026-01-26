@@ -2,9 +2,9 @@ import { ScrollProgress, useScrollProgress } from "@/components/animate/scroll-p
 import { themeVars } from "@/theme/theme.css";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
+import { faker } from "@faker-js/faker";
 
-const TEXT =
-	"该页面用于演示滚动进度条组件。\n\n为移除 mock 数据生成依赖，这里使用静态长文本作为示例内容。\n\n".repeat(16);
+const TEXT = faker.lorem.paragraphs({ min: 20, max: 30 });
 export default function ScrollProgressView() {
 	const containerProgress = useScrollProgress("container");
 
@@ -28,9 +28,7 @@ export default function ScrollProgressView() {
 					<div ref={containerProgress.elementRef} className="h-80 overflow-auto">
 						{[...Array(4)].map((_, index) => (
 							// biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
-							<div key={index} className="whitespace-pre-line">
-								{TEXT}
-							</div>
+							<div key={index}>{TEXT}</div>
 						))}
 					</div>
 				</CardContent>

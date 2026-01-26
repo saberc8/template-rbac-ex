@@ -1,11 +1,12 @@
 import type { NavItemDataProps } from "@/components/nav/types";
-import type { NavProps } from "@/components/nav/types";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { useUserPermissions } from "@/store/userStore";
 import { checkAny } from "@/utils";
 import { useMemo } from "react";
+import { backendNavData } from "./nav-data-backend";
 import { frontendNavData } from "./nav-data-frontend";
-import { useBackendNavData } from "./nav-data-backend";
+
+const navData = GLOBAL_CONFIG.routerMode === "backend" ? backendNavData : frontendNavData;
 
 /**
  * 递归处理导航数据，过滤掉没有权限的项目
@@ -34,23 +35,29 @@ const filterItems = (items: NavItemDataProps[], permissions: string[]) => {
 };
 
 /**
+ *
  * 根据权限过滤导航数据
- * @param source 导航数据
  * @param permissions 权限列表
+ * @returns 过滤后的导航数据
  */
-const filterNavData = (source: NavProps["data"], permissions: string[]): NavProps["data"] => {
-	return source
+const filterNavData = (permissions: string[]) => {
+	return navData
 		.map((group) => {
+			// 过滤组内的项目
 			const filteredItems = filterItems(group.items, permissions);
+
+			// 如果组内没有项目了，返回 null
 			if (filteredItems.length === 0) {
 				return null;
 			}
+
+			// 返回过滤后的组
 			return {
 				...group,
 				items: filteredItems,
 			};
 		})
-		.filter((group): group is NonNullable<typeof group> => group !== null);
+		.filter((group): group is NonNullable<typeof group> => group !== null); // 过滤掉空组
 };
 
 /**
@@ -59,7 +66,7 @@ const filterNavData = (source: NavProps["data"], permissions: string[]): NavProp
  */
 export const useFilteredNavData = () => {
 	const permissions = useUserPermissions();
-	const backendNavData = useBackendNavData();
-	const source = GLOBAL_CONFIG.routerMode === "backend" ? backendNavData : frontendNavData;
-	return useMemo(() => filterNavData(source, permissions), [source, permissions]);
+	const permissionCodes = useMemo(() => permissions.map((p) => p.code), [permissions]);
+	const filteredNavData = useMemo(() => filterNavData(permissionCodes), [permissionCodes]);
+	return filteredNavData;
 };
