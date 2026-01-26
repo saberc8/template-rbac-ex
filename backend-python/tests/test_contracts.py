@@ -90,6 +90,16 @@ def test_captcha_redis_key_contract() -> None:
     assert build_redis_key("abc") == "CAPTCHA:abc"
 
 
+def test_captcha_memory_store_contract() -> None:
+    from app.core.captcha import delete_code_from_memory, get_code_from_memory, set_code_in_memory
+
+    key = "CAPTCHA:test"
+    delete_code_from_memory(key)
+    assert get_code_from_memory(key) is None
+
+    set_code_in_memory(key, "1234", 2)
+    assert get_code_from_memory(key) == "1234"
+
 def test_bcrypt_password_contract() -> None:
     from app.security.password import hash_password, verify_password
 
@@ -172,3 +182,55 @@ def test_captcha_ttl_contract(monkeypatch) -> None:
     assert resp["data"]["isEnabled"] is True
     assert calls["ex"] == 120
     assert calls["key"].startswith("CAPTCHA:")
+
+
+def test_go_seed_extract_contract() -> None:
+    from app.db.seed import _extract_block
+
+    backend_py_root = Path(__file__).resolve().parents[1]
+    repo_root = backend_py_root.parent
+    go_migrate = repo_root / "backend-go" / "internal" / "infrastructure" / "db" / "migrate.go"
+    assert go_migrate.exists(), "缺少 Go migrate 源文件（backend-go/internal/infrastructure/db/migrate.go）"
+
+    go_text = go_migrate.read_text(encoding="utf-8")
+    block = _extract_block(go_text, "ensureSysUser", "seedAdmin")
+    assert "INSERT INTO sys_user" in block
+
+
+def test_captcha_png_render_contract() -> None:
+    import base64
+
+    import app.http.routes.captcha as captcha
+
+    data_url = captcha._render_png_base64("1234", 200, 60)
+    assert data_url.startswith("data:image/png;base64,")
+    raw = base64.b64decode(data_url.split(",", 1)[1])
+    assert raw[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_captcha_image_endpoint_fallback_without_redis(monkeypatch) -> None:
+    import app.http.routes.captcha as captcha
+    from app.core.captcha import build_redis_key, get_code_from_memory
+
+    # runtime.settings 为模块级单例，可能已被其他测试以 production 配置初始化；
+    # 这里显式覆盖，确保走“非生产环境可兜底”分支。
+    monkeypatch.setattr(captcha, "settings", type("S", (), {"app_env": "local"})())
+
+    monkeypatch.setattr(captcha, "_is_option_enabled", lambda _db, _code: True)
+    monkeypatch.setattr(captcha, "_render_png_base64", lambda _code, _w, _h: "data:image/png;base64,xxx")
+
+    class DownRedis:
+        def set(self, *a, **k):
+            raise RuntimeError("redis down")
+
+    monkeypatch.setattr(captcha, "redis_client", DownRedis())
+
+    resp = captcha.get_image_captcha(db=None)
+    assert resp["code"] == "200"
+    assert resp["success"] is True
+    assert resp["data"]["isEnabled"] is True
+    assert resp["data"]["uuid"] != ""
+    assert resp["data"]["img"].startswith("data:image/png;base64,")
+
+    key = build_redis_key(resp["data"]["uuid"])
+    assert get_code_from_memory(key) is not None

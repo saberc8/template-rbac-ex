@@ -59,7 +59,10 @@ def _extract_block(text_all: str, func_name: Optional[str], const_name: str) -> 
             next_func = len(hay)
         hay = hay[start:next_func]
 
-    m = re.search(rf"const\\s+{re.escape(const_name)}\\s*=\\s*`([\\s\\S]*?)`", hay)
+    # Go 源码中的 seed 多以 raw string（反引号）形式定义：
+    #   const seedXxx = `...`
+    # 注意：这里是 Python 正则，不需要把 `\s` 再次转义为 `\\s`。
+    m = re.search(rf"const\s+{re.escape(const_name)}\s*=\s*`([\s\S]*?)`", hay)
     if not m:
         raise RuntimeError(f"cannot find const {const_name} in migrate.go (func={func_name})")
     return m.group(1)

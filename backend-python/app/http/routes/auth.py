@@ -8,12 +8,16 @@ from fastapi import APIRouter, Body, Depends, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.captcha import build_redis_key
+from app.core.captcha import (
+    build_redis_key,
+    delete_code_from_memory,
+    get_code_from_memory,
+)
 from app.db.models.sys_option import SysOption
 from app.db.models.sys_user import SysUser
 from app.http.deps import get_db
 from app.http.response import fail, ok
-from app.runtime import online_store, redis_client, token_service
+from app.runtime import online_store, redis_client, settings, token_service
 from app.security.password import verify_password
 
 
@@ -70,13 +74,16 @@ def login(
         try:
             val = redis_client.get(key)
         except Exception:
-            return fail("500", "验证码服务未初始化")
+            if settings.app_env in {"prod", "production"}:
+                return fail("500", "验证码服务未初始化")
+            val = get_code_from_memory(key)
         if not val or str(val).strip().lower() != captcha.strip().lower():
             return fail("400", "验证码不正确或已过期")
         try:
             redis_client.delete(key)
         except Exception:
-            pass
+            if settings.app_env not in {"prod", "production"}:
+                delete_code_from_memory(key)
 
     user = db.execute(select(SysUser).where(SysUser.username == username).limit(1)).scalar_one_or_none()
     if user is None:
