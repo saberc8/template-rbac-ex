@@ -16,7 +16,7 @@ from app.db.models.sys_client import SysClient
 from app.db.models.sys_user import SysUser
 from app.http.deps import get_db, require_user_id
 from app.http.response import fail, ok
-from app.http.utils import format_time
+from app.http.utils import format_time, get_query_list
 
 
 router = APIRouter()
@@ -73,7 +73,7 @@ def list_client_page(request: Request, db: Session = Depends(get_db)):
         return fail("400", "size 参数不正确")
 
     client_type = (request.query_params.get("clientType") or "").strip()
-    auth_types = _normalize_non_empty_unique(request.query_params.getlist("authType") if hasattr(request.query_params, "getlist") else [])
+    auth_types = _normalize_non_empty_unique(get_query_list(request, "authType"))
 
     has_status = False
     status_val = 0

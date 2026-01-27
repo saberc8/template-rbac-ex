@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.db.models.sys_option import SysOption
 from app.http.deps import get_db, require_user_id
 from app.http.response import fail, ok
+from app.http.utils import get_query_list
 
 
 router = APIRouter()
@@ -40,13 +41,7 @@ def _to_option_value_string(v) -> str:
 
 @router.get("/system/option")
 def list_option(request: Request, db: Session = Depends(get_db)):
-    codes_raw = request.query_params.getlist("code") if hasattr(request.query_params, "getlist") else []
-    codes: list[str] = []
-    for raw in codes_raw:
-        for p in str(raw).split(","):
-            p = p.strip()
-            if p:
-                codes.append(p)
+    codes = get_query_list(request, "code")
     category = (request.query_params.get("category") or "").strip()
 
     stmt = select(

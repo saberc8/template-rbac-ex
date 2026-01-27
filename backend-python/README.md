@@ -20,7 +20,7 @@ cp .env.example .env
 
 可选：`ADMIN_FRONTEND_TYPE`
 - `vue3`（默认）：对齐 `backend-go` 的接口集合与统一响应包装
-- `react`：启用 slash-admin(React) 兼容接口（如 `/auth/signin`、`/menu`）
+- `react`：启用 slash-admin(React) 兼容接口（如 `/menu`、`/user/tokenExpired`），登录统一走 `/auth/login`
 
 ## 3. 初始化/迁移数据库（推荐显式执行）
 

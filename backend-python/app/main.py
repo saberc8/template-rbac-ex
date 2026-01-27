@@ -38,7 +38,6 @@ from app.http.routes import (
     user_profile,
     system_user,
 )
-from app.http.react_routes import auth as react_auth
 from app.http.react_routes import menu as react_menu
 from app.http.react_routes import user as react_user
 
@@ -90,6 +89,7 @@ def create_app() -> FastAPI:
 
     # 静态文件：对齐 Go 的 r.Static("/file", FILE_STORAGE_DIR)
     file_root = os.getenv("FILE_STORAGE_DIR") or settings.file_storage_dir
+    os.makedirs(file_root, exist_ok=True)
     app.mount("/file", StaticFiles(directory=file_root), name="file")
 
     # 路由注册（路径与 Go 保持一致）
@@ -113,7 +113,6 @@ def create_app() -> FastAPI:
 
     if settings.admin_frontend_type == "react":
         # slash-admin(React) 兼容路由（与对齐接口并存）
-        app.include_router(react_auth.router)
         app.include_router(react_menu.router)
         app.include_router(react_user.router)
 

@@ -46,6 +46,22 @@ export const frontendNavData: NavProps["data"] = [
 						path: "/management/system",
 						children: [
 							{
+								title: "sys.nav.system.client",
+								path: "/management/system/client",
+							},
+							{
+								title: "sys.nav.system.organization",
+								path: "/management/system/organization",
+							},
+							{
+								title: "sys.nav.system.option",
+								path: "/management/system/option",
+							},
+							{
+								title: "sys.nav.system.file",
+								path: "/management/system/file",
+							},
+							{
 								title: "sys.nav.system.permission",
 								path: "/management/system/permission",
 							},
@@ -54,12 +70,30 @@ export const frontendNavData: NavProps["data"] = [
 								path: "/management/system/role",
 							},
 							{
+								title: "sys.nav.system.storage",
+								path: "/management/system/storage",
+							},
+							{
 								title: "sys.nav.system.user",
 								path: "/management/system/user",
 							},
 							{
 								title: "sys.nav.system.dict",
 								path: "/management/system/dict",
+							},
+						],
+					},
+					{
+						title: "sys.nav.monitor.index",
+						path: "/management/monitor",
+						children: [
+							{
+								title: "sys.nav.monitor.online",
+								path: "/management/monitor/online",
+							},
+							{
+								title: "sys.nav.monitor.log",
+								path: "/management/monitor/log",
 							},
 						],
 					},

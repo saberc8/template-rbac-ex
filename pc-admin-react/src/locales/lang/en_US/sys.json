@@ -119,12 +119,21 @@
 			"scroll": "Scroll",
 			"system": {
 				"index": "System",
+				"client": "Client",
 				"organization": "Organization",
+				"option": "Option",
+				"file": "File",
 				"permission": "Permission",
 				"role": "Role",
+				"storage": "Storage",
 				"dict": "Dict",
 				"user": "User",
 				"user_detail": "User Detail"
+			},
+			"monitor": {
+				"index": "Monitor",
+				"online": "Online Users",
+				"log": "System Logs"
 			},
 			"toast": "Toast",
 			"token_expired": "Token Expired",

@@ -7,6 +7,29 @@ from datetime import datetime
 from typing import Optional
 
 
+def get_query_list(request, key: str) -> list[str]:
+    qp = getattr(request, "query_params", None)
+    if qp is None:
+        return []
+
+    raw_values: list[str] = []
+    if hasattr(qp, "getlist"):
+        raw_values.extend(qp.getlist(key))
+        raw_values.extend(qp.getlist(f"{key}[]"))
+    else:
+        v = qp.get(key) if hasattr(qp, "get") else None
+        if v is not None:
+            raw_values.append(str(v))
+
+    out: list[str] = []
+    for raw in raw_values:
+        for part in str(raw).split(","):
+            p = part.strip()
+            if p:
+                out.append(p)
+    return out
+
+
 def format_time(dt: Optional[datetime]) -> str:
     if dt is None:
         return ""

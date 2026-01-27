@@ -210,13 +210,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 						</Button>
 					</div>
 
-					{/* 注册 */}
-					<div className="text-center text-sm">
-						{t("sys.login.noAccount")}
-						<Button variant="link" className="px-1" onClick={() => setLoginState(LoginStateEnum.REGISTER)}>
-							{t("sys.login.signUpFormTitle")}
-						</Button>
-					</div>
+					<div className="text-center text-sm text-muted-foreground">如需账号请联系管理员开通</div>
 				</form>
 			</Form>
 		</div>

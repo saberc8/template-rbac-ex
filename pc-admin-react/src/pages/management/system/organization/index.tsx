@@ -1,32 +1,33 @@
-import { systemRoleService, type SysRole } from "@/api/services/systemRoleService";
+import { systemDeptService, type SysDeptNode } from "@/api/services/systemDeptService";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { useQuery } from "@tanstack/react-query";
-import Table, { type ColumnsType } from "antd/es/table";
+import { Table } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { useMemo, useState } from "react";
+import { BasicStatus } from "#/enum";
 
-export default function RolePage() {
+export default function OrganizationPage() {
 	const [keyword, setKeyword] = useState("");
 	const [queryKeyword, setQueryKeyword] = useState("");
 
 	const { data, isFetching } = useQuery({
-		queryKey: ["systemRole.list", queryKeyword],
-		queryFn: () => systemRoleService.list(queryKeyword || undefined),
+		queryKey: ["systemDept.tree", queryKeyword],
+		queryFn: () => systemDeptService.tree({ description: queryKeyword || undefined }),
 	});
 
-	const columns: ColumnsType<SysRole> = useMemo(
+	const columns: ColumnsType<SysDeptNode> = useMemo(
 		() => [
-			{ title: "Name", dataIndex: "name", width: 240 },
-			{ title: "Code", dataIndex: "code", width: 200 },
-			{ title: "Order", dataIndex: "sort", width: 80 },
+			{ title: "Name", dataIndex: "name", width: 260 },
+			{ title: "Sort", dataIndex: "sort", width: 80 },
 			{
-				title: "System",
-				dataIndex: "isSystem",
-				width: 100,
-				render: (v: boolean) => (v ? "Yes" : "No"),
+				title: "Status",
+				dataIndex: "status",
+				width: 120,
+				render: (v: number) => (v === BasicStatus.DISABLE ? "Disable" : "Enable"),
 			},
-			{ title: "Desc", dataIndex: "description" },
+			{ title: "Description", dataIndex: "description" },
 		],
 		[],
 	);
@@ -35,7 +36,7 @@ export default function RolePage() {
 		<Card>
 			<CardHeader>
 				<div className="flex items-center justify-between gap-3">
-					<div>Role List</div>
+					<div>Organization</div>
 					<div className="flex items-center gap-2">
 						<Input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="Search" className="w-[240px]" />
 						<Button onClick={() => setQueryKeyword(keyword.trim())}>Search</Button>
@@ -43,7 +44,7 @@ export default function RolePage() {
 				</div>
 			</CardHeader>
 			<CardContent>
-				<Table<SysRole>
+				<Table<SysDeptNode>
 					rowKey="id"
 					size="small"
 					scroll={{ x: "max-content" }}
@@ -56,3 +57,4 @@ export default function RolePage() {
 		</Card>
 	);
 }
+

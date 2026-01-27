@@ -13,7 +13,7 @@ from app.db.models.sys_log import SysLog
 from app.db.models.sys_user import SysUser
 from app.http.deps import get_db
 from app.http.response import fail, ok
-from app.http.utils import escape_csv, format_time, parse_time_ymdhms
+from app.http.utils import escape_csv, format_time, get_query_list, parse_time_ymdhms
 
 
 router = APIRouter()
@@ -32,7 +32,7 @@ def _build_filters(request: Request) -> dict:
         except Exception:
             status = 0
 
-    time_range = request.query_params.getlist("createTime") if hasattr(request.query_params, "getlist") else []
+    time_range = get_query_list(request, "createTime")
     start_time = parse_time_ymdhms(time_range[0]) if len(time_range) == 2 else None
     end_time = parse_time_ymdhms(time_range[1]) if len(time_range) == 2 else None
 

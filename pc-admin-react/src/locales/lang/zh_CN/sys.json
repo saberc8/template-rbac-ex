@@ -99,12 +99,21 @@
 			},
 			"system": {
 				"index": "系统",
+				"client": "客户端",
 				"organization": "组织",
+				"option": "配置",
+				"file": "文件",
 				"permission": "权限",
 				"role": "角色",
+				"storage": "存储",
 				"dict": "字典",
 				"user": "用户",
 				"user_detail": "用户详情"
+			},
+			"monitor": {
+				"index": "监控",
+				"online": "在线用户",
+				"log": "系统日志"
 			},
 			"blog": "博客",
 			"components": "组件",
