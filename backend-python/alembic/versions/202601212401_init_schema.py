@@ -109,7 +109,7 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=255), nullable=False),
         sa.Column("original_name", sa.String(length=255), nullable=False),
         sa.Column("size", sa.BigInteger()),
-        sa.Column("parent_path", sa.String(length=512), nullable=False, server_default=sa.text(\"'/'\")),
+        sa.Column("parent_path", sa.String(length=512), nullable=False, server_default=sa.text("'/'")),
         sa.Column("path", sa.String(length=512), nullable=False),
         sa.Column("extension", sa.String(length=100)),
         sa.Column("content_type", sa.String(length=255)),

@@ -10,6 +10,10 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
+MySQL 8 默认认证插件可能是 `caching_sha2_password`（或 `sha256_password`），PyMySQL 需要 `cryptography` 才能完成认证；如遇到报错：
+`RuntimeError: 'cryptography' package is required for sha256_password or caching_sha2_password auth methods`
+请在虚拟环境中执行 `python -m pip install -r requirements.txt` 重新安装依赖（已包含 `cryptography`）。
+
 ## 2. 配置环境变量
 
 ```bash

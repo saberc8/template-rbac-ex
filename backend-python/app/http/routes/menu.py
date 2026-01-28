@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, Request
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, inspect, select, update
 from sqlalchemy.orm import Session, aliased
 
 from app.core.id import next_id
@@ -19,6 +19,14 @@ from app.http.utils import format_time
 
 
 router = APIRouter()
+
+
+def _has_frontend_column(db: Session) -> bool:
+    try:
+        cols = inspect(db.get_bind()).get_columns("sys_menu")
+    except Exception:
+        return False
+    return any(str(c.get("name") or "") == "frontend" for c in cols)
 
 
 def _build_menu_for_save(menu_id: int, body: dict) -> tuple[Optional[dict], Optional[tuple[str, str]]]:
@@ -113,7 +121,7 @@ def _to_menu_resp(row: dict) -> dict:
 def list_menu_tree(db: Session = Depends(get_db)):
     cu = aliased(SysUser)
     uu = aliased(SysUser)
-    rows = db.execute(
+    stmt = (
         select(
             SysMenu.id,
             SysMenu.title,
@@ -139,7 +147,10 @@ def list_menu_tree(db: Session = Depends(get_db)):
         .join(cu, cu.id == SysMenu.create_user, isouter=True)
         .join(uu, uu.id == SysMenu.update_user, isouter=True)
         .order_by(SysMenu.sort.asc(), SysMenu.id.asc())
-    ).all()
+    )
+    if _has_frontend_column(db):
+        stmt = stmt.where(SysMenu.frontend == "vue3")
+    rows = db.execute(stmt).all()
 
     flat: list[dict] = []
     for r in rows:
@@ -201,7 +212,7 @@ def get_menu(id: int, db: Session = Depends(get_db)):
 
     cu = aliased(SysUser)
     uu = aliased(SysUser)
-    row = db.execute(
+    stmt = (
         select(
             SysMenu.id,
             SysMenu.title,
@@ -228,7 +239,10 @@ def get_menu(id: int, db: Session = Depends(get_db)):
         .join(uu, uu.id == SysMenu.update_user, isouter=True)
         .where(SysMenu.id == id)
         .limit(1)
-    ).first()
+    )
+    if _has_frontend_column(db):
+        stmt = stmt.where(SysMenu.frontend == "vue3")
+    row = db.execute(stmt).first()
     if row is None:
         return fail("404", "菜单不存在")
 
@@ -326,10 +340,11 @@ def update_menu(
 
     now = datetime.now()
     try:
+        stmt = update(SysMenu).where(SysMenu.id == int(id))
+        if _has_frontend_column(db):
+            stmt = stmt.where(SysMenu.frontend == "vue3")
         db.execute(
-            update(SysMenu)
-            .where(SysMenu.id == int(id))
-            .values(
+            stmt.values(
                 parent_id=payload["parent_id"],
                 type=payload["type"],
                 title=payload["title"],
@@ -378,11 +393,21 @@ def delete_menu(
     if not seed_ids:
         return fail("400", "ID 列表不能为空")
 
-    rows = db.execute(select(SysMenu.id, SysMenu.parent_id)).all()
+    stmt = select(SysMenu.id, SysMenu.parent_id)
+    if _has_frontend_column(db):
+        stmt = stmt.where(SysMenu.frontend == "vue3")
+    rows = db.execute(stmt).all()
     children_of: dict[int, list[int]] = {}
+    allowed_ids: set[int] = set()
     for r in rows:
         pid = int(r.parent_id or 0)
-        children_of.setdefault(pid, []).append(int(r.id))
+        mid = int(r.id)
+        allowed_ids.add(mid)
+        children_of.setdefault(pid, []).append(mid)
+
+    seed_ids = [mid for mid in seed_ids if mid in allowed_ids]
+    if not seed_ids:
+        return ok(True)
 
     seen: set[int] = set()
 
@@ -402,7 +427,10 @@ def delete_menu(
 
     try:
         db.execute(delete(SysRoleMenu).where(SysRoleMenu.menu_id.in_(all_ids)))
-        db.execute(delete(SysMenu).where(SysMenu.id.in_(all_ids)))
+        stmt = delete(SysMenu).where(SysMenu.id.in_(all_ids))
+        if _has_frontend_column(db):
+            stmt = stmt.where(SysMenu.frontend == "vue3")
+        db.execute(stmt)
         db.commit()
     except Exception:
         db.rollback()

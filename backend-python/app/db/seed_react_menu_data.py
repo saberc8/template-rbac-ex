@@ -1,0 +1,472 @@
+"""React 菜单 seed 数据（快照）。
+
+说明:
+- 用于 backend-python 的 /menu（slash-admin React）动态路由。
+- 与 Vue3 的 sys_menu（/system/*）逻辑解耦；此处仅存 React 所需字段。
+- 该快照最初来源于 pc-admin-react/src/_mock/assets_backup.ts 的 DB_MENU。
+"""
+
+from __future__ import annotations
+
+REACT_MENU_FLAT: list[dict] = [
+  {
+    "id": "group_dashboard",
+    "parentId": "",
+    "name": "sys.nav.dashboard",
+    "code": "dashboard",
+    "icon": None,
+    "type": 0,
+    "path": "",
+    "component": ""
+  },
+  {
+    "id": "group_pages",
+    "parentId": "",
+    "name": "sys.nav.pages",
+    "code": "pages",
+    "icon": None,
+    "type": 0,
+    "path": "",
+    "component": ""
+  },
+  {
+    "id": "group_ui",
+    "parentId": "",
+    "name": "sys.nav.ui",
+    "code": "ui",
+    "icon": None,
+    "type": 0,
+    "path": "",
+    "component": ""
+  },
+  {
+    "id": "group_others",
+    "parentId": "",
+    "name": "sys.nav.others",
+    "code": "others",
+    "icon": None,
+    "type": 0,
+    "path": "",
+    "component": ""
+  },
+  {
+    "id": "workbench",
+    "parentId": "group_dashboard",
+    "name": "sys.nav.workbench",
+    "code": "workbench",
+    "icon": "local:ic-workbench",
+    "type": 2,
+    "path": "/workbench",
+    "component": "/pages/dashboard/workbench"
+  },
+  {
+    "id": "analysis",
+    "parentId": "group_dashboard",
+    "name": "sys.nav.analysis",
+    "code": "analysis",
+    "icon": "local:ic-analysis",
+    "type": 2,
+    "path": "/analysis",
+    "component": "/pages/dashboard/analysis"
+  },
+  {
+    "id": "management",
+    "parentId": "group_pages",
+    "name": "sys.nav.management",
+    "code": "management",
+    "icon": "local:ic-management",
+    "type": 1,
+    "path": "/management",
+    "component": ""
+  },
+  {
+    "id": "management_user",
+    "parentId": "management",
+    "name": "sys.nav.user.index",
+    "code": "management:user",
+    "icon": None,
+    "type": 1,
+    "path": "/management/user",
+    "component": ""
+  },
+  {
+    "id": "management_user_profile",
+    "parentId": "management_user",
+    "name": "sys.nav.user.profile",
+    "code": "management:user:profile",
+    "icon": None,
+    "type": 2,
+    "path": "management/user/profile",
+    "component": "/pages/management/user/profile"
+  },
+  {
+    "id": "management_user_account",
+    "parentId": "management_user",
+    "name": "sys.nav.user.account",
+    "code": "management:user:account",
+    "icon": None,
+    "type": 2,
+    "path": "management/user/account",
+    "component": "/pages/management/user/account"
+  },
+  {
+    "id": "management_system",
+    "parentId": "management",
+    "name": "sys.nav.system.index",
+    "code": "management:system",
+    "icon": None,
+    "type": 1,
+    "path": "management/system",
+    "component": ""
+  },
+  {
+    "id": "management_system_user",
+    "parentId": "management_system",
+    "name": "sys.nav.system.user",
+    "code": "management:system:user",
+    "icon": None,
+    "type": 2,
+    "path": "/management/system/user",
+    "component": "/pages/management/system/user"
+  },
+  {
+    "id": "management_system_role",
+    "parentId": "management_system",
+    "name": "sys.nav.system.role",
+    "code": "management:system:role",
+    "icon": None,
+    "type": 2,
+    "path": "/management/system/role",
+    "component": "/pages/management/system/role"
+  },
+  {
+    "id": "management_system_permission",
+    "parentId": "management_system",
+    "name": "sys.nav.system.permission",
+    "code": "management:system:permission",
+    "icon": None,
+    "type": 2,
+    "path": "/management/system/permission",
+    "component": "/pages/management/system/permission"
+  },
+  {
+    "id": "menulevel",
+    "parentId": "group_pages",
+    "name": "sys.nav.menulevel.index",
+    "code": "menulevel",
+    "icon": "local:ic-menulevel",
+    "type": 1,
+    "path": "/menu_level",
+    "component": ""
+  },
+  {
+    "id": "menulevel_1a",
+    "parentId": "menulevel",
+    "name": "sys.nav.menulevel.1a",
+    "code": "menulevel:1a",
+    "icon": None,
+    "type": 2,
+    "path": "/menu_level/1a",
+    "component": "/pages/menu-level/menu-level-1a"
+  },
+  {
+    "id": "menulevel_1b",
+    "parentId": "menulevel",
+    "name": "sys.nav.menulevel.1b.index",
+    "code": "menulevel:1b",
+    "icon": None,
+    "type": 1,
+    "path": "/menu_level/1b",
+    "component": "/pages/menu-level/menu-level-1b"
+  },
+  {
+    "id": "menulevel_1b_2a",
+    "parentId": "menulevel_1b",
+    "name": "sys.nav.menulevel.1b.2a",
+    "code": "menulevel:1b:2a",
+    "icon": None,
+    "type": 2,
+    "path": "/menu_level/1b/2a",
+    "component": "/pages/menu-level/menu-level-1b/menu-level-2a"
+  },
+  {
+    "id": "menulevel_1b_2b",
+    "parentId": "menulevel_1b",
+    "name": "sys.nav.menulevel.1b.2b.index",
+    "code": "menulevel:1b:2b",
+    "icon": None,
+    "type": 1,
+    "path": "/menu_level/1b/2b",
+    "component": ""
+  },
+  {
+    "id": "menulevel_1b_2b_3a",
+    "parentId": "menulevel_1b_2b",
+    "name": "sys.nav.menulevel.1b.2b.3a",
+    "code": "menulevel:1b:2b:3a",
+    "icon": None,
+    "type": 2,
+    "path": "/menu_level/1b/2b/3a",
+    "component": "/pages/menu-level/menu-level-1b/menu-level-2b/menu-level-3a"
+  },
+  {
+    "id": "menulevel_1b_2b_3b",
+    "parentId": "menulevel_1b_2b",
+    "name": "sys.nav.menulevel.1b.2b.3b",
+    "code": "menulevel:1b:2b:3b",
+    "icon": None,
+    "type": 2,
+    "path": "/menu_level/1b/2b/3b",
+    "component": "/pages/menu-level/menu-level-1b/menu-level-2b/menu-level-3b"
+  },
+  {
+    "id": "error",
+    "parentId": "group_pages",
+    "name": "sys.nav.error.index",
+    "code": "error",
+    "icon": "bxs:error-alt",
+    "type": 1,
+    "path": "/error",
+    "component": ""
+  },
+  {
+    "id": "error_403",
+    "parentId": "error",
+    "name": "sys.nav.error.403",
+    "code": "error:403",
+    "icon": None,
+    "type": 2,
+    "path": "/error/403",
+    "component": "/pages/sys/error/Page403"
+  },
+  {
+    "id": "error_404",
+    "parentId": "error",
+    "name": "sys.nav.error.404",
+    "code": "error:404",
+    "icon": None,
+    "type": 2,
+    "path": "/error/404",
+    "component": "/pages/sys/error/Page404"
+  },
+  {
+    "id": "error_500",
+    "parentId": "error",
+    "name": "sys.nav.error.500",
+    "code": "error:500",
+    "icon": None,
+    "type": 2,
+    "path": "/error/500",
+    "component": "/pages/sys/error/Page500"
+  },
+  {
+    "id": "components",
+    "parentId": "group_ui",
+    "name": "sys.nav.components",
+    "code": "components",
+    "icon": "solar:widget-5-bold-duotone",
+    "type": 1,
+    "path": "/components",
+    "component": ""
+  },
+  {
+    "id": "components_icon",
+    "parentId": "components",
+    "name": "sys.nav.icon",
+    "code": "components:icon",
+    "icon": None,
+    "type": 2,
+    "path": "/components/icon",
+    "component": "/pages/components/icon"
+  },
+  {
+    "id": "components_animate",
+    "parentId": "components",
+    "name": "sys.nav.animate",
+    "code": "components:animate",
+    "icon": None,
+    "type": 2,
+    "path": "/components/animate",
+    "component": "/pages/components/animate"
+  },
+  {
+    "id": "components_scroll",
+    "parentId": "components",
+    "name": "sys.nav.scroll",
+    "code": "components:scroll",
+    "icon": None,
+    "type": 2,
+    "path": "/components/scroll",
+    "component": "/pages/components/scroll"
+  },
+  {
+    "id": "components_i18n",
+    "parentId": "components",
+    "name": "sys.nav.i18n",
+    "code": "components:i18n",
+    "icon": None,
+    "type": 2,
+    "path": "/components/multi-language",
+    "component": "/pages/components/multi-language"
+  },
+  {
+    "id": "components_upload",
+    "parentId": "components",
+    "name": "sys.nav.upload",
+    "code": "components:upload",
+    "icon": None,
+    "type": 2,
+    "path": "/components/upload",
+    "component": "/pages/components/upload"
+  },
+  {
+    "id": "components_chart",
+    "parentId": "components",
+    "name": "sys.nav.chart",
+    "code": "components:chart",
+    "icon": None,
+    "type": 2,
+    "path": "/components/chart",
+    "component": "/pages/components/chart"
+  },
+  {
+    "id": "components_toast",
+    "parentId": "components",
+    "name": "sys.nav.toast",
+    "code": "components:toast",
+    "icon": None,
+    "type": 2,
+    "path": "/components/toast",
+    "component": "/pages/components/toast"
+  },
+  {
+    "id": "functions",
+    "parentId": "group_ui",
+    "name": "sys.nav.functions",
+    "code": "functions",
+    "icon": "solar:plain-2-bold-duotone",
+    "type": 1,
+    "path": "/functions",
+    "component": ""
+  },
+  {
+    "id": "functions_clipboard",
+    "parentId": "functions",
+    "name": "sys.nav.clipboard",
+    "code": "functions:clipboard",
+    "icon": None,
+    "type": 2,
+    "path": "/functions/clipboard",
+    "component": "/pages/functions/clipboard"
+  },
+  {
+    "id": "functions_tokenExpired",
+    "parentId": "functions",
+    "name": "sys.nav.token_expired",
+    "code": "functions:token_expired",
+    "icon": None,
+    "type": 2,
+    "path": "/functions/token_expired",
+    "component": "/pages/functions/token-expired"
+  },
+  {
+    "id": "permission",
+    "parentId": "group_others",
+    "name": "sys.nav.permission",
+    "code": "permission",
+    "icon": "mingcute:safe-lock-fill",
+    "type": 2,
+    "path": "/permission",
+    "component": "/pages/sys/others/permission"
+  },
+  {
+    "id": "permission_page_test",
+    "parentId": "group_others",
+    "name": "sys.nav.permission.page_test",
+    "code": "permission:page_test",
+    "icon": "mingcute:safe-lock-fill",
+    "type": 2,
+    "path": "/permission/page-test",
+    "component": "/pages/sys/others/permission/page-test"
+  },
+  {
+    "id": "calendar",
+    "parentId": "group_others",
+    "name": "sys.nav.calendar",
+    "code": "calendar",
+    "icon": "solar:calendar-bold-duotone",
+    "type": 2,
+    "path": "/calendar",
+    "component": "/pages/sys/others/calendar"
+  },
+  {
+    "id": "kanban",
+    "parentId": "group_others",
+    "name": "sys.nav.kanban",
+    "code": "kanban",
+    "icon": "solar:clipboard-bold-duotone",
+    "type": 2,
+    "path": "/kanban",
+    "component": "/pages/sys/others/kanban"
+  },
+  {
+    "id": "disabled",
+    "parentId": "group_others",
+    "name": "sys.nav.disabled",
+    "code": "disabled",
+    "icon": "local:ic-disabled",
+    "type": 2,
+    "path": "/disabled",
+    "component": "/pages/sys/others/disabled"
+  },
+  {
+    "id": "label",
+    "parentId": "group_others",
+    "name": "sys.nav.label",
+    "code": "label",
+    "icon": "local:ic-label",
+    "type": 2,
+    "path": "#label",
+    "component": ""
+  },
+  {
+    "id": "link",
+    "parentId": "group_others",
+    "name": "sys.nav.link",
+    "code": "link",
+    "icon": "local:ic-external",
+    "type": 1,
+    "path": "/link",
+    "component": ""
+  },
+  {
+    "id": "link_external",
+    "parentId": "link",
+    "name": "sys.nav.external_link",
+    "code": "link:external_link",
+    "icon": None,
+    "type": 2,
+    "path": "/link/external_link",
+    "component": "/pages/sys/others/link/external-link"
+  },
+  {
+    "id": "link_iframe",
+    "parentId": "link",
+    "name": "sys.nav.iframe",
+    "code": "link:iframe",
+    "icon": None,
+    "type": 2,
+    "path": "/link/iframe",
+    "component": "/pages/sys/others/link/iframe"
+  },
+  {
+    "id": "blank",
+    "parentId": "group_others",
+    "name": "sys.nav.blank",
+    "code": "blank",
+    "icon": "local:ic-blank",
+    "type": 2,
+    "path": "/blank",
+    "component": "/pages/sys/others/blank"
+  }
+]

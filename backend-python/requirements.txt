@@ -11,5 +11,6 @@ pillow>=10.0
 python-multipart>=0.0.9
 psycopg2-binary>=2.9
 pymysql>=1.1
+cryptography>=41.0
 minio>=7.2
 pytest>=8.0

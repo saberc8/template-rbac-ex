@@ -16,6 +16,7 @@ class SysMenu(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
     title: Mapped[str] = mapped_column(String(30), nullable=False)
+    frontend: Mapped[str] = mapped_column(String(20), nullable=False, server_default=text("'vue3'"))
     parent_id: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
     type: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("1"))
     path: Mapped[Optional[str]] = mapped_column(String(255))
@@ -35,6 +36,7 @@ class SysMenu(Base):
     update_time: Mapped[Optional[datetime]] = mapped_column(DateTime)
 
     __table_args__ = (
+        Index("idx_menu_frontend", "frontend"),
         Index("idx_menu_parent_id", "parent_id"),
         Index("idx_menu_create_user", "create_user"),
         Index("idx_menu_update_user", "update_user"),

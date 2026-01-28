@@ -184,17 +184,13 @@ def test_captcha_ttl_contract(monkeypatch) -> None:
     assert calls["key"].startswith("CAPTCHA:")
 
 
-def test_go_seed_extract_contract() -> None:
-    from app.db.seed import _extract_block
+def test_seed_data_snapshot_contract() -> None:
+    # Python 后端 seed 数据已内置为快照，运行时不再依赖 backend-go 源码。
+    from app.db.seed_data import SEED_SQL_BLOCKS
 
-    backend_py_root = Path(__file__).resolve().parents[1]
-    repo_root = backend_py_root.parent
-    go_migrate = repo_root / "backend-go" / "internal" / "infrastructure" / "db" / "migrate.go"
-    assert go_migrate.exists(), "缺少 Go migrate 源文件（backend-go/internal/infrastructure/db/migrate.go）"
-
-    go_text = go_migrate.read_text(encoding="utf-8")
-    block = _extract_block(go_text, "ensureSysUser", "seedAdmin")
-    assert "INSERT INTO sys_user" in block
+    assert isinstance(SEED_SQL_BLOCKS, list)
+    assert len(SEED_SQL_BLOCKS) > 0
+    assert any("INSERT INTO sys_user" in b for b in SEED_SQL_BLOCKS)
 
 
 def test_captcha_png_render_contract() -> None:

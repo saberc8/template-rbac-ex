@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select
+from sqlalchemy import func, inspect, select
 from sqlalchemy.orm import Session
 
 from app.db.models.sys_dept import SysDept
@@ -22,6 +22,14 @@ from app.http.response import ok
 router = APIRouter()
 
 
+def _has_frontend_column(db: Session) -> bool:
+    try:
+        cols = inspect(db.get_bind()).get_columns("sys_menu")
+    except Exception:
+        return False
+    return any(str(c.get("name") or "") == "frontend" for c in cols)
+
+
 @router.get("/common/dict/option/site")
 def list_site_options(db: Session = Depends(get_db)):
     rows = db.execute(
@@ -35,10 +43,10 @@ def list_site_options(db: Session = Depends(get_db)):
 
 @router.get("/common/tree/menu")
 def list_menu_tree(db: Session = Depends(get_db)):
-    rows = db.execute(
-        select(SysMenu.id, SysMenu.title, SysMenu.parent_id, SysMenu.status, SysMenu.type)
-        .order_by(SysMenu.sort.asc(), SysMenu.id.asc())
-    ).all()
+    stmt = select(SysMenu.id, SysMenu.title, SysMenu.parent_id, SysMenu.status, SysMenu.type).order_by(SysMenu.sort.asc(), SysMenu.id.asc())
+    if _has_frontend_column(db):
+        stmt = stmt.where(SysMenu.frontend == "vue3")
+    rows = db.execute(stmt).all()
 
     nodes: dict[int, dict] = {}
     ordered_ids: list[int] = []

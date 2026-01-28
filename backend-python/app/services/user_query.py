@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import distinct, func, select
+from sqlalchemy import distinct, func, inspect, select
 from sqlalchemy.orm import Session
 
 from app.db.models.sys_menu import SysMenu
@@ -17,6 +17,14 @@ from app.http.utils import format_time
 
 def _str_or_empty(v) -> str:
     return "" if v is None else str(v)
+
+
+def _has_frontend_column(db: Session) -> bool:
+    try:
+        cols = inspect(db.get_bind()).get_columns("sys_menu")
+    except Exception:
+        return False
+    return any(str(c.get("name") or "") == "frontend" for c in cols)
 
 
 def get_user_info(db: Session, user_id: int) -> dict:
@@ -89,7 +97,7 @@ def list_user_route(db: Session, user_id: int) -> list[dict]:
     role_ids = [int(r.id) for r in roles if int(r.id) > 0]
     role_codes = [str(r.code) for r in roles if r.code is not None and str(r.code).strip() != ""]
 
-    menu_rows = db.execute(
+    stmt = (
         select(
             SysMenu.id,
             SysMenu.parent_id,
@@ -110,7 +118,10 @@ def list_user_route(db: Session, user_id: int) -> list[dict]:
         .select_from(SysMenu)
         .join(SysRoleMenu, SysRoleMenu.menu_id == SysMenu.id)
         .where(SysRoleMenu.role_id.in_(role_ids))
-    ).all()
+    )
+    if _has_frontend_column(db):
+        stmt = stmt.where(SysMenu.frontend == "vue3")
+    menu_rows = db.execute(stmt).all()
     if not menu_rows:
         return []
 
