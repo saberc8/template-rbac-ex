@@ -5,14 +5,15 @@ from __future__ import annotations
 import json
 import os
 import time
+from collections.abc import Iterable
 from datetime import datetime
-from typing import Callable, Iterable
+from typing import Callable
 
 from starlette.datastructures import URL
 
 from app.core.id import next_id
-from app.db.runtime import SessionLocal
 from app.db.models.sys_log import SysLog
+from app.db.runtime import SessionLocal
 
 
 def _env_int(key: str, default: int) -> int:
@@ -123,10 +124,7 @@ class SysLogMiddleware:
         self.skip_body_prefix = _env_csv("LOG_SKIP_BODY_PATHS", "/auth/login")
 
     def _should_skip_body(self, path: str) -> bool:
-        for p in self.skip_body_prefix:
-            if p and path.startswith(p):
-                return True
-        return False
+        return any(p and path.startswith(p) for p in self.skip_body_prefix)
 
     async def __call__(self, scope, receive: Callable, send: Callable):
         if scope.get("type") != "http":

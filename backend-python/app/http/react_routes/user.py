@@ -5,7 +5,6 @@ from __future__ import annotations
 from fastapi import APIRouter
 from fastapi.responses import Response
 
-
 router = APIRouter()
 
 
@@ -13,4 +12,3 @@ router = APIRouter()
 def token_expired():
     # 对齐 slash-admin 的 MSW 行为：直接返回 HTTP 401 触发前端登出逻辑。
     return Response(status_code=401)
-

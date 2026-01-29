@@ -18,7 +18,6 @@ from app.http.response import fail, ok
 from app.http.routes import file_api
 from app.http.utils import build_storage_file_url, detect_file_type, extension_from_filename, normalize_parent_path
 
-
 router = APIRouter()
 
 
@@ -104,4 +103,3 @@ def upload_avatar(
         return fail("500", "更新头像失败")
 
     return ok({"avatar": avatar_url})
-

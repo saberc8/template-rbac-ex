@@ -18,7 +18,6 @@ from app.http.deps import get_db, require_user_id
 from app.http.response import fail, ok
 from app.http.utils import format_time, get_query_list
 
-
 router = APIRouter()
 
 
@@ -92,7 +91,9 @@ def list_client_page(request: Request, db: Session = Depends(get_db)):
     u_create = aliased(SysUser)
     u_update = aliased(SysUser)
 
-    base = select(SysClient.id).select_from(SysClient).join(u_create, u_create.id == SysClient.create_user, isouter=True)
+    base = (
+        select(SysClient.id).select_from(SysClient).join(u_create, u_create.id == SysClient.create_user, isouter=True)
+    )
 
     if client_type:
         base = base.where(SysClient.client_type == client_type)

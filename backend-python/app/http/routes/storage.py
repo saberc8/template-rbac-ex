@@ -16,7 +16,6 @@ from app.http.deps import get_db, require_user_id
 from app.http.response import fail, ok
 from app.http.utils import format_time
 
-
 router = APIRouter()
 
 
@@ -24,10 +23,7 @@ def _to_storage_resp(row: dict, mask_secret: bool) -> dict:
     ct = row.get("create_time")
     ut = row.get("update_time")
     secret = str(row.get("secret_key") or "")
-    if mask_secret:
-        secret = "******" if secret.strip() else ""
-    else:
-        secret = ""
+    secret = ("******" if secret.strip() else "") if mask_secret else ""
     return {
         "id": int(row.get("id") or 0),
         "name": row.get("name") or "",
@@ -309,7 +305,9 @@ def update_storage(
         return fail("400", "私有密钥长度不能超过 255 个字符")
 
     exclude = int(id)
-    exists = db.execute(select(SysStorage.id).where(SysStorage.code == code).where(SysStorage.id != exclude).limit(1)).first()
+    exists = db.execute(
+        select(SysStorage.id).where(SysStorage.code == code).where(SysStorage.id != exclude).limit(1)
+    ).first()
     if exists is not None:
         return fail("400", "修改失败，编码已存在")
 
@@ -317,7 +315,7 @@ def update_storage(
     if old is None:
         return fail("404", "存储配置不存在")
 
-    secret_final = (old.secret_key or "")
+    secret_final = old.secret_key or ""
     if secret_key_present and secret_key_val is not None:
         secret_final = secret_key_val
 
@@ -373,7 +371,9 @@ def delete_storage(
     if not ids:
         return fail("400", "ID 列表不能为空")
 
-    default_hit = db.execute(select(SysStorage.id).where(SysStorage.id.in_(ids)).where(SysStorage.is_default.is_(True)).limit(1)).first()
+    default_hit = db.execute(
+        select(SysStorage.id).where(SysStorage.id.in_(ids)).where(SysStorage.is_default.is_(True)).limit(1)
+    ).first()
     if default_hit is not None:
         return fail("400", "不允许删除默认存储")
 
@@ -409,7 +409,11 @@ def update_storage_status(
 
     now = datetime.now()
     try:
-        db.execute(update(SysStorage).where(SysStorage.id == int(id)).values(status=status, update_user=int(user_id), update_time=now))
+        db.execute(
+            update(SysStorage)
+            .where(SysStorage.id == int(id))
+            .values(status=status, update_user=int(user_id), update_time=now)
+        )
         db.commit()
     except Exception:
         db.rollback()
@@ -433,7 +437,11 @@ def set_default_storage(
     now = datetime.now()
     try:
         db.execute(update(SysStorage).values(is_default=False))
-        db.execute(update(SysStorage).where(SysStorage.id == int(id)).values(is_default=True, update_user=int(user_id), update_time=now))
+        db.execute(
+            update(SysStorage)
+            .where(SysStorage.id == int(id))
+            .values(is_default=True, update_user=int(user_id), update_time=now)
+        )
         db.commit()
     except Exception:
         db.rollback()

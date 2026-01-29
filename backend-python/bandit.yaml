@@ -1,0 +1,5 @@
+skips:
+  - B105 # hardcoded_password_string: 本项目存在大量空字符串校验，属于误报
+  - B110 # try_except_pass: 中间件/兼容逻辑存在 best-effort 分支，属可接受模式
+  - B112 # try_except_continue: 数据清洗逻辑使用 continue 属可接受模式
+

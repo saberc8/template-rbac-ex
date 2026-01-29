@@ -8,7 +8,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-
 HEADER_NAME = "X-Request-Id"
 
 
@@ -33,4 +32,3 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 def get_request_id(request: Request) -> str:
     rid = getattr(request.state, "request_id", "")
     return (rid or "").strip()
-

@@ -9,7 +9,6 @@ from app.http.response import fail, ok
 from app.http.utils import get_query_list, parse_time_ymdhms
 from app.runtime import online_store
 
-
 router = APIRouter()
 
 
@@ -29,7 +28,9 @@ def page_online_user(request: Request):
     start_time = parse_time_ymdhms(time_range[0]) if len(time_range) == 2 else None
     end_time = parse_time_ymdhms(time_range[1]) if len(time_range) == 2 else None
 
-    items, total = online_store.list(nickname=nickname, login_start=start_time, login_end=end_time, page=page, size=size)
+    items, total = online_store.list(
+        nickname=nickname, login_start=start_time, login_end=end_time, page=page, size=size
+    )
     return ok({"list": items, "total": int(total)})
 
 

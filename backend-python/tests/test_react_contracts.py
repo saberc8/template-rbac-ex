@@ -27,7 +27,6 @@ def test_config_admin_frontend_type_contract(monkeypatch) -> None:
     monkeypatch.setenv("ADMIN_FRONTEND_TYPE", "invalid")
     try:
         load_settings()
-        assert False, "expected invalid ADMIN_FRONTEND_TYPE to raise"
+        raise AssertionError("expected invalid ADMIN_FRONTEND_TYPE to raise")
     except RuntimeError:
         pass
-

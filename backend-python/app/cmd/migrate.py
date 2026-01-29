@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 from typing import Optional
 
 from sqlalchemy import inspect, text
 
+from app.db import models  # noqa: F401
 from app.db.base import Base
 from app.db.runtime import engine
-from app.db import models  # noqa: F401
 from app.db.seed import seed_from_go_migrate
 
 
@@ -36,8 +36,9 @@ def main() -> int:
             root = Path(__file__).resolve().parents[2]
             ini = root / "alembic.ini"
             if ini.exists():
-                from alembic import command
                 from alembic.config import Config
+
+                from alembic import command
 
                 cfg = Config(str(ini))
                 cfg.set_main_option("script_location", str(root / "alembic"))
@@ -49,7 +50,6 @@ def main() -> int:
                 has_version = inspector.has_table("alembic_version")
                 has_sys_user = inspector.has_table("sys_user")
                 has_sys_menu = inspector.has_table("sys_menu")
-                has_schema = has_sys_user and has_sys_menu
                 current_version: Optional[str] = None
                 if has_version:
                     try:
@@ -68,7 +68,9 @@ def main() -> int:
                         f"sys_user={has_sys_user} sys_menu={has_sys_menu} "
                         f"alembic_version_table={has_version} current_version={current_version or 'NONE'}\n"
                     )
-                if has_any_core and (not has_version or current_version is None or current_version not in known_versions):
+                if has_any_core and (
+                    not has_version or current_version is None or current_version not in known_versions
+                ):
                     # 假设当前库结构已与 init_schema 对齐（至少已存在核心表），先 stamp 到该 revision，
                     # 再继续 upgrade head，避免 init_schema 重复建表失败。
                     # 同时用 ORM create_all 补齐“被手工删表/部分缺失”的表结构，降低迁移失败概率。

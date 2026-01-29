@@ -1,0 +1,41 @@
+[tool.ruff]
+target-version = "py39"
+line-length = 120
+extend-exclude = [
+  ".venv",
+  "alembic/versions",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = [
+  "B008", # FastAPI/SQLAlchemy dependency injection uses call expressions in defaults
+  "E501", # line-length handled by formatter
+  "UP007", # Python 3.9 runtime may evaluate annotations; keep typing.Union for FastAPI/Pydantic compatibility
+  "UP045", # Optional[T] is acceptable for py39 + readability in this codebase
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.mypy]
+python_version = "3.9"
+mypy_path = "backend-python"
+warn_unused_configs = true
+warn_return_any = true
+no_implicit_optional = true
+disallow_any_generics = false
+check_untyped_defs = false
+disallow_untyped_defs = false
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+  "app.db.models.*",
+  "app.db.seed",
+  "app.http.middleware.*",
+  "app.http.routes.*",
+  "app.services.*",
+  "tests.*",
+]
+ignore_errors = true

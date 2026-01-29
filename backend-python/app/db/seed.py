@@ -66,7 +66,7 @@ def _stable_i64_from_string(value: str) -> int:
 
     if value == "":
         return 0
-    digest = hashlib.sha1(value.encode("utf-8")).digest()[:8]
+    digest = hashlib.sha1(value.encode("utf-8")).digest()[:8]  # nosec B324
     num = int.from_bytes(digest, byteorder="big", signed=False) & 0x7FFFFFFFFFFFFFFF
     return num if num != 0 else 1
 
@@ -188,4 +188,3 @@ def seed_from_go_migrate(bind: Union[Engine, Connection]) -> None:
         return
 
     _apply(bind)
-

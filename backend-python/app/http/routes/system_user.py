@@ -21,7 +21,6 @@ from app.http.response import fail, ok
 from app.http.utils import format_time
 from app.security.password import hash_password
 
-
 router = APIRouter()
 
 
@@ -263,10 +262,7 @@ def list_all_user(request: Request, db: Session = Depends(get_db)):
         .join(cu, cu.id == SysUser.create_user, isouter=True)
         .join(uu, uu.id == SysUser.update_user, isouter=True)
     )
-    if ids:
-        stmt = stmt.where(SysUser.id.in_(ids))
-    else:
-        stmt = stmt.order_by(SysUser.id.desc())
+    stmt = stmt.where(SysUser.id.in_(ids)) if ids else stmt.order_by(SysUser.id.desc())
 
     rows = db.execute(stmt).all()
     base_rows: list[dict] = []

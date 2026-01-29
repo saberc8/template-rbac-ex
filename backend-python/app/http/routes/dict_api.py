@@ -17,7 +17,6 @@ from app.http.deps import get_db, require_user_id
 from app.http.response import fail, ok
 from app.http.utils import format_time
 
-
 router = APIRouter()
 
 
@@ -81,7 +80,10 @@ def list_dict(description: Optional[str] = None, db: Session = Depends(get_db)):
     )
     if desc:
         like = f"%{desc}%"
-        stmt = stmt.where(func.lower(SysDict.name).like(func.lower(like)) | func.lower(func.coalesce(SysDict.description, "")).like(func.lower(like)))
+        stmt = stmt.where(
+            func.lower(SysDict.name).like(func.lower(like))
+            | func.lower(func.coalesce(SysDict.description, "")).like(func.lower(like))
+        )
 
     rows = db.execute(stmt).all()
     out = []
@@ -265,9 +267,7 @@ def list_dict_item(request: Request, db: Session = Depends(get_db)):
         return ok({"list": [], "total": 0})
 
     rows = db.execute(
-        stmt.order_by(SysDictItem.sort.asc(), SysDictItem.id.asc())
-        .limit(int(size))
-        .offset(int((page - 1) * size))
+        stmt.order_by(SysDictItem.sort.asc(), SysDictItem.id.asc()).limit(int(size)).offset(int((page - 1) * size))
     ).all()
 
     out = []

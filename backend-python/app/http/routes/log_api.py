@@ -15,7 +15,6 @@ from app.http.deps import get_db
 from app.http.response import fail, ok
 from app.http.utils import escape_csv, format_time, get_query_list, parse_time_ymdhms
 
-
 router = APIRouter()
 
 
@@ -62,7 +61,10 @@ def _apply_filters(stmt, filters: dict, user_alias) -> object:
     ip = filters.get("ip") or ""
     if ip:
         like = f"%{ip}%"
-        stmt = stmt.where(func.lower(func.coalesce(SysLog.ip, "")).like(func.lower(like)) | func.lower(func.coalesce(SysLog.address, "")).like(func.lower(like)))
+        stmt = stmt.where(
+            func.lower(func.coalesce(SysLog.ip, "")).like(func.lower(like))
+            | func.lower(func.coalesce(SysLog.address, "")).like(func.lower(like))
+        )
 
     cu = filters.get("create_user") or ""
     if cu:

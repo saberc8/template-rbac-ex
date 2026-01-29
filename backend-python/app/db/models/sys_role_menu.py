@@ -13,4 +13,3 @@ class SysRoleMenu(Base):
 
     role_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     menu_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-

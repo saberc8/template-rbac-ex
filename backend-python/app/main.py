@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
@@ -12,13 +13,15 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.staticfiles import StaticFiles
 
 from app.config import load_settings
+from app.db import models  # noqa: F401
 from app.db.base import Base
 from app.db.runtime import engine
-from app.db import models  # noqa: F401
 from app.db.seed import seed_from_go_migrate
 from app.http.middleware.auth_context import AuthContextMiddleware
 from app.http.middleware.request_id import RequestIDMiddleware
 from app.http.middleware.syslog import SysLogMiddleware
+from app.http.react_routes import menu as react_menu
+from app.http.react_routes import user as react_user
 from app.http.response import AppError, fail
 from app.http.routes import (
     auth,
@@ -35,17 +38,22 @@ from app.http.routes import (
     option,
     role,
     storage,
-    user_profile,
     system_user,
+    user_profile,
 )
-from app.http.react_routes import menu as react_menu
-from app.http.react_routes import user as react_user
 
 
 def create_app() -> FastAPI:
     settings = load_settings()
 
-    app = FastAPI(title="backend-python", docs_url="/docs", openapi_url="/openapi.json")
+    @asynccontextmanager
+    async def _lifespan(_app: FastAPI):
+        if settings.auto_migrate:
+            Base.metadata.create_all(bind=engine)
+            seed_from_go_migrate(engine)
+        yield
+
+    app = FastAPI(title="backend-python", docs_url="/docs", openapi_url="/openapi.json", lifespan=_lifespan)
 
     # request-id（写入响应头 + request.state），供日志链路追踪使用
     app.add_middleware(RequestIDMiddleware)
@@ -115,13 +123,6 @@ def create_app() -> FastAPI:
         # slash-admin(React) 兼容路由（与对齐接口并存）
         app.include_router(react_menu.router)
         app.include_router(react_user.router)
-
-    @app.on_event("startup")
-    def _startup_auto_migrate() -> None:
-        if not settings.auto_migrate:
-            return
-        Base.metadata.create_all(bind=engine)
-        seed_from_go_migrate(engine)
 
     return app
 

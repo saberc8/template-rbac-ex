@@ -43,4 +43,3 @@ class AppError(Exception):
         super().__init__(msg)
         self.code = str(code)
         self.msg = msg
-

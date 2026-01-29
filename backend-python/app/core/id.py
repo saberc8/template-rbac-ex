@@ -18,4 +18,3 @@ def next_id() -> int:
         else:
             _last = now
         return _last
-

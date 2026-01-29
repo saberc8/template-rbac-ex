@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 SEED_SQL_BLOCKS: list[str] = [
-    '''
+    """
 
 INSERT INTO sys_user (
     id, username, nickname, password, gender, email, phone, avatar,
@@ -31,8 +31,8 @@ SELECT
     1,
     NOW()
 WHERE NOT EXISTS (SELECT 1 FROM sys_user WHERE username = 'admin');
-    ''',
-    '''
+    """,
+    """
 
 INSERT INTO sys_role (id, name, code, data_scope, description, sort, is_system, create_user, create_time)
 SELECT 1, '系统管理员', 'admin', 1, '系统初始角色', 1, TRUE, 1, NOW()
@@ -41,14 +41,14 @@ WHERE NOT EXISTS (SELECT 1 FROM sys_role WHERE id = 1);
 INSERT INTO sys_role (id, name, code, data_scope, description, sort, is_system, create_user, create_time)
 SELECT 2, '普通用户', 'general', 4, '系统初始角色', 2, TRUE, 1, NOW()
 WHERE NOT EXISTS (SELECT 1 FROM sys_role WHERE id = 2);
-    ''',
-    '''
+    """,
+    """
 
 INSERT INTO sys_user_role (id, user_id, role_id)
 SELECT 1, 1, 1
 WHERE NOT EXISTS (SELECT 1 FROM sys_user_role WHERE user_id = 1 AND role_id = 1);
-    ''',
-    '''
+    """,
+    """
 
 INSERT INTO sys_menu (id, title, parent_id, type, path, name, component, redirect, icon,
                       is_external, is_cache, is_hidden, permission, sort, status,
@@ -682,8 +682,8 @@ INSERT INTO sys_menu (id, title, parent_id, type, path, name, component, redirec
 SELECT 2033, '导出', 2030, 3, NULL, NULL, NULL, NULL, NULL,
        NULL, NULL, NULL, 'monitor:log:export', 3, 1, 1, NOW()
 WHERE NOT EXISTS (SELECT 1 FROM sys_menu WHERE id = 2033);
-    ''',
-    '''
+    """,
+    """
 
 INSERT INTO sys_role_menu (role_id, menu_id)
 SELECT 1, m.id
@@ -691,14 +691,14 @@ FROM sys_menu AS m
 WHERE NOT EXISTS (
     SELECT 1 FROM sys_role_menu rm WHERE rm.role_id = 1 AND rm.menu_id = m.id
 );
-    ''',
-    '''
+    """,
+    """
 
 INSERT INTO sys_dept (id, name, parent_id, sort, status, is_system, description, create_user, create_time)
 SELECT 1, '默认部门', 0, 1, 1, TRUE, '系统初始部门', 1, NOW()
 WHERE NOT EXISTS (SELECT 1 FROM sys_dept WHERE id = 1);
-    ''',
-    '''
+    """,
+    """
 
 INSERT INTO sys_dict (id, name, code, description, is_system, create_user, create_time)
 SELECT 2, '客户端类型', 'client_type', NULL, TRUE, 1, NOW()
@@ -711,8 +711,8 @@ WHERE NOT EXISTS (SELECT 1 FROM sys_dict WHERE id = 3 OR code = 'auth_type_enum'
 INSERT INTO sys_dict (id, name, code, description, is_system, create_user, create_time)
 SELECT 4, '存储类型', 'storage_type_enum', NULL, TRUE, 1, NOW()
 WHERE NOT EXISTS (SELECT 1 FROM sys_dict WHERE id = 4 OR code = 'storage_type_enum');
-    ''',
-    '''
+    """,
+    """
 
 -- 客户端类型
 INSERT INTO sys_dict_item (
@@ -788,8 +788,8 @@ INSERT INTO sys_dict_item (
 SELECT 11, '对象存储', '2', 'primary', 2, NULL, 1,
        4, 1, NOW()
 WHERE NOT EXISTS (SELECT 1 FROM sys_dict_item WHERE id = 11);
-    ''',
-    '''
+    """,
+    """
 
 INSERT INTO sys_option (id, category, name, code, value, default_value, description)
 SELECT 1, 'SITE', '系统名称', 'SITE_TITLE', NULL, 'ContiNew Admin', '显示在浏览器标题栏和登录界面的系统名称'
@@ -850,8 +850,8 @@ WHERE NOT EXISTS (SELECT 1 FROM sys_option WHERE id = 17);
 INSERT INTO sys_option (id, category, name, code, value, default_value, description)
 SELECT 27, 'LOGIN', '是否启用验证码', 'LOGIN_CAPTCHA_ENABLED', NULL, '1', NULL
 WHERE NOT EXISTS (SELECT 1 FROM sys_option WHERE id = 27);
-    ''',
-    '''
+    """,
+    """
 
 INSERT INTO sys_storage (
     id, name, code, type, access_key, secret_key, endpoint,
@@ -874,8 +874,8 @@ SELECT 1,
        1,
        NOW()
 WHERE NOT EXISTS (SELECT 1 FROM sys_storage WHERE id = 1);
-    ''',
-    '''
+    """,
+    """
 
 INSERT INTO sys_client (
     id, client_id, client_type, auth_type,
@@ -892,5 +892,5 @@ SELECT 1,
        1,
        NOW()
 WHERE NOT EXISTS (SELECT 1 FROM sys_client WHERE id = 1);
-    ''',
+    """,
 ]

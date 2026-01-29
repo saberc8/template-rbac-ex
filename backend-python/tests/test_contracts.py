@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
 import re
 import sys
-
+from pathlib import Path
 
 BACKEND_PY_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = BACKEND_PY_ROOT.parent
@@ -100,6 +99,7 @@ def test_captcha_memory_store_contract() -> None:
     set_code_in_memory(key, "1234", 2)
     assert get_code_from_memory(key) == "1234"
 
+
 def test_bcrypt_password_contract() -> None:
     from app.security.password import hash_password, verify_password
 
@@ -110,10 +110,10 @@ def test_bcrypt_password_contract() -> None:
 
 
 def test_config_database_url_contract() -> None:
-    from app.config import load_settings
-
     # 避免测试时读取 .env
     import os
+
+    from app.config import load_settings
 
     os.environ["APP_ENV"] = "production"
     os.environ["AUTH_JWT_SECRET"] = "test-secret"
@@ -135,8 +135,8 @@ def test_config_database_url_contract() -> None:
 
 
 def test_models_primary_key_not_autoincrement() -> None:
-    from app.db.base import Base
     from app.db import models as _  # noqa: F401
+    from app.db.base import Base
 
     must_tables = [
         "sys_user",

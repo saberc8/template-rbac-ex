@@ -4,10 +4,13 @@
 
 ## 1. 安装依赖
 
+推荐 Python 版本：`>=3.11`（可获得更完整的依赖安全修复版本；CI 也以 3.11 为基线）。
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
 ```
 
 MySQL 8 默认认证插件可能是 `caching_sha2_password`（或 `sha256_password`），PyMySQL 需要 `cryptography` 才能完成认证；如遇到报错：
@@ -43,4 +46,21 @@ uvicorn app.main:app --host 0.0.0.0 --port ${HTTP_PORT:-14396} --reload
 - React 前端：`3001`（默认，可自行调整端口）
 - Vue3 前端：`14399`（仓库默认）
 - Python 后端：`14396`（避免与前端端口冲突）
+
+## 5. 代码质量检查（推荐）
+
+在 `backend-python/` 目录执行：
+
+```bash
+python -m ruff format .
+python -m ruff check .
+python -m mypy app tests
+python -m pytest -q tests
+```
+
+如需依赖审计：
+
+```bash
+pip-audit -r requirements.txt -r requirements-dev.txt
+```
 ```

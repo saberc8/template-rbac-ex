@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import bcrypt
 
-
 _PREFIX = "{bcrypt}"
 
 
@@ -25,4 +24,3 @@ def hash_password(raw: str) -> str:
         raise ValueError("empty password")
     hashed = bcrypt.hashpw(raw.encode("utf-8"), bcrypt.gensalt())
     return _PREFIX + hashed.decode("utf-8")
-

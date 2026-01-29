@@ -20,7 +20,6 @@ from app.http.response import fail, ok
 from app.runtime import online_store, redis_client, settings, token_service
 from app.security.password import verify_password
 
-
 router = APIRouter()
 
 
@@ -28,11 +27,7 @@ def _is_option_enabled(db: Session, code: str) -> bool:
     code = (code or "").strip()
     if code == "":
         return False
-    stmt = (
-        select(func.coalesce(SysOption.value, SysOption.default_value, ""))
-        .where(SysOption.code == code)
-        .limit(1)
-    )
+    stmt = select(func.coalesce(SysOption.value, SysOption.default_value, "")).where(SysOption.code == code).limit(1)
     val = db.execute(stmt).scalar_one_or_none()
     if val is None:
         return False

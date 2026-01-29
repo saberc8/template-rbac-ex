@@ -9,7 +9,6 @@ from app.http.deps import get_db, get_user_id
 from app.http.react_routes import query
 from app.http.react_routes.response import ok
 
-
 router = APIRouter()
 
 
@@ -22,4 +21,3 @@ def list_menu(request: Request, db: Session = Depends(get_db)):
     _, role_ids = query.list_user_roles(db, int(uid))
     tree = query.list_menu_tree(db, role_ids=role_ids)
     return ok(tree)
-

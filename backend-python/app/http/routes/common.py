@@ -18,7 +18,6 @@ from app.db.models.sys_user import SysUser
 from app.http.deps import get_db
 from app.http.response import ok
 
-
 router = APIRouter()
 
 
@@ -43,7 +42,9 @@ def list_site_options(db: Session = Depends(get_db)):
 
 @router.get("/common/tree/menu")
 def list_menu_tree(db: Session = Depends(get_db)):
-    stmt = select(SysMenu.id, SysMenu.title, SysMenu.parent_id, SysMenu.status, SysMenu.type).order_by(SysMenu.sort.asc(), SysMenu.id.asc())
+    stmt = select(SysMenu.id, SysMenu.title, SysMenu.parent_id, SysMenu.status, SysMenu.type).order_by(
+        SysMenu.sort.asc(), SysMenu.id.asc()
+    )
     if _has_frontend_column(db):
         stmt = stmt.where(SysMenu.frontend == "vue3")
     rows = db.execute(stmt).all()
@@ -94,13 +95,21 @@ def list_menu_tree(db: Session = Depends(get_db)):
 
 @router.get("/common/tree/dept")
 def list_dept_tree(db: Session = Depends(get_db)):
-    rows = db.execute(select(SysDept.id, SysDept.name, SysDept.parent_id).order_by(SysDept.sort.asc(), SysDept.id.asc())).all()
+    rows = db.execute(
+        select(SysDept.id, SysDept.name, SysDept.parent_id).order_by(SysDept.sort.asc(), SysDept.id.asc())
+    ).all()
     nodes: dict[int, dict] = {}
     ordered_ids: list[int] = []
     for r in rows:
         did = int(r.id)
         ordered_ids.append(did)
-        nodes[did] = {"key": did, "title": r.name, "disabled": False, "children": [], "_parentId": int(r.parent_id or 0)}
+        nodes[did] = {
+            "key": did,
+            "title": r.name,
+            "disabled": False,
+            "children": [],
+            "_parentId": int(r.parent_id or 0),
+        }
 
     roots: list[dict] = []
     for did in ordered_ids:
@@ -155,7 +164,9 @@ def list_user_dict(status: Optional[str] = None, db: Session = Depends(get_db)):
 
 @router.get("/common/dict/role")
 def list_role_dict(db: Session = Depends(get_db)):
-    rows = db.execute(select(SysRole.id, SysRole.name, SysRole.code).order_by(SysRole.sort.asc(), SysRole.id.asc())).all()
+    rows = db.execute(
+        select(SysRole.id, SysRole.name, SysRole.code).order_by(SysRole.sort.asc(), SysRole.id.asc())
+    ).all()
     out = [{"label": r.name, "value": int(r.id), "extra": r.code} for r in rows]
     return ok(out)
 

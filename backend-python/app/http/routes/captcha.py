@@ -25,7 +25,6 @@ from app.http.deps import get_db
 from app.http.response import fail, ok
 from app.runtime import redis_client, settings
 
-
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -41,15 +40,13 @@ def _getenv_int(key: str, default: int) -> int:
         return default
 
 
-def _is_option_enabled(db: Session, code: str) -> bool:
+def _is_option_enabled(db: Optional[Session], code: str) -> bool:
     code = (code or "").strip()
     if code == "":
         return False
-    stmt = (
-        select(func.coalesce(SysOption.value, SysOption.default_value, ""))
-        .where(SysOption.code == code)
-        .limit(1)
-    )
+    if db is None:
+        return False
+    stmt = select(func.coalesce(SysOption.value, SysOption.default_value, "")).where(SysOption.code == code).limit(1)
     val = db.execute(stmt).scalar_one_or_none()
     if val is None:
         return False
@@ -59,7 +56,7 @@ def _is_option_enabled(db: Session, code: str) -> bool:
 
 def _gen_code(length: int, source: str) -> str:
     source = source.strip() or "23456789"
-    return "".join(random.choice(source) for _ in range(length))
+    return "".join(random.choice(source) for _ in range(length))  # nosec B311
 
 
 def _try_load_captcha_truetype_font(size: int) -> Optional[ImageFont.ImageFont]:
@@ -194,7 +191,7 @@ def _render_png_base64(code: str, width: int, height: int) -> str:
 
 
 @router.get("/captcha/image")
-def get_image_captcha(db: Session = Depends(get_db)):
+def get_image_captcha(db: Optional[Session] = Depends(get_db)):
     expiration_minutes = 2
     expire_time_ms = int((time.time() + expiration_minutes * 60) * 1000)
 

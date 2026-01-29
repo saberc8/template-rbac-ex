@@ -23,4 +23,3 @@ def ok(data: Any, message: str = "") -> ReactAPIResponse:
 
 def fail(message: str, status: int = ResultStatus.ERROR, data: Any = None) -> ReactAPIResponse:
     return {"status": int(status), "message": message or "", "data": data}
-

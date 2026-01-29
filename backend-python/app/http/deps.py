@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Generator
+from collections.abc import Generator
 from typing import Optional
 
 from fastapi import Request
 from sqlalchemy.orm import Session
 
-from app.http.response import AppError
 from app.db.runtime import SessionLocal
+from app.http.response import AppError
 
 
 def get_db() -> Generator[Session, None, None]:

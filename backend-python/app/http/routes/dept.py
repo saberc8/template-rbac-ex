@@ -19,7 +19,6 @@ from app.http.deps import get_db, require_user_id
 from app.http.response import fail, ok
 from app.http.utils import format_time_rfc3339
 
-
 router = APIRouter()
 
 
@@ -349,7 +348,9 @@ def delete_dept(
     if not ids:
         return fail("400", "参数错误")
 
-    sys_row = db.execute(select(SysDept.name).where(SysDept.id.in_(ids)).where(SysDept.is_system.is_(True)).limit(1)).first()
+    sys_row = db.execute(
+        select(SysDept.name).where(SysDept.id.in_(ids)).where(SysDept.is_system.is_(True)).limit(1)
+    ).first()
     if sys_row is not None:
         return fail("400", f"所选部门 [{sys_row[0]}] 是系统内置部门，不允许删除")
 
@@ -391,7 +392,9 @@ def export_dept(request: Request, db: Session = Depends(get_db)):
 
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow(["ID", "名称", "上级部门ID", "状态", "排序", "系统内置", "描述", "创建时间", "创建人", "修改时间", "修改人"])
+    writer.writerow(
+        ["ID", "名称", "上级部门ID", "状态", "排序", "系统内置", "描述", "创建时间", "创建人", "修改时间", "修改人"]
+    )
     for row in flat_rows:
         writer.writerow(
             [

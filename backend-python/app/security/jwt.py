@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-import re
 from typing import Any
 
 import jwt
-
 
 _bearer_re = re.compile(r"^bearer\s+", re.IGNORECASE)
 
@@ -42,4 +41,3 @@ class TokenService:
         if uid <= 0:
             raise ValueError("invalid token")
         return Claims(user_id=uid)
-

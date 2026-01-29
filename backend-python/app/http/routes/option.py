@@ -15,7 +15,6 @@ from app.http.deps import get_db, require_user_id
 from app.http.response import fail, ok
 from app.http.utils import get_query_list
 
-
 router = APIRouter()
 
 

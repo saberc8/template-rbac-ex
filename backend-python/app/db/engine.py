@@ -18,4 +18,3 @@ def create_db_engine(settings: Settings):
 
 def create_session_factory(engine):
     return sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
-

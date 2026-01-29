@@ -9,7 +9,6 @@ from app.http.deps import get_db, require_user_id
 from app.http.response import fail, ok
 from app.services import user_query
 
-
 router = APIRouter()
 
 
@@ -39,4 +38,3 @@ def list_user_route(
     except Exception:
         return fail("500", "服务未初始化")
     return ok(tree)
-

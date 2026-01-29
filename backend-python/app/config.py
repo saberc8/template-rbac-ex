@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import os
 import pathlib
+from dataclasses import dataclass
 from typing import Optional
 
 from dotenv import load_dotenv

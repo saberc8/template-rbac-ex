@@ -17,4 +17,3 @@ from app.db.models.sys_role_menu import SysRoleMenu  # noqa: F401
 from app.db.models.sys_storage import SysStorage  # noqa: F401
 from app.db.models.sys_user import SysUser  # noqa: F401
 from app.db.models.sys_user_role import SysUserRole  # noqa: F401
-

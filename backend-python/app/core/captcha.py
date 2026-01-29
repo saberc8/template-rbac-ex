@@ -6,6 +6,7 @@ import threading
 import time
 from typing import Optional
 
+
 def build_redis_key(uuid: str) -> str:
     return f"CAPTCHA:{uuid}"
 

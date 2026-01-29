@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import os
-from typing import Generator
+from collections.abc import Generator
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 
 @pytest.fixture()
@@ -15,8 +15,8 @@ def client() -> Generator[TestClient, None, None]:
     os.environ.setdefault("APP_ENV", "production")
     os.environ.setdefault("AUTH_JWT_SECRET", "test-secret")
 
-    from app.db.base import Base
     from app.db import models as _  # noqa: F401
+    from app.db.base import Base
     from app.http.deps import get_db
     from app.main import create_app
 

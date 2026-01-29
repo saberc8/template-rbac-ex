@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Generator
 from datetime import datetime
-from typing import Generator
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,8 +16,8 @@ def client(tmp_path) -> Generator[TestClient, None, None]:
     os.environ.setdefault("APP_ENV", "production")
     os.environ.setdefault("AUTH_JWT_SECRET", "test-secret")
 
-    from app.db.base import Base
     from app.db import models as _  # noqa: F401
+    from app.db.base import Base
     from app.http.deps import get_db, require_user_id
     from app.main import create_app
 

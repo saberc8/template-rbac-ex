@@ -18,4 +18,3 @@ class SysRoleDept(Base):
         Index("idx_role_dept_role_id", "role_id"),
         Index("idx_role_dept_dept_id", "dept_id"),
     )
-

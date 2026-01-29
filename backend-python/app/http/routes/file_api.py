@@ -6,7 +6,7 @@ import hashlib
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Body, Depends, File, Form, Request, UploadFile
@@ -26,7 +26,6 @@ from app.http.utils import (
     format_time,
     normalize_parent_path,
 )
-
 
 router = APIRouter()
 
@@ -132,10 +131,10 @@ def _delete_from_local(storage: Optional[SysStorage], full_path: str) -> None:
     root_dir = _local_root_dir(storage)
     relative = full_path.lstrip("/")
     abs_path = Path(root_dir) / Path(relative)
-    try:
+    import contextlib
+
+    with contextlib.suppress(Exception):
         abs_path.unlink()
-    except Exception:
-        pass
 
 
 def _delete_from_minio(storage: SysStorage, full_path: str) -> None:
@@ -618,7 +617,9 @@ def delete_file(
 
     targets: list[tuple[str, int]] = []
     for fid in ids:
-        row = db.execute(select(SysFile.id, SysFile.name, SysFile.path, SysFile.type, SysFile.storage_id).where(SysFile.id == fid)).first()
+        row = db.execute(
+            select(SysFile.id, SysFile.name, SysFile.path, SysFile.type, SysFile.storage_id).where(SysFile.id == fid)
+        ).first()
         if row is None:
             continue
         file_type = int(row[3] or 0)

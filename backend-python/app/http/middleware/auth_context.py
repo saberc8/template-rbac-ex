@@ -18,4 +18,3 @@ class AuthContextMiddleware(BaseHTTPMiddleware):
             except Exception:
                 pass
         return await call_next(request)
-
