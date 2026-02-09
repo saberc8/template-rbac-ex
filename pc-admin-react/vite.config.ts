@@ -33,7 +33,7 @@ export default defineConfig(({ mode }) => {
 		server: {
 			open: true,
 			host: true,
-			port: 3001,
+			port: 14397,
 			proxy: {
 				"/api": {
 					target: apiProxyTarget,
