@@ -159,6 +159,22 @@
 				"500": "500"
 			}
 		},
+		"page": {
+			"systemPermission": {
+				"searchPlaceholder": "搜索 标题/路径/权限标识",
+				"columns": {
+					"title": "标题",
+					"type": "类型",
+					"path": "路径",
+					"permission": "权限标识",
+					"status": "状态"
+				},
+				"status": {
+					"enable": "启用",
+					"disable": "禁用"
+				}
+			}
+		},
 		"docs": "文档",
 		"settings": {
 			"title": "设置",

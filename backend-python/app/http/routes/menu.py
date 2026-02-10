@@ -16,6 +16,7 @@ from app.db.models.sys_user import SysUser
 from app.http.deps import get_db, require_user_id
 from app.http.response import fail, ok
 from app.http.utils import format_time
+from app.runtime import settings as runtime_settings
 
 router = APIRouter()
 
@@ -26,6 +27,19 @@ def _has_frontend_column(db: Session) -> bool:
     except Exception:
         return False
     return any(str(c.get("name") or "") == "frontend" for c in cols)
+
+
+def _active_frontend(db: Session) -> Optional[str]:
+    """根据运行配置选择当前菜单数据集。
+
+    - 未升级到 frontend 字段时：返回 None，表示不做过滤
+    - 已升级：按 ADMIN_FRONTEND_TYPE 选择 react/vue3
+    """
+
+    if not _has_frontend_column(db):
+        return None
+    v = str(runtime_settings.admin_frontend_type or "vue3").strip().lower()
+    return v if v in {"vue3", "react"} else "vue3"
 
 
 def _build_menu_for_save(menu_id: int, body: dict) -> tuple[Optional[dict], Optional[tuple[str, str]]]:
@@ -147,8 +161,9 @@ def list_menu_tree(db: Session = Depends(get_db)):
         .join(uu, uu.id == SysMenu.update_user, isouter=True)
         .order_by(SysMenu.sort.asc(), SysMenu.id.asc())
     )
-    if _has_frontend_column(db):
-        stmt = stmt.where(SysMenu.frontend == "vue3")
+    frontend = _active_frontend(db)
+    if frontend is not None:
+        stmt = stmt.where(SysMenu.frontend == frontend)
     rows = db.execute(stmt).all()
 
     flat: list[dict] = []
@@ -239,8 +254,9 @@ def get_menu(id: int, db: Session = Depends(get_db)):
         .where(SysMenu.id == id)
         .limit(1)
     )
-    if _has_frontend_column(db):
-        stmt = stmt.where(SysMenu.frontend == "vue3")
+    frontend = _active_frontend(db)
+    if frontend is not None:
+        stmt = stmt.where(SysMenu.frontend == frontend)
     row = db.execute(stmt).first()
     if row is None:
         return fail("404", "菜单不存在")
@@ -292,26 +308,30 @@ def create_menu(
 
     now = datetime.now()
     try:
+        frontend = _active_frontend(db)
+        menu_kwargs = {
+            "id": mid,
+            "title": payload["title"],
+            "parent_id": payload["parent_id"],
+            "type": payload["type"],
+            "path": payload["path"],
+            "name": payload["name"],
+            "component": payload["component"],
+            "redirect": payload["redirect"],
+            "icon": payload["icon"],
+            "is_external": payload["is_external"],
+            "is_cache": payload["is_cache"],
+            "is_hidden": payload["is_hidden"],
+            "permission": payload["permission"],
+            "sort": payload["sort"],
+            "status": payload["status"],
+            "create_user": int(user_id),
+            "create_time": now,
+        }
+        if frontend is not None:
+            menu_kwargs["frontend"] = frontend
         db.add(
-            SysMenu(
-                id=mid,
-                title=payload["title"],
-                parent_id=payload["parent_id"],
-                type=payload["type"],
-                path=payload["path"],
-                name=payload["name"],
-                component=payload["component"],
-                redirect=payload["redirect"],
-                icon=payload["icon"],
-                is_external=payload["is_external"],
-                is_cache=payload["is_cache"],
-                is_hidden=payload["is_hidden"],
-                permission=payload["permission"],
-                sort=payload["sort"],
-                status=payload["status"],
-                create_user=int(user_id),
-                create_time=now,
-            )
+            SysMenu(**menu_kwargs)
         )
         db.commit()
     except Exception:
@@ -340,8 +360,9 @@ def update_menu(
     now = datetime.now()
     try:
         stmt = update(SysMenu).where(SysMenu.id == int(id))
-        if _has_frontend_column(db):
-            stmt = stmt.where(SysMenu.frontend == "vue3")
+        frontend = _active_frontend(db)
+        if frontend is not None:
+            stmt = stmt.where(SysMenu.frontend == frontend)
         db.execute(
             stmt.values(
                 parent_id=payload["parent_id"],
@@ -393,8 +414,9 @@ def delete_menu(
         return fail("400", "ID 列表不能为空")
 
     stmt = select(SysMenu.id, SysMenu.parent_id)
-    if _has_frontend_column(db):
-        stmt = stmt.where(SysMenu.frontend == "vue3")
+    frontend = _active_frontend(db)
+    if frontend is not None:
+        stmt = stmt.where(SysMenu.frontend == frontend)
     rows = db.execute(stmt).all()
     children_of: dict[int, list[int]] = {}
     allowed_ids: set[int] = set()
@@ -427,8 +449,8 @@ def delete_menu(
     try:
         db.execute(delete(SysRoleMenu).where(SysRoleMenu.menu_id.in_(all_ids)))
         stmt = delete(SysMenu).where(SysMenu.id.in_(all_ids))
-        if _has_frontend_column(db):
-            stmt = stmt.where(SysMenu.frontend == "vue3")
+        if frontend is not None:
+            stmt = stmt.where(SysMenu.frontend == frontend)
         db.execute(stmt)
         db.commit()
     except Exception:

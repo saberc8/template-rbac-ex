@@ -145,6 +145,22 @@
 			},
 			"workbench": "Workbench"
 		},
+		"page": {
+			"systemPermission": {
+				"searchPlaceholder": "Search title/path/permission",
+				"columns": {
+					"title": "Title",
+					"type": "Type",
+					"path": "Path",
+					"permission": "Permission",
+					"status": "Status"
+				},
+				"status": {
+					"enable": "Enable",
+					"disable": "Disable"
+				}
+			}
+		},
 		"settings": {
 			"accordion": "Accordion Menu",
 			"breadcrumb": "BreadCrumb",

@@ -12,7 +12,7 @@ const getRoutes = (): RouteObject[] => {
 	return getBackendDashboardRoutes();
 };
 
-export const dashboardRoutes: RouteObject[] = [
+export const buildDashboardRoutes = (): RouteObject[] => [
 	{
 		element: (
 			<LoginAuthGuard>

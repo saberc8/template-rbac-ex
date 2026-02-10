@@ -46,6 +46,8 @@ class Settings:
     admin_frontend_type: str
     file_storage_dir: str
     auto_migrate: bool
+    db_seed_mode: str
+    db_seed_force: bool
 
     auth_jwt_secret: str
 
@@ -109,6 +111,14 @@ def load_settings() -> Settings:
     if not ok:
         auto_migrate = app_env not in {"prod", "production"}
 
+    seed_mode = (os.getenv("DB_SEED_MODE") or "").strip().lower().replace("_", "-") or "all"
+    if seed_mode not in {"all", "base", "react-menu", "none"}:
+        raise RuntimeError("invalid DB_SEED_MODE: must be 'all' | 'base' | 'react-menu' | 'none'")
+    seed_force_raw = os.getenv("DB_SEED_FORCE")
+    seed_force, ok = _parse_bool(seed_force_raw)
+    if not ok:
+        seed_force = False
+
     db_dialect = _getenv_default("DB_DIALECT", "postgres").strip() or "postgres"
     db_host = _getenv_default("DB_HOST", "127.0.0.1").strip() or "127.0.0.1"
     db_port = int(_getenv_default("DB_PORT", "5432"))
@@ -128,6 +138,8 @@ def load_settings() -> Settings:
         admin_frontend_type=admin_frontend_type,
         file_storage_dir=file_storage_dir,
         auto_migrate=auto_migrate,
+        db_seed_mode=seed_mode,
+        db_seed_force=seed_force,
         auth_jwt_secret=auth_jwt_secret,
         db_dialect=db_dialect,
         db_host=db_host,

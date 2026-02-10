@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 from pathlib import Path
@@ -27,6 +28,35 @@ def _parse_bool(value: Optional[str]) -> tuple[bool, bool]:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(prog="db-migrate", add_help=True)
+    parser.add_argument(
+        "--seed",
+        choices=["all", "base", "react-menu", "none"],
+        default=(os.getenv("DB_SEED_MODE") or "all").strip().lower().replace("_", "-") or "all",
+        help="控制 seed 范围：all/base/react-menu/none（默认读 DB_SEED_MODE 或 all）",
+    )
+    seed_force_env, ok = _parse_bool(os.getenv("DB_SEED_FORCE"))
+    if not ok:
+        seed_force_env = False
+    parser.add_argument(
+        "--force",
+        dest="force",
+        action="store_true",
+        default=seed_force_env,
+        help="强制同步菜单快照到数据库（仅更新/插入，不删除；默认读 DB_SEED_FORCE）",
+    )
+    parser.add_argument(
+        "--no-force",
+        dest="force",
+        action="store_false",
+        help="显式关闭 --force（覆盖 DB_SEED_FORCE）",
+    )
+    args = parser.parse_args()
+
+    # 让 alembic migration 内部调用 seed_from_go_migrate() 时也能读取到本次选择
+    os.environ["DB_SEED_MODE"] = str(args.seed)
+    os.environ["DB_SEED_FORCE"] = "1" if bool(args.force) else "0"
+
     try:
         use_alembic, ok = _parse_bool(os.getenv("DB_USE_ALEMBIC"))
         if not ok:
@@ -76,16 +106,19 @@ def main() -> int:
                     # 同时用 ORM create_all 补齐“被手工删表/部分缺失”的表结构，降低迁移失败概率。
                     sys.stderr.write("db-migrate: stamping alembic revision to 202601212401\n")
                     Base.metadata.create_all(bind=engine)
-                    seed_from_go_migrate(engine)
+                    seed_from_go_migrate(engine, seed_mode=str(args.seed), force=bool(args.force))
                     command.stamp(cfg, "202601212401")
 
                 command.upgrade(cfg, "head")
+
+                # 即使没有新的 migration，也允许用户显式选择 seed/sync（例如同步 React 菜单快照）。
+                seed_from_go_migrate(engine, seed_mode=str(args.seed), force=bool(args.force))
             else:
                 Base.metadata.create_all(bind=engine)
-                seed_from_go_migrate(engine)
+                seed_from_go_migrate(engine, seed_mode=str(args.seed), force=bool(args.force))
         else:
             Base.metadata.create_all(bind=engine)
-            seed_from_go_migrate(engine)
+            seed_from_go_migrate(engine, seed_mode=str(args.seed), force=bool(args.force))
     except Exception as exc:
         sys.stderr.write(f"auto-migrate failed: {exc}\n")
         return 1

@@ -50,7 +50,7 @@ def create_app() -> FastAPI:
     async def _lifespan(_app: FastAPI):
         if settings.auto_migrate:
             Base.metadata.create_all(bind=engine)
-            seed_from_go_migrate(engine)
+            seed_from_go_migrate(engine, seed_mode=settings.db_seed_mode, force=settings.db_seed_force)
         yield
 
     app = FastAPI(title="backend-python", docs_url="/docs", openapi_url="/openapi.json", lifespan=_lifespan)

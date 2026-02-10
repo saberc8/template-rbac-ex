@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from typing import Union
 
 from sqlalchemy import inspect, text
@@ -21,6 +22,19 @@ from sqlalchemy.engine import Connection, Engine
 
 from app.db.seed_data import SEED_SQL_BLOCKS
 from app.db.seed_react_menu_data import REACT_MENU_FLAT
+
+
+def _normalize_seed_mode(value: str) -> str:
+    v = (value or "").strip().lower().replace("_", "-")
+    if v in {"", "all"}:
+        return "all"
+    if v in {"none", "no", "false", "0"}:
+        return "none"
+    if v in {"base"}:
+        return "base"
+    if v in {"react", "react-menu", "menu", "reactmenu"}:
+        return "react-menu"
+    raise ValueError("invalid seed mode: must be one of 'all' | 'base' | 'react-menu' | 'none'")
 
 
 def _split_sql(sql: str) -> list[str]:
@@ -96,7 +110,7 @@ CREATE INDEX IF NOT EXISTS idx_client_auth_type_gin
         )
 
 
-def _seed_react_menu(conn: Connection) -> None:
+def _seed_react_menu(conn: Connection, *, force: bool) -> None:
     # 仅当 schema 已具备 frontend 字段时才启用该 seed（避免老库/未迁移时报错）。
     if not _has_column(conn, "sys_menu", "frontend"):
         return
@@ -123,7 +137,10 @@ def _seed_react_menu(conn: Connection) -> None:
         pid = _pid(item.get("parentId") or "")
         title = str(item.get("name") or "").strip() or sid
         code = str(item.get("code") or "").strip() or sid
-        typ = int(item.get("type") or 2)
+        if "type" in item and item.get("type") is not None:
+            typ = int(item.get("type"))
+        else:
+            typ = 2
 
         path = str(item.get("path") or "").strip() or None
         component = str(item.get("component") or "").strip() or None
@@ -134,9 +151,24 @@ def _seed_react_menu(conn: Connection) -> None:
         # React 菜单的“权限码”：只给 MENU(2) 写入，避免目录/分组被误判为权限点
         perm = code if typ == 2 else None
 
-        conn.execute(
-            text(
-                """
+        params = {
+            "id": mid,
+            "title": title,
+            "parent_id": pid,
+            "type": typ,
+            "path": path,
+            "name": code[:50],
+            "component": component,
+            "icon": icon,
+            "permission": perm,
+            "sort": idx,
+        }
+
+        exists = conn.execute(text("SELECT 1 FROM sys_menu WHERE id = :id LIMIT 1"), {"id": mid}).first() is not None
+        if not exists:
+            conn.execute(
+                text(
+                    """
 INSERT INTO sys_menu
     (id, title, parent_id, type, path, name, component, redirect, icon,
      is_external, is_cache, is_hidden, permission, sort, status,
@@ -147,20 +179,32 @@ SELECT
     1, NOW(), 'react'
 WHERE NOT EXISTS (SELECT 1 FROM sys_menu WHERE id = :id);
 """
-            ),
-            {
-                "id": mid,
-                "title": title,
-                "parent_id": pid,
-                "type": typ,
-                "path": path,
-                "name": code[:50],
-                "component": component,
-                "icon": icon,
-                "permission": perm,
-                "sort": idx,
-            },
-        )
+                ),
+                params,
+            )
+        elif force:
+            # 强制同步：更新静态快照字段，但不执行删除（避免破坏性操作）。
+            conn.execute(
+                text(
+                    """
+UPDATE sys_menu
+SET
+    title = :title,
+    parent_id = :parent_id,
+    type = :type,
+    path = :path,
+    name = :name,
+    component = :component,
+    icon = :icon,
+    permission = :permission,
+    sort = :sort,
+    status = 1,
+    frontend = 'react'
+WHERE id = :id;
+"""
+                ),
+                params,
+            )
 
         # role-menu：默认给 admin(1) 绑定所有 react 菜单
         conn.execute(
@@ -175,12 +219,36 @@ WHERE NOT EXISTS (SELECT 1 FROM sys_role_menu WHERE role_id = 1 AND menu_id = :m
         )
 
 
-def seed_from_go_migrate(bind: Union[Engine, Connection]) -> None:
+def _parse_bool(value: str | None) -> tuple[bool, bool]:
+    if value is None:
+        return False, False
+    v = value.strip().lower()
+    if v in {"1", "true", "yes", "y", "on"}:
+        return True, True
+    if v in {"0", "false", "no", "n", "off"}:
+        return False, True
+    return False, False
+
+
+def seed_from_go_migrate(
+    bind: Union[Engine, Connection], *, seed_mode: str | None = None, force: bool | None = None
+) -> None:
     """兼容历史迁移脚本的入口；实现已切换为 Python 内置 seed。"""
 
+    if seed_mode is None:
+        seed_mode = os.getenv("DB_SEED_MODE") or "all"
+    if force is None:
+        force, ok = _parse_bool(os.getenv("DB_SEED_FORCE"))
+        if not ok:
+            force = False
+
+    mode = _normalize_seed_mode(seed_mode)
+
     def _apply(conn: Connection) -> None:
-        _seed_base(conn)
-        _seed_react_menu(conn)
+        if mode in {"all", "base"}:
+            _seed_base(conn)
+        if mode in {"all", "react-menu"}:
+            _seed_react_menu(conn, force=bool(force))
 
     if isinstance(bind, Engine):
         with bind.begin() as conn:

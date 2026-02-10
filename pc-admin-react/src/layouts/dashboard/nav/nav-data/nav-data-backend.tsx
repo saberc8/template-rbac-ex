@@ -29,4 +29,7 @@ const convert = (menuTree: MenuTree[]): NavProps["data"] => {
 	}));
 };
 
-export const backendNavData: NavProps["data"] = convert(convertFlatToTree(DB_MENU));
+export const buildBackendNavData = (menuTree: MenuTree[]): NavProps["data"] => {
+	const tree = menuTree && menuTree.length > 0 ? menuTree : convertFlatToTree(DB_MENU);
+	return convert(tree);
+};

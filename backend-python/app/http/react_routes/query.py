@@ -21,6 +21,10 @@ def _has_frontend_column(db: Session) -> bool:
     return any(str(c.get("name") or "") == "frontend" for c in cols)
 
 
+def has_frontend_column(db: Session) -> bool:
+    return _has_frontend_column(db)
+
+
 def list_user_roles(db: Session, user_id: int) -> tuple[list[dict], list[int]]:
     rows = db.execute(
         select(SysRole.id, SysRole.code)

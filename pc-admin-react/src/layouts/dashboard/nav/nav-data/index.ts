@@ -1,12 +1,11 @@
 import type { NavItemDataProps } from "@/components/nav/types";
 import { GLOBAL_CONFIG } from "@/global-config";
+import { useMenuStore } from "@/store/menuStore";
 import { useUserPermissions } from "@/store/userStore";
 import { checkAny } from "@/utils";
 import { useMemo } from "react";
-import { backendNavData } from "./nav-data-backend";
+import { buildBackendNavData } from "./nav-data-backend";
 import { frontendNavData } from "./nav-data-frontend";
-
-const navData = GLOBAL_CONFIG.routerMode === "backend" ? backendNavData : frontendNavData;
 
 /**
  * 递归处理导航数据，过滤掉没有权限的项目
@@ -14,24 +13,21 @@ const navData = GLOBAL_CONFIG.routerMode === "backend" ? backendNavData : fronte
  * @param permissions 权限列表
  * @returns 过滤后的导航项目数组
  */
-const filterItems = (items: NavItemDataProps[], permissions: string[]) => {
-	return items.filter((item) => {
-		// 检查当前项目是否有权限
+const filterItems = (items: NavItemDataProps[], permissions: string[]): NavItemDataProps[] => {
+	const out: NavItemDataProps[] = [];
+	for (const item of items) {
+		const children = item.children?.length ? filterItems(item.children, permissions) : undefined;
 		const hasPermission = item.auth ? checkAny(item.auth, permissions) : true;
 
-		// 如果有子项目，递归处理
-		if (item.children?.length) {
-			const filteredChildren = filterItems(item.children, permissions);
-			// 如果子项目都被过滤掉了，则过滤掉当前项目
-			if (filteredChildren.length === 0) {
-				return false;
-			}
-			// 更新子项目
-			item.children = filteredChildren;
-		}
+		// 没权限且子项也都被过滤掉，则丢弃
+		if (!hasPermission && (!children || children.length === 0)) continue;
 
-		return hasPermission;
-	});
+		out.push({
+			...item,
+			children,
+		});
+	}
+	return out;
 };
 
 /**
@@ -41,7 +37,10 @@ const filterItems = (items: NavItemDataProps[], permissions: string[]) => {
  * @returns 过滤后的导航数据
  */
 const filterNavData = (permissions: string[]) => {
-	return navData
+	const menuTree = useMenuStore.getState().backendMenuTree;
+	const rawNavData = GLOBAL_CONFIG.routerMode === "backend" ? buildBackendNavData(menuTree) : frontendNavData;
+
+	return rawNavData
 		.map((group) => {
 			// 过滤组内的项目
 			const filteredItems = filterItems(group.items, permissions);

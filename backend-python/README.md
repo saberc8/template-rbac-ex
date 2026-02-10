@@ -35,6 +35,10 @@ cp .env.example .env
 python -m app.cmd.migrate
 ```
 
+可选参数（用于初始化/同步 React 动态菜单 `/menu`）：
+- 全量初始化：`python -m app.cmd.migrate --seed all`
+- 仅同步 React 菜单：`python -m app.cmd.migrate --seed react-menu --force`
+
 ## 4. 启动服务
 
 ```bash

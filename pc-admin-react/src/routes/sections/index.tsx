@@ -1,13 +1,15 @@
 import { Navigate, type RouteObject } from "react-router";
 import { authRoutes } from "./auth";
-import { dashboardRoutes } from "./dashboard";
+import { buildDashboardRoutes } from "./dashboard";
 import { mainRoutes } from "./main";
 
-export const routesSection: RouteObject[] = [
+export const buildRoutesSection = (): RouteObject[] => [
 	// Auth
 	...authRoutes,
+	// Alias
+	{ path: "login", element: <Navigate to="/auth/login" replace /> },
 	// Dashboard
-	...dashboardRoutes,
+	...buildDashboardRoutes(),
 	// Main
 	...mainRoutes,
 	// No Match
