@@ -73,49 +73,6 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 				{ path: "500", element: Component("/pages/sys/error/Page500") },
 			],
 		},
-		{
-			path: "menu_level",
-			children: [
-				{ index: true, element: <Navigate to="1a" replace /> },
-				{ path: "1a", element: Component("/pages/menu-level/menu-level-1a") },
-				{
-					path: "1b",
-					children: [
-						{ index: true, element: <Navigate to="2a" replace /> },
-						{ path: "2a", element: Component("/pages/menu-level/menu-level-1b/menu-level-2a") },
-						{
-							path: "2b",
-							children: [
-								{ index: true, element: <Navigate to="3a" replace /> },
-								{ path: "3a", element: Component("/pages/menu-level/menu-level-1b/menu-level-2b/menu-level-3a") },
-								{ path: "3b", element: Component("/pages/menu-level/menu-level-1b/menu-level-2b/menu-level-3b") },
-							],
-						},
-					],
-				},
-			],
-		},
-		{
-			path: "link",
-			children: [
-				{ index: true, element: <Navigate to="iframe" replace /> },
-				{ path: "iframe", element: Component("/pages/sys/others/link/iframe", { src: "https://ant.design/index-cn" }) },
-				{
-					path: "external-link",
-					element: Component("/pages/sys/others/link/external-link", { src: "https://ant.design/index-cn" }),
-				},
-			],
-		},
-		{
-			path: "permission",
-			children: [
-				{ index: true, element: Component("/pages/sys/others/permission") },
-				{ path: "page-test", element: Component("/pages/sys/others/permission/page-test") },
-			],
-		},
-		{ path: "calendar", element: Component("/pages/sys/others/calendar") },
-		{ path: "kanban", element: Component("/pages/sys/others/kanban") },
-		{ path: "blank", element: Component("/pages/sys/others/blank") },
 	];
 	return frontendDashboardRoutes;
 }

@@ -101,7 +101,7 @@
 			"label": "Item Label",
 			"permission": "Permission",
 			"permission.page_test": "Page Permission Test",
-			"management": "Management",
+				"management": "System Management",
 			"markdown": "Markdown",
 			"menulevel": {
 				"1a": "Menu Level 1a",
@@ -117,24 +117,24 @@
 				"index": "Menu Level"
 			},
 			"scroll": "Scroll",
-			"system": {
-				"index": "System Management",
-				"client": "Client",
-				"organization": "Department",
-				"option": "Option",
-				"file": "File",
-				"permission": "Permission",
-				"role": "Role",
-				"storage": "Storage",
-				"dict": "Dictionary",
-				"user": "User",
-				"user_detail": "User Detail"
-			},
-			"monitor": {
-				"index": "Monitor",
-				"online": "Online Users",
-				"log": "System Logs"
-			},
+				"system": {
+					"index": "System Management",
+					"client": "App Mgmt",
+					"organization": "Dept Mgmt",
+					"option": "Option",
+					"file": "File Mgmt",
+					"permission": "Perm Mgmt",
+					"role": "Role Mgmt",
+					"storage": "Storage Mgmt",
+					"dict": "Dictionary",
+					"user": "User Mgmt",
+					"user_detail": "User Detail"
+				},
+				"monitor": {
+					"index": "Monitor Mgmt",
+					"online": "Online Users",
+					"log": "System Logs"
+				},
 			"toast": "Toast",
 			"token_expired": "Token Expired",
 			"upload": "Upload",

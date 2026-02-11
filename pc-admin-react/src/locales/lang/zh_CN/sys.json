@@ -89,32 +89,32 @@
 			"others": "其他",
 			"ui": "UI",
 			"custom_ui_components": "自定义UI组件",
-			"workbench": "工作台",
-			"analysis": "分析",
-			"management": "管理",
-			"user": {
-				"index": "用户",
-				"profile": "个人资料",
-				"account": "账户"
-			},
-			"system": {
-				"index": "系统管理",
-				"client": "客户端",
-				"organization": "部门",
-				"option": "系统配置",
-				"file": "文件",
-				"permission": "权限",
-				"role": "角色",
-				"storage": "存储",
-				"dict": "字典配置",
-				"user": "用户",
-				"user_detail": "用户详情"
-			},
-			"monitor": {
-				"index": "监控",
-				"online": "在线用户",
-				"log": "系统日志"
-			},
+				"workbench": "工作台",
+				"analysis": "分析",
+				"management": "系统管理",
+				"user": {
+					"index": "用户",
+					"profile": "个人资料",
+					"account": "账户"
+				},
+				"system": {
+					"index": "系统管理",
+					"client": "应用管理",
+					"organization": "部门管理",
+					"option": "系统配置",
+					"file": "文件管理",
+					"permission": "权限管理",
+					"role": "角色管理",
+					"storage": "存储管理",
+					"dict": "字典配置",
+					"user": "用户管理",
+					"user_detail": "用户详情"
+				},
+				"monitor": {
+					"index": "监控管理",
+					"online": "在线用户",
+					"log": "系统日志"
+				},
 			"blog": "博客",
 			"components": "组件",
 			"icon": "图标",

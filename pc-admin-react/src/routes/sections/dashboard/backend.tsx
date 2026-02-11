@@ -101,6 +101,7 @@ export function getBackendDashboardRoutes() {
 	// 这里补充静态路由，避免从列表页跳转后命中 404。
 	const extraRoutes: RouteObject[] = [
 		{ path: "management/system/user/:id", element: Component("/pages/management/system/user/detail") },
+		{ path: "management/user/profile", element: Component("/pages/management/user/profile") },
 	];
 
 	for (const r of extraRoutes) {
