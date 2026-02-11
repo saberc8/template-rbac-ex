@@ -31,6 +31,15 @@ export default function MenuPage() {
 	const permissionCodes = useMemo(() => permissions.map((p) => p.code), [permissions]);
 	const permissionCodeSet = useMemo(() => new Set(permissionCodes), [permissionCodes]);
 	const can = useCallback((code: string) => permissionCodeSet.has(code), [permissionCodeSet]);
+	const translateTitle = useCallback(
+		(value: string) => {
+			const raw = String(value || "");
+			if (!raw) return raw;
+			const translated = t(raw);
+			return translated === raw ? raw : translated;
+		},
+		[t],
+	);
 	const [keyword, setKeyword] = useState("");
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [dialogMode, setDialogMode] = useState<"create" | "update">("create");
@@ -70,8 +79,10 @@ export default function MenuPage() {
 		if (!term) return stripEmptyChildren(data || []);
 
 		const filterNode = (node: SysMenuNode): SysMenuNode | null => {
+			const displayTitle = translateTitle(node.title || "");
 			const hit =
 				(node.title || "").toLowerCase().includes(term) ||
+				displayTitle.toLowerCase().includes(term) ||
 				(node.path || "").toLowerCase().includes(term) ||
 				(node.permission || "").toLowerCase().includes(term);
 			const children = (node.children || []).map(filterNode).filter((x): x is SysMenuNode => x != null);
@@ -82,7 +93,7 @@ export default function MenuPage() {
 		};
 
 		return stripEmptyChildren((data || []).map(filterNode).filter((x): x is SysMenuNode => x != null));
-	}, [data, keyword]);
+	}, [data, keyword, translateTitle]);
 
 	type FlatMenuRow = { node: SysMenuNode; depth: number; hasChildren: boolean };
 
@@ -151,7 +162,7 @@ export default function MenuPage() {
 							) : (
 								<div className="h-7 w-7 shrink-0" />
 							)}
-							<span className="truncate">{r.node.title}</span>
+							<span className="truncate">{translateTitle(r.node.title)}</span>
 						</div>
 					);
 				},
@@ -258,7 +269,7 @@ export default function MenuPage() {
 				},
 			},
 		],
-		[can, confirm, deleteMutation, expandedIds, t],
+		[can, confirm, deleteMutation, expandedIds, t, translateTitle],
 	);
 
 	const onSubmitDialog = async (payload: SysMenuSaveReq) => {

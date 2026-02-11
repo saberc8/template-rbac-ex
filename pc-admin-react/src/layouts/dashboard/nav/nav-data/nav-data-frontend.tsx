@@ -3,7 +3,7 @@ import type { NavProps } from "@/components/nav";
 
 export const frontendNavData: NavProps["data"] = [
 	{
-		name: "sys.nav.dashboard",
+		name: undefined,
 		items: [
 			{
 				title: "sys.nav.workbench",
@@ -15,17 +15,15 @@ export const frontendNavData: NavProps["data"] = [
 				path: "/analysis",
 				icon: <Icon icon="local:ic-analysis" size="24" />,
 			},
-		],
-	},
-	{
-		name: "sys.nav.pages",
-		items: [
-			// management
 			{
 				title: "sys.nav.management",
 				path: "/management",
 				icon: <Icon icon="local:ic-management" size="24" />,
 				children: [
+					{
+						title: "sys.nav.user.profile",
+						path: "/management/user/profile",
+					},
 					{
 						title: "sys.nav.system.client",
 						path: "/management/system/client",
@@ -63,22 +61,15 @@ export const frontendNavData: NavProps["data"] = [
 						path: "/management/system/dict",
 					},
 					{
-						title: "sys.nav.monitor.index",
-						path: "/management/monitor",
-						children: [
-							{
-								title: "sys.nav.monitor.online",
-								path: "/management/monitor/online",
-							},
-							{
-								title: "sys.nav.monitor.log",
-								path: "/management/monitor/log",
-							},
-						],
+						title: "sys.nav.monitor.online",
+						path: "/management/monitor/online",
+					},
+					{
+						title: "sys.nav.monitor.log",
+						path: "/management/monitor/log",
 					},
 				],
 			},
-			// errors
 			{
 				title: "sys.nav.error.index",
 				path: "/error",

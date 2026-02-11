@@ -1,17 +1,12 @@
 import type { Menu } from "#/entity";
 import { PermissionType } from "#/enum";
 
-const { GROUP, MENU, CATALOGUE } = PermissionType;
+const { MENU, CATALOGUE } = PermissionType;
 
 export const MENU_SNAPSHOT: Menu[] = [
-	// group
-	{ id: "group_dashboard", name: "sys.nav.dashboard", code: "dashboard", parentId: "", type: GROUP },
-	{ id: "group_pages", name: "sys.nav.pages", code: "pages", parentId: "", type: GROUP },
-
-	// group_dashboard
 	{
 		id: "workbench",
-		parentId: "group_dashboard",
+		parentId: "",
 		name: "sys.nav.workbench",
 		code: "workbench",
 		icon: "local:ic-workbench",
@@ -21,7 +16,7 @@ export const MENU_SNAPSHOT: Menu[] = [
 	},
 	{
 		id: "analysis",
-		parentId: "group_dashboard",
+		parentId: "",
 		name: "sys.nav.analysis",
 		code: "analysis",
 		icon: "local:ic-analysis",
@@ -30,11 +25,9 @@ export const MENU_SNAPSHOT: Menu[] = [
 		component: "/pages/dashboard/analysis",
 	},
 
-	// group_pages
-	// management
 	{
 		id: "management",
-		parentId: "group_pages",
+		parentId: "",
 		name: "sys.nav.management",
 		code: "management",
 		icon: "local:ic-management",
@@ -104,10 +97,27 @@ export const MENU_SNAPSHOT: Menu[] = [
 		path: "/management/system/option",
 		component: "/pages/management/system/option",
 	},
-	// erros
+	{
+		id: "management_monitor_online",
+		parentId: "management",
+		name: "sys.nav.monitor.online",
+		code: "monitor:online",
+		type: MENU,
+		path: "/management/monitor/online",
+		component: "/pages/management/monitor/online",
+	},
+	{
+		id: "management_monitor_log",
+		parentId: "management",
+		name: "sys.nav.monitor.log",
+		code: "monitor:log",
+		type: MENU,
+		path: "/management/monitor/log",
+		component: "/pages/management/monitor/log",
+	},
 	{
 		id: "error",
-		parentId: "group_pages",
+		parentId: "",
 		name: "sys.nav.error.index",
 		code: "error",
 		icon: "bxs:error-alt",

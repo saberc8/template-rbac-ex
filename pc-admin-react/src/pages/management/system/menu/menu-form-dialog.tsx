@@ -1,5 +1,6 @@
 import { TreeSelect } from "antd";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { BasicStatus } from "#/enum";
 import type { SysMenuNode, SysMenuSaveReq } from "@/api/services/systemMenuService";
@@ -51,6 +52,7 @@ export default function MenuFormDialog({
 	onOpenChange: (open: boolean) => void;
 	onSubmit: (payload: SysMenuSaveReq) => Promise<void> | void;
 }) {
+	const { t } = useTranslation();
 	const [type, setType] = useState<number>(2);
 	const [title, setTitle] = useState("");
 	const [parentId, setParentId] = useState<number>(0);
@@ -109,10 +111,19 @@ export default function MenuFormDialog({
 		return collectDescendantIds(node);
 	}, [initial, mode, tree]);
 
+	const translateTitle = useMemo(() => {
+		return (value: string) => {
+			const raw = String(value || "");
+			if (!raw) return raw;
+			const translated = t(raw);
+			return translated === raw ? raw : translated;
+		};
+	}, [t]);
+
 	const treeSelectData = useMemo(() => {
 		const map = (nodes: SysMenuNode[]): any[] =>
 			(nodes || []).map((n) => ({
-				title: n.title,
+				title: translateTitle(n.title),
 				value: n.id,
 				disabled: disabledParentIds.has(Number(n.id)),
 				children: map(n.children || []),
@@ -125,7 +136,7 @@ export default function MenuFormDialog({
 				children: map(tree),
 			},
 		];
-	}, [disabledParentIds, tree]);
+	}, [disabledParentIds, translateTitle, tree]);
 
 	const isButton = type === 3;
 	const isMenu = type === 2;

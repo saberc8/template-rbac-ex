@@ -6,6 +6,7 @@ import { Button } from "@/ui/button";
 import { Switch } from "@/ui/switch";
 import { Tree } from "antd";
 import type { Key } from "react";
+import { useTranslation } from "react-i18next";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -32,6 +33,7 @@ export default function RolePermissionPanel({
 	roleId: number;
 	canSave: boolean;
 }) {
+	const { t } = useTranslation();
 	const queryClient = useQueryClient();
 
 	const { data: menuTree } = useQuery({
@@ -61,7 +63,24 @@ export default function RolePermissionPanel({
 		},
 	});
 
-	const treeData = useMemo(() => stripEmptyChildren(menuTree || []), [menuTree]);
+	const translateTitle = useMemo(() => {
+		return (value: string) => {
+			const raw = String(value || "");
+			if (!raw) return raw;
+			const translated = t(raw);
+			return translated === raw ? raw : translated;
+		};
+	}, [t]);
+
+	const treeData = useMemo(() => {
+		const map = (nodes: SysMenuNode[]): any[] =>
+			(nodes || []).map((n) => ({
+				...n,
+				title: translateTitle(n.title),
+				children: n.children ? map(n.children) : undefined,
+			}));
+		return stripEmptyChildren(map(menuTree || []) as any);
+	}, [menuTree, translateTitle]);
 
 	const onCheck = (checked: any) => {
 		setCheckedKeys(normalizeCheckedKeys(checked));

@@ -166,7 +166,11 @@ def _seed_react_menu(conn: Connection, *, force: bool) -> None:
             "sort": idx,
         }
 
-        exists = conn.execute(text("SELECT 1 FROM sys_menu WHERE id = :id LIMIT 1"), {"id": mid}).first() is not None
+        row = conn.execute(
+            text("SELECT create_user, frontend FROM sys_menu WHERE id = :id LIMIT 1"),
+            {"id": mid},
+        ).first()
+        exists = row is not None
         if not exists:
             conn.execute(
                 text(
@@ -184,11 +188,24 @@ WHERE NOT EXISTS (SELECT 1 FROM sys_menu WHERE id = :id);
                 ),
                 params,
             )
-        elif force:
-            # 强制同步：更新静态快照字段，但不执行删除（避免破坏性操作）。
-            conn.execute(
-                text(
-                    """
+            bind_ok = True
+        else:
+            frontend = str(getattr(row, "frontend", None) or (row[1] if len(row) > 1 else "") or "").strip().lower()
+            try:
+                create_user = int(getattr(row, "create_user", None) or (row[0] if len(row) > 0 else 0) or 0)
+            except Exception:
+                create_user = 0
+
+            # 默认同步：仅更新 seed 生成的 React 菜单（frontend='react' 且 create_user=1），
+            # 避免覆盖人工维护的数据集；如需强制覆盖，请使用 --force。
+            should_update = bool(force) or (frontend == "react" and create_user == 1)
+            bind_ok = should_update
+
+            if should_update:
+                # 同步：更新静态快照字段；删除逻辑仅在 force 分支执行（避免破坏性操作）。
+                conn.execute(
+                    text(
+                        """
 UPDATE sys_menu
 SET
     title = :title,
@@ -204,26 +221,24 @@ SET
     frontend = 'react'
 WHERE id = :id;
 """
-                ),
-                params,
-            )
+                    ),
+                    params,
+                )
 
         # role-menu：默认给 admin(1) 绑定所有 react 菜单
-        conn.execute(
-            text(
-                """
+        if bind_ok:
+            conn.execute(
+                text(
+                    """
 INSERT INTO sys_role_menu (role_id, menu_id)
 SELECT 1, :menu_id
 WHERE NOT EXISTS (SELECT 1 FROM sys_role_menu WHERE role_id = 1 AND menu_id = :menu_id);
 """
-            ),
-            {"menu_id": mid},
-        )
+                ),
+                {"menu_id": mid},
+            )
 
-    if not force:
-        return
-
-    # 强制同步时，清理已从快照移除的 React 菜单（仅删除 seed 生成的 create_user=1 数据）。
+    # 已从快照移除的 React 菜单（仅处理 seed 生成的 create_user=1 数据）。
     stale_rows = conn.execute(
         text(
             """
@@ -237,6 +252,15 @@ WHERE frontend = 'react' AND create_user = 1;
     if not stale_ids:
         return
 
+    if not force:
+        # 非强制同步：仅做“软清理”，避免破坏性删除。
+        # - status=0：从 /menu 查询中移除
+        # - is_hidden=TRUE：避免在管理页误展示
+        for mid in stale_ids:
+            conn.execute(text("UPDATE sys_menu SET status = 0, is_hidden = TRUE WHERE id = :id"), {"id": mid})
+        return
+
+    # 强制同步时，清理已从快照移除的 React 菜单（删除 seed 生成数据）。
     for mid in stale_ids:
         conn.execute(text("DELETE FROM sys_role_menu WHERE menu_id = :id"), {"id": mid})
         conn.execute(text("DELETE FROM sys_menu WHERE id = :id"), {"id": mid})
