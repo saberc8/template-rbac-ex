@@ -7,3 +7,4 @@ export const fakeAvatars = (count: number) => {
 	}
 	return result;
 };
+

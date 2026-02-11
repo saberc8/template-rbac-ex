@@ -53,7 +53,17 @@ def test_routes_match_backend_go() -> None:
     py_routes = _extract_py_routes()
     assert go_routes, "未找到 Go 路由（backend-go/internal/interfaces/http）"
     assert py_routes, "未找到 Python 路由（backend-python/app/http/routes）"
-    assert go_routes == py_routes
+    missing_in_python = go_routes - py_routes
+    assert not missing_in_python, f"Python 缺失 Go 路由: {sorted(missing_in_python)}"
+
+    allowed_extra = {
+        ("PUT", "/user/profile/basic/info"),
+        ("PUT", "/user/profile/phone"),
+        ("PUT", "/user/profile/email"),
+        ("PUT", "/user/profile/password"),
+    }
+    extra_in_python = py_routes - go_routes
+    assert extra_in_python.issubset(allowed_extra), f"Python 多余路由不在白名单: {sorted(extra_in_python)}"
 
 
 def test_response_wrapper_contract() -> None:

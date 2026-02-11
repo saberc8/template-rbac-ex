@@ -34,6 +34,17 @@ axiosInstance.interceptors.request.use(
 		if (token) {
 			config.headers.Authorization = `Bearer ${token}`;
 		}
+		const isFormData = typeof FormData !== "undefined" && config.data instanceof FormData;
+		if (isFormData && config.headers) {
+			const h: any = config.headers as any;
+			if (typeof h.delete === "function") {
+				h.delete("Content-Type");
+				h.delete("content-type");
+			} else {
+				delete h["Content-Type"];
+				delete h["content-type"];
+			}
+		}
 		return config;
 	},
 	(error) => Promise.reject(error),

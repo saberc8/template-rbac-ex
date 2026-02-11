@@ -15,8 +15,33 @@ type UserStore = {
 
 	actions: {
 		setUserInfo: (userInfo: UserInfo) => void;
+		updateUserInfo: (patch: Partial<UserInfo>) => void;
 		setUserToken: (token: UserToken) => void;
 		clearUserInfoAndToken: () => void;
+		refreshUserInfo: () => Promise<void>;
+	};
+};
+
+type AuthUserInfo = Awaited<ReturnType<typeof authService.getUserInfo>>;
+
+const mapAuthUserInfoToUserInfo = (info: AuthUserInfo): UserInfo => {
+	const roles = (info.roles || []).map((code) => ({ id: code, name: code, code }));
+	const permissions = (info.permissions || []).map((code) => ({ id: code, name: code, code }));
+	return {
+		id: String(info.id),
+		username: info.username,
+		email: info.email || "",
+		phone: info.phone || "",
+		nickname: info.nickname || "",
+		gender: info.gender ?? 0,
+		avatar: info.avatar || "",
+		description: info.description || "",
+		pwdResetTime: info.pwdResetTime || "",
+		pwdExpired: info.pwdExpired ?? false,
+		registrationDate: info.registrationDate || "",
+		deptName: info.deptName || "",
+		roles,
+		permissions,
 	};
 };
 
@@ -29,11 +54,18 @@ const useUserStore = create<UserStore>()(
 				setUserInfo: (userInfo) => {
 					set({ userInfo });
 				},
+				updateUserInfo: (patch) => {
+					set((state) => ({ userInfo: { ...state.userInfo, ...patch } }));
+				},
 				setUserToken: (userToken) => {
 					set({ userToken });
 				},
 				clearUserInfoAndToken() {
 					set({ userInfo: {}, userToken: {} });
+				},
+				refreshUserInfo: async () => {
+					const info = await authService.getUserInfo();
+					set({ userInfo: mapAuthUserInfoToUserInfo(info) });
 				},
 			},
 		}),
@@ -81,16 +113,7 @@ export const useSignIn = () => {
 
 			try {
 				const info = await authService.getUserInfo();
-				const roles = (info.roles || []).map((code) => ({ id: code, name: code, code }));
-				const permissions = (info.permissions || []).map((code) => ({ id: code, name: code, code }));
-				setUserInfo({
-					id: String(info.id),
-					username: info.username,
-					email: info.email || "",
-					avatar: info.avatar || "",
-					roles,
-					permissions,
-				});
+				setUserInfo(mapAuthUserInfoToUserInfo(info));
 			} catch (e) {
 				setUserToken({});
 				throw e;

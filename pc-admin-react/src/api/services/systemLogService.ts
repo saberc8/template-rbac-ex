@@ -38,8 +38,11 @@ export type SysLogQuery = {
 	module?: string;
 	ip?: string;
 	createUserString?: string;
+	createTime?: string[];
 	status?: number;
 };
+
+export type SysLogExportQuery = Omit<SysLogQuery, "page" | "size">;
 
 export const systemLogService = {
 	page: (query: SysLogQuery) =>
@@ -52,8 +55,38 @@ export const systemLogService = {
 				module: query.module,
 				ip: query.ip,
 				createUserString: query.createUserString,
+				createTime: query.createTime,
 				status: query.status,
 			},
 		}),
 	get: (id: number) => apiClient.get<SysLogDetail>({ url: `/system/log/${id}` }),
+
+	exportLoginCsv: (query: SysLogExportQuery) =>
+		apiClient.request<Blob>({
+			method: "GET",
+			url: "/system/log/export/login",
+			params: {
+				description: query.description,
+				module: query.module,
+				ip: query.ip,
+				createUserString: query.createUserString,
+				createTime: query.createTime,
+				status: query.status,
+			},
+			responseType: "blob",
+		}),
+	exportOperationCsv: (query: SysLogExportQuery) =>
+		apiClient.request<Blob>({
+			method: "GET",
+			url: "/system/log/export/operation",
+			params: {
+				description: query.description,
+				module: query.module,
+				ip: query.ip,
+				createUserString: query.createUserString,
+				createTime: query.createTime,
+				status: query.status,
+			},
+			responseType: "blob",
+		}),
 };

@@ -20,9 +20,15 @@ export type UserInfoResp = {
 	id: number;
 	username: string;
 	nickname?: string;
+	gender?: number;
 	email?: string;
 	phone?: string;
 	avatar?: string;
+	description?: string;
+	pwdResetTime?: string;
+	pwdExpired?: boolean;
+	registrationDate?: string;
+	deptName?: string;
 	roles?: string[];
 	permissions?: string[];
 };

@@ -19,7 +19,28 @@ export type SysMenuNode = {
 	children?: SysMenuNode[];
 };
 
-export const systemMenuService = {
-	tree: () => apiClient.get<SysMenuNode[]>({ url: "/system/menu/tree" }),
+export type SysMenuSaveReq = {
+	type: number;
+	icon: string;
+	title: string;
+	sort: number;
+	permission: string;
+	path: string;
+	name: string;
+	component: string;
+	redirect: string;
+	isExternal: boolean;
+	isCache: boolean;
+	isHidden: boolean;
+	parentId: number;
+	status: number;
 };
 
+export const systemMenuService = {
+	tree: () => apiClient.get<SysMenuNode[]>({ url: "/system/menu/tree" }),
+	get: (id: number) => apiClient.get<SysMenuNode>({ url: `/system/menu/${id}` }),
+	create: (data: SysMenuSaveReq) => apiClient.post<{ id: number }>({ url: "/system/menu", data }),
+	update: (id: number, data: SysMenuSaveReq) => apiClient.put<boolean>({ url: `/system/menu/${id}`, data }),
+	delete: (ids: number[]) => apiClient.delete<boolean>({ url: "/system/menu", data: { ids } }),
+	clearCache: () => apiClient.delete<boolean>({ url: "/system/menu/cache" }),
+};

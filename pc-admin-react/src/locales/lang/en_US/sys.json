@@ -118,15 +118,15 @@
 			},
 			"scroll": "Scroll",
 			"system": {
-				"index": "System",
+				"index": "System Management",
 				"client": "Client",
-				"organization": "Organization",
+				"organization": "Department",
 				"option": "Option",
 				"file": "File",
 				"permission": "Permission",
 				"role": "Role",
 				"storage": "Storage",
-				"dict": "Dict",
+				"dict": "Dictionary",
 				"user": "User",
 				"user_detail": "User Detail"
 			},

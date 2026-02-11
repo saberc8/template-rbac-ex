@@ -1,20 +1,33 @@
-import { systemLogService, type SysLogDetail, type SysLogRow } from "@/api/services/systemLogService";
+import { systemLogService, type SysLogDetail, type SysLogRow, type SysLogExportQuery } from "@/api/services/systemLogService";
+import { useUserPermissions } from "@/store/userStore";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { ScrollArea } from "@/ui/scroll-area";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/ui/sheet";
-import { useQuery } from "@tanstack/react-query";
-import { Table } from "antd";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DatePicker, Modal, Table, Tag, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useMemo, useState } from "react";
+import dayjs, { type Dayjs } from "dayjs";
+import { useCallback, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 export default function SysLogPage() {
+	const queryClient = useQueryClient();
+	const permissions = useUserPermissions();
+	const permissionCodes = useMemo(() => permissions.map((p) => p.code), [permissions]);
+	const permissionCodeSet = useMemo(() => new Set(permissionCodes), [permissionCodes]);
+	const can = useCallback((code: string) => permissionCodeSet.has(code), [permissionCodeSet]);
+
 	const [description, setDescription] = useState("");
 	const [module, setModule] = useState("");
 	const [ip, setIp] = useState("");
 	const [createUser, setCreateUser] = useState("");
 	const [status, setStatus] = useState("");
+	const [createTimeRange, setCreateTimeRange] = useState<[Dayjs, Dayjs]>(() => [
+		dayjs().subtract(6, "day").startOf("day"),
+		dayjs().endOf("day"),
+	]);
 	const [page, setPage] = useState(1);
 	const [pageSize, setPageSize] = useState(30);
 	const [detailOpen, setDetailOpen] = useState(false);
@@ -24,8 +37,11 @@ export default function SysLogPage() {
 		module?: string;
 		ip?: string;
 		createUserString?: string;
+		createTime?: string[];
 		status?: number;
-	}>({});
+	}>(() => ({
+		createTime: [dayjs().subtract(6, "day").startOf("day").format("YYYY-MM-DD HH:mm:ss"), dayjs().endOf("day").format("YYYY-MM-DD HH:mm:ss")],
+	}));
 
 	const { data, isFetching } = useQuery({
 		queryKey: ["system.log.page", page, pageSize, query],
@@ -34,12 +50,29 @@ export default function SysLogPage() {
 				page,
 				size: pageSize,
 				description: query.description,
-				module: query.module,
-				ip: query.ip,
-				createUserString: query.createUserString,
-				status: query.status,
-			}),
+					module: query.module,
+					ip: query.ip,
+					createUserString: query.createUserString,
+					createTime: query.createTime,
+					status: query.status,
+				}),
 	});
+
+	const exportLoginMutation = useMutation({
+		mutationFn: (q: SysLogExportQuery) => systemLogService.exportLoginCsv(q),
+	});
+	const exportOperationMutation = useMutation({
+		mutationFn: (q: SysLogExportQuery) => systemLogService.exportOperationCsv(q),
+	});
+
+	const downloadBlob = (blob: Blob, filename: string) => {
+		const url = window.URL.createObjectURL(blob);
+		const a = document.createElement("a");
+		a.href = url;
+		a.download = filename;
+		a.click();
+		window.URL.revokeObjectURL(url);
+	};
 
 	const columns: ColumnsType<SysLogRow> = useMemo(
 		() => [
@@ -48,7 +81,23 @@ export default function SysLogPage() {
 			{ title: "Description", dataIndex: "description", width: 280, ellipsis: true },
 			{ title: "User", dataIndex: "createUserString", width: 140 },
 			{ title: "IP", dataIndex: "ip", width: 140 },
-			{ title: "Status", dataIndex: "status", width: 90 },
+			{
+				title: "Status",
+				dataIndex: "status",
+				width: 110,
+				render: (_: any, record) => {
+					const ok = Number(record.status) === 1;
+					const tag = (
+						<Tag color={ok ? "green" : "red"}>{ok ? "成功" : "失败"}</Tag>
+					);
+					if (ok) return tag;
+					return (
+						<Tooltip title={record.errorMsg || ""}>
+							<span className="cursor-pointer">{tag}</span>
+						</Tooltip>
+					);
+				},
+			},
 			{ title: "Time(ms)", dataIndex: "timeTaken", width: 110 },
 			{ title: "Error", dataIndex: "errorMsg", width: 240, ellipsis: true },
 			{ title: "Created", dataIndex: "createTime", width: 180 },
@@ -58,7 +107,7 @@ export default function SysLogPage() {
 
 	const { data: detail, isFetching: isDetailFetching } = useQuery({
 		queryKey: ["system.log.get", detailId || 0],
-		enabled: detailOpen && Boolean(detailId),
+		enabled: detailOpen && Boolean(detailId) && can("monitor:log:get"),
 		queryFn: () => systemLogService.get(detailId || 0),
 	});
 
@@ -85,28 +134,123 @@ export default function SysLogPage() {
 			<Card>
 				<CardHeader>
 					<div className="flex items-center justify-between gap-3">
-						<div>Log</div>
-						<div className="flex flex-wrap items-center gap-2">
-							<Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Keyword" className="w-[200px]" />
-							<Input value={module} onChange={(e) => setModule(e.target.value)} placeholder="Module" className="w-[150px]" />
-							<Input value={ip} onChange={(e) => setIp(e.target.value)} placeholder="IP" className="w-[150px]" />
-							<Input value={createUser} onChange={(e) => setCreateUser(e.target.value)} placeholder="User" className="w-[150px]" />
-							<Input value={status} onChange={(e) => setStatus(e.target.value)} placeholder="Status(1/2)" className="w-[110px]" />
-							<Button
-								onClick={() => {
-									const s = Number(status.trim());
-									setPage(1);
-									setQuery({
-										description: description.trim() || undefined,
-										module: module.trim() || undefined,
-										ip: ip.trim() || undefined,
-										createUserString: createUser.trim() || undefined,
-										status: Number.isFinite(s) && s > 0 ? s : undefined,
-									});
-								}}
-							>
-								Search
+							<div>Log</div>
+							<div className="flex flex-wrap items-center gap-2">
+								<Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Keyword" className="w-[200px]" />
+								<Input value={module} onChange={(e) => setModule(e.target.value)} placeholder="Module" className="w-[150px]" />
+								<Input value={ip} onChange={(e) => setIp(e.target.value)} placeholder="IP" className="w-[150px]" />
+								<Input value={createUser} onChange={(e) => setCreateUser(e.target.value)} placeholder="User" className="w-[150px]" />
+								<Input value={status} onChange={(e) => setStatus(e.target.value)} placeholder="Status(1/2)" className="w-[110px]" />
+								<DatePicker.RangePicker
+									value={createTimeRange}
+									onChange={(v) => {
+										if (v && v[0] && v[1]) setCreateTimeRange([v[0], v[1]]);
+									}}
+									showTime
+									allowClear={false}
+								/>
+								<Button
+									onClick={() => {
+										const s = Number(status.trim());
+										setPage(1);
+										setQuery({
+											description: description.trim() || undefined,
+											module: module.trim() || undefined,
+											ip: ip.trim() || undefined,
+											createUserString: createUser.trim() || undefined,
+											createTime: [createTimeRange[0].format("YYYY-MM-DD HH:mm:ss"), createTimeRange[1].format("YYYY-MM-DD HH:mm:ss")],
+											status: Number.isFinite(s) && s > 0 ? s : undefined,
+										});
+									}}
+								>
+									Search
+								</Button>
+								<Button
+									variant="secondary"
+									onClick={() => {
+										setDescription("");
+										setModule("");
+										setIp("");
+										setCreateUser("");
+										setStatus("");
+										setCreateTimeRange([dayjs().subtract(6, "day").startOf("day"), dayjs().endOf("day")]);
+										setPage(1);
+										setQuery({
+											createTime: [dayjs().subtract(6, "day").startOf("day").format("YYYY-MM-DD HH:mm:ss"), dayjs().endOf("day").format("YYYY-MM-DD HH:mm:ss")],
+										});
+									}}
+								>
+									Reset
+								</Button>
+							<Button variant="secondary" onClick={() => queryClient.invalidateQueries({ queryKey: ["system.log.page"] })}>
+								Refresh
 							</Button>
+							{can("monitor:log:export") && (
+								<>
+									<Button
+										variant="secondary"
+										disabled={exportLoginMutation.isPending}
+										onClick={async () => {
+											Modal.confirm({
+												title: "导出登录日志？",
+												content: "将按当前筛选条件导出 CSV。",
+												okText: "导出",
+												cancelText: "取消",
+													onOk: async () => {
+														try {
+															const q: SysLogExportQuery = {
+																description: query.description,
+																module: "登录",
+																ip: query.ip,
+																createUserString: query.createUserString,
+																createTime: query.createTime,
+																status: query.status,
+															};
+															const blob = await exportLoginMutation.mutateAsync(q);
+															downloadBlob(blob, "login-log.csv");
+															toast.success("导出成功", { position: "top-center" });
+													} catch {
+														// handled by apiClient
+													}
+												},
+											});
+										}}
+									>
+										导出登录
+									</Button>
+									<Button
+										variant="secondary"
+										disabled={exportOperationMutation.isPending}
+										onClick={async () => {
+											Modal.confirm({
+												title: "导出操作日志？",
+												content: "将按当前筛选条件导出 CSV。",
+												okText: "导出",
+												cancelText: "取消",
+													onOk: async () => {
+														try {
+															const q: SysLogExportQuery = {
+																description: query.description,
+																module: query.module,
+																ip: query.ip,
+																createUserString: query.createUserString,
+																createTime: query.createTime,
+																status: query.status,
+															};
+															const blob = await exportOperationMutation.mutateAsync(q);
+															downloadBlob(blob, "operation-log.csv");
+															toast.success("导出成功", { position: "top-center" });
+													} catch {
+														// handled by apiClient
+													}
+												},
+											});
+										}}
+									>
+										导出操作
+									</Button>
+								</>
+							)}
 						</div>
 					</div>
 				</CardHeader>
@@ -128,15 +272,19 @@ export default function SysLogPage() {
 						}}
 						columns={columns}
 						dataSource={data?.list || []}
-						onRow={(record) => ({
-							onClick: () => {
-								setDetailId(record.id);
-								setDetailOpen(true);
-							},
-						})}
-						rowClassName="cursor-pointer"
+						onRow={(record) =>
+							can("monitor:log:get")
+								? {
+										onClick: () => {
+											setDetailId(record.id);
+											setDetailOpen(true);
+										},
+									}
+								: {}
+						}
+						rowClassName={can("monitor:log:get") ? "cursor-pointer" : ""}
 					/>
-					<div className="mt-2 text-xs text-muted-foreground">点击行查看详情</div>
+					<div className="mt-2 text-xs text-muted-foreground">{can("monitor:log:get") ? "点击行查看详情" : "无查看详情权限"}</div>
 				</CardContent>
 			</Card>
 
@@ -153,7 +301,7 @@ export default function SysLogPage() {
 					</SheetHeader>
 					<div className="p-4 flex-1 overflow-hidden">
 						{isDetailFetching && <div className="text-sm text-muted-foreground">Loading...</div>}
-						{!isDetailFetching && !detail && <div className="text-sm text-muted-foreground">No data</div>}
+						{!isDetailFetching && !detail && <div className="text-sm text-muted-foreground">{can("monitor:log:get") ? "No data" : "无查看详情权限"}</div>}
 						{detail && <LogDetailView detail={detail} renderMeta={renderMeta} renderBlock={renderBlock} />}
 					</div>
 				</SheetContent>

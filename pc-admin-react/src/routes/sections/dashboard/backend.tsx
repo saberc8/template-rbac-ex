@@ -1,11 +1,11 @@
 import type { MenuMetaInfo, MenuTree } from "@/types/entity";
 import { PermissionType } from "@/types/enum";
+import { MENU_SNAPSHOT } from "@/fixtures/menuSnapshot";
 import { getBackendMenuTreeSnapshot } from "@/store/menuStore";
 import { convertFlatToTree } from "@/utils/tree";
 import type { RouteObject } from "react-router";
 import { Navigate } from "react-router";
 import { Component } from "./utils";
-import { DB_MENU } from "@/_mock/assets_backup";
 
 /**
  * get route path from menu path and parent path
@@ -94,6 +94,6 @@ const convertToRoute = (items: MenuTree[], parent?: MenuTree): RouteObject[] => 
 
 export function getBackendDashboardRoutes() {
 	const tree = getBackendMenuTreeSnapshot();
-	const menuTree = tree && tree.length > 0 ? tree : convertFlatToTree(DB_MENU);
+	const menuTree = tree && tree.length > 0 ? tree : convertFlatToTree(MENU_SNAPSHOT);
 	return convertToRoute(menuTree);
 }

@@ -98,15 +98,15 @@
 				"account": "账户"
 			},
 			"system": {
-				"index": "系统",
+				"index": "系统管理",
 				"client": "客户端",
-				"organization": "组织",
-				"option": "配置",
+				"organization": "部门",
+				"option": "系统配置",
 				"file": "文件",
 				"permission": "权限",
 				"role": "角色",
 				"storage": "存储",
-				"dict": "字典",
+				"dict": "字典配置",
 				"user": "用户",
 				"user_detail": "用户详情"
 			},

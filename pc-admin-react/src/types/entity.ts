@@ -10,8 +10,16 @@ export interface UserInfo {
 	id: string;
 	email: string;
 	username: string;
+	nickname?: string;
+	gender?: number;
+	phone?: string;
 	password?: string;
 	avatar?: string;
+	description?: string;
+	pwdResetTime?: string;
+	pwdExpired?: boolean;
+	registrationDate?: string;
+	deptName?: string;
 	roles?: Role[];
 	status?: BasicStatus;
 	permissions?: Permission[];

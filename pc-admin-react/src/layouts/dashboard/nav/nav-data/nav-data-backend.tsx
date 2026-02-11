@@ -1,6 +1,6 @@
-import { DB_MENU } from "@/_mock/assets_backup";
 import { Icon } from "@/components/icon";
 import type { NavItemDataProps, NavProps } from "@/components/nav";
+import { MENU_SNAPSHOT } from "@/fixtures/menuSnapshot";
 import type { MenuTree } from "@/types/entity";
 import { Badge } from "@/ui/badge";
 import { convertFlatToTree } from "@/utils/tree";
@@ -30,6 +30,6 @@ const convert = (menuTree: MenuTree[]): NavProps["data"] => {
 };
 
 export const buildBackendNavData = (menuTree: MenuTree[]): NavProps["data"] => {
-	const tree = menuTree && menuTree.length > 0 ? menuTree : convertFlatToTree(DB_MENU);
+	const tree = menuTree && menuTree.length > 0 ? menuTree : convertFlatToTree(MENU_SNAPSHOT);
 	return convert(tree);
 };

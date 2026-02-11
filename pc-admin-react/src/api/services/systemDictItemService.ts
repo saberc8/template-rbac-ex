@@ -20,6 +20,18 @@ export type SysDictItemRow = {
 	updateTime: string;
 };
 
+export type SysDictItemDetail = SysDictItemRow;
+
+export type SysDictItemSaveReq = {
+	label: string;
+	value: string;
+	color?: string;
+	sort: number;
+	description?: string;
+	status: number;
+	dictId?: number;
+};
+
 export type ListDictItemQuery = {
 	dictId: number;
 	page: number;
@@ -40,5 +52,9 @@ export const systemDictItemService = {
 				status: query.status,
 			},
 		}),
-};
 
+	get: (id: number) => apiClient.get<SysDictItemDetail>({ url: `/system/dict/item/${id}` }),
+	create: (data: SysDictItemSaveReq & { dictId: number }) => apiClient.post<{ id: number }>({ url: "/system/dict/item", data }),
+	update: (id: number, data: SysDictItemSaveReq) => apiClient.put<boolean>({ url: `/system/dict/item/${id}`, data }),
+	delete: (ids: number[]) => apiClient.delete<boolean>({ url: "/system/dict/item", data: { ids } }),
+};

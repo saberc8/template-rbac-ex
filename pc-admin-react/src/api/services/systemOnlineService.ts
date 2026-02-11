@@ -24,17 +24,20 @@ export type OnlineUserQuery = {
 	page: number;
 	size: number;
 	nickname?: string;
+	loginTime?: string[];
 };
 
 export const systemOnlineService = {
-	page: (query: OnlineUserQuery) =>
-		apiClient.get<PageResult<OnlineUserRow>>({
-			url: "/monitor/online",
-			params: {
-				page: query.page,
-				size: query.size,
-				nickname: query.nickname,
-			},
-		}),
-};
+		page: (query: OnlineUserQuery) =>
+			apiClient.get<PageResult<OnlineUserRow>>({
+				url: "/monitor/online",
+				params: {
+					page: query.page,
+					size: query.size,
+					nickname: query.nickname,
+					loginTime: query.loginTime,
+				},
+			}),
 
+	kickout: (token: string) => apiClient.delete<boolean>({ url: `/monitor/online/${encodeURIComponent(token)}` }),
+};

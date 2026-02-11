@@ -34,6 +34,7 @@ export default defineConfig(({ mode }) => {
 			open: true,
 			host: true,
 			port: 14397,
+			strictPort: true,
 			proxy: {
 				"/api": {
 					target: apiProxyTarget,
@@ -63,7 +64,7 @@ export default defineConfig(({ mode }) => {
 		},
 
 		optimizeDeps: {
-			include: ["react", "react-dom", "react-router", "antd", "axios", "dayjs"],
+			include: ["react", "react-dom", "react-router", "antd", "axios", "dayjs", "react-easy-crop"],
 			exclude: ["@iconify/react"],
 		},
 

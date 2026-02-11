@@ -11,7 +11,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Table, Tree } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { BasicStatus } from "#/enum";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import UserFormSheet from "./user-form-sheet";
 import UserImportSheet from "./user-import-sheet";
@@ -44,6 +44,18 @@ export default function UserPage() {
 		queryKey: ["systemDept.tree"],
 		queryFn: () => systemDeptService.tree(),
 	});
+
+	useEffect(() => {
+		if (!deptTree?.length) return;
+		if (deptId !== undefined || queryDeptId !== undefined) return;
+
+		const defaultDeptId = Number((deptTree || []).find((n) => Number(n.id) === 1)?.id) || Number(deptTree[0]?.id) || 0;
+		if (defaultDeptId <= 0) return;
+
+		setDeptId(defaultDeptId);
+		setQueryDeptId(defaultDeptId);
+		setPage(1);
+	}, [deptId, deptTree, queryDeptId]);
 
 	const { data, isFetching } = useQuery({
 		queryKey: ["systemUser.page", page, pageSize, queryKeyword, queryStatus, queryDeptId],
@@ -244,7 +256,7 @@ export default function UserPage() {
 	}, [deptTree]);
 
 	return (
-		<div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
+		<div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[280px_1fr]">
 			<Card>
 				<CardHeader>
 					<div className="flex items-center justify-between gap-2">
@@ -281,7 +293,7 @@ export default function UserPage() {
 				</CardContent>
 			</Card>
 
-			<Card>
+			<Card className="min-w-0">
 				<CardHeader>
 					<div className="flex flex-col gap-3">
 						<div className="flex items-center justify-between gap-3">
@@ -364,24 +376,26 @@ export default function UserPage() {
 					</div>
 				</CardHeader>
 				<CardContent>
-					<Table<SysUserRow>
-						rowKey="id"
-						size="small"
-						scroll={{ x: 1200 }}
-						loading={isFetching}
-						pagination={{
-							current: page,
-							pageSize,
-							total: data?.total || 0,
-							showSizeChanger: true,
-							onChange: (p, s) => {
-								setPage(p);
-								setPageSize(s);
-							},
-						}}
-						columns={columns as any}
-						dataSource={data?.list || []}
-					/>
+					<div className="min-w-0 overflow-x-auto">
+						<Table<SysUserRow>
+							rowKey="id"
+							size="small"
+							scroll={{ x: "max-content" }}
+							loading={isFetching}
+							pagination={{
+								current: page,
+								pageSize,
+								total: data?.total || 0,
+								showSizeChanger: true,
+								onChange: (p, s) => {
+									setPage(p);
+									setPageSize(s);
+								},
+							}}
+							columns={columns as any}
+							dataSource={data?.list || []}
+						/>
+					</div>
 				</CardContent>
 			</Card>
 

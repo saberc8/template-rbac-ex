@@ -35,10 +35,6 @@ export const frontendNavData: NavProps["data"] = [
 								title: "sys.nav.user.profile",
 								path: "/management/user/profile",
 							},
-							{
-								title: "sys.nav.user.account",
-								path: "/management/user/account",
-							},
 						],
 					},
 					{
