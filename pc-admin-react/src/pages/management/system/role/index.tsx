@@ -1,15 +1,22 @@
-import { systemDeptService, type SysDeptNode } from "@/api/services/systemDeptService";
-import { systemRoleService, type SysRole, type SysRoleDetail, type SysRoleSaveReq } from "@/api/services/systemRoleService";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Tree } from "antd";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { type SysDeptNode, systemDeptService } from "@/api/services/systemDeptService";
+import {
+	type SysRole,
+	type SysRoleDetail,
+	type SysRoleSaveReq,
+	systemRoleService,
+} from "@/api/services/systemRoleService";
+import { useConfirmDialog } from "@/components/confirm/use-confirm-dialog";
+import Icon from "@/components/icon/icon";
 import { useUserPermissions } from "@/store/userStore";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader } from "@/ui/card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/ui/dropdown-menu";
 import { Input } from "@/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/ui/tabs";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import Icon from "@/components/icon/icon";
-import { Dropdown, Modal, Tree, Typography } from "antd";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
 import RoleFormDialog from "./role-form-dialog";
 import RolePermissionPanel from "./role-permission-panel";
 import RoleUserPanel from "./role-user-panel";
@@ -30,6 +37,7 @@ export default function RolePage() {
 	const [formOpen, setFormOpen] = useState(false);
 	const [formMode, setFormMode] = useState<"create" | "update">("create");
 	const [editingRoleId, setEditingRoleId] = useState<number | null>(null);
+	const { confirm, ConfirmDialog } = useConfirmDialog();
 
 	const { data, isFetching } = useQuery({
 		queryKey: ["systemRole.list"],
@@ -114,46 +122,50 @@ export default function RolePage() {
 		});
 	}, [data, queryKeyword]);
 
-	const openCreate = () => {
+	const openCreate = useCallback(() => {
 		setFormMode("create");
 		setEditingRoleId(null);
 		setFormOpen(true);
-	};
+	}, []);
 
-	const openEdit = async (role: SysRole) => {
-		const roleId = Number(role.id);
-		if (!Number.isFinite(roleId) || roleId <= 0) return;
-		setFormMode("update");
-		setEditingRoleId(roleId);
-		setSelectedRoleId(roleId);
-		setFormOpen(true);
-		try {
-			await queryClient.fetchQuery({
-				queryKey: ["systemRole.get", roleId],
-				queryFn: () => systemRoleService.get(roleId),
+	const openEdit = useCallback(
+		async (role: SysRole) => {
+			const roleId = Number(role.id);
+			if (!Number.isFinite(roleId) || roleId <= 0) return;
+			setFormMode("update");
+			setEditingRoleId(roleId);
+			setSelectedRoleId(roleId);
+			setFormOpen(true);
+			try {
+				await queryClient.fetchQuery({
+					queryKey: ["systemRole.get", roleId],
+					queryFn: () => systemRoleService.get(roleId),
+				});
+			} catch {
+				// handled by apiClient
+			}
+		},
+		[queryClient],
+	);
+
+	const confirmDelete = useCallback(
+		async (role: SysRole) => {
+			const ok = await confirm({
+				title: "确认删除？",
+				description: `角色：${role.name}`,
+				confirmText: "删除",
+				destructive: true,
 			});
-		} catch {
-			// handled by apiClient
-		}
-	};
-
-	const confirmDelete = (role: SysRole) => {
-		Modal.confirm({
-			title: "确认删除？",
-			content: `角色：${role.name}`,
-			okText: "删除",
-			cancelText: "取消",
-			okButtonProps: { danger: true },
-			onOk: async () => {
-				try {
-					await deleteMutation.mutateAsync([Number(role.id)]);
-					toast.success("删除成功", { position: "top-center" });
-				} catch {
-					// handled by apiClient
-				}
-			},
-		});
-	};
+			if (!ok) return;
+			try {
+				await deleteMutation.mutateAsync([Number(role.id)]);
+				toast.success("删除成功", { position: "top-center" });
+			} catch {
+				// handled by apiClient
+			}
+		},
+		[confirm, deleteMutation.mutateAsync],
+	);
 
 	const treeData = useMemo(() => {
 		const canShowAction = canAny(["system:role:update", "system:role:delete"]);
@@ -161,55 +173,48 @@ export default function RolePage() {
 			const roleId = Number(r.id);
 			const canUpdate = can("system:role:update") && !r.disabled;
 			const canDelete = can("system:role:delete") && !r.disabled;
-			const items = [
-				canShowAction
-					? {
-							key: "update",
-							label: "编辑",
-							disabled: !canUpdate,
-						}
-					: null,
-				canShowAction
-					? {
-							key: "delete",
-							label: "删除",
-							disabled: !canDelete,
-						}
-					: null,
-			].filter(Boolean) as any[];
 
 			return {
 				key: roleId,
 				title: (
 					<div className="group flex w-full min-w-0 items-center justify-between gap-2">
-						<Typography.Text
-							className="min-w-0"
-							ellipsis={{ tooltip: `${r.name || ""} (${r.code || ""})` }}
-						>
+						<span className="min-w-0 truncate" title={`${r.name || ""} (${r.code || ""})`}>
 							{r.name} ({r.code})
-						</Typography.Text>
+						</span>
 
 						{canShowAction && (
-							<Dropdown
-								trigger={["click"]}
-								menu={{
-									items,
-									onClick: ({ key }) => {
-										if (key === "update") openEdit(r);
-										if (key === "delete") confirmDelete(r);
-									},
-								}}
-							>
-								<Button
-									type="button"
-									variant="ghost"
-									size="icon"
-									className="opacity-0 transition-opacity group-hover:opacity-100"
-									onClick={(e) => e.stopPropagation()}
-								>
-									<Icon icon="mdi:dots-horizontal" />
-								</Button>
-							</Dropdown>
+							<DropdownMenu>
+								<DropdownMenuTrigger asChild>
+									<Button
+										type="button"
+										variant="ghost"
+										size="icon"
+										className="opacity-0 transition-opacity group-hover:opacity-100"
+										onClick={(e) => e.stopPropagation()}
+									>
+										<Icon icon="mdi:dots-horizontal" />
+									</Button>
+								</DropdownMenuTrigger>
+								<DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+									<DropdownMenuItem
+										disabled={!canUpdate}
+										onClick={() => {
+											openEdit(r);
+										}}
+									>
+										编辑
+									</DropdownMenuItem>
+									<DropdownMenuItem
+										variant="destructive"
+										disabled={!canDelete}
+										onClick={() => {
+											confirmDelete(r);
+										}}
+									>
+										删除
+									</DropdownMenuItem>
+								</DropdownMenuContent>
+							</DropdownMenu>
 						)}
 					</div>
 				),
@@ -226,12 +231,15 @@ export default function RolePage() {
 						<div className="flex flex-col gap-3">
 							<div className="flex items-center justify-between gap-3">
 								<div>角色列表</div>
-								{can("system:role:create") && (
-									<Button onClick={openCreate}>新增</Button>
-								)}
+								{can("system:role:create") && <Button onClick={openCreate}>新增</Button>}
 							</div>
 							<div className="flex items-center gap-2">
-								<Input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="搜索名称/编码" className="w-[240px]" />
+								<Input
+									value={keyword}
+									onChange={(e) => setKeyword(e.target.value)}
+									placeholder="搜索名称/编码"
+									className="w-[240px]"
+								/>
 								<Button onClick={() => setQueryKeyword(keyword.trim())}>查询</Button>
 								<Button
 									variant="secondary"
@@ -272,7 +280,9 @@ export default function RolePage() {
 					<CardHeader>
 						<div className="flex items-center justify-between gap-3">
 							<div>角色详情</div>
-							<div className="text-sm text-muted-foreground">{selectedRoleId ? `ID: ${selectedRoleId}` : "未选择角色"}</div>
+							<div className="text-sm text-muted-foreground">
+								{selectedRoleId ? `ID: ${selectedRoleId}` : "未选择角色"}
+							</div>
 						</div>
 					</CardHeader>
 					<CardContent>
@@ -308,6 +318,7 @@ export default function RolePage() {
 				}}
 				onSubmit={onSubmitRole}
 			/>
+			{ConfirmDialog}
 		</div>
 	);
 }

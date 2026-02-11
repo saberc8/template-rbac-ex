@@ -1,19 +1,20 @@
 // 文件管理-主区域：目录/类型双模式、面包屑、上传/新建/批量、列表/宫格与操作弹窗。
 
-import { systemFileService, type SysFileRow } from "@/api/services/systemFileService";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { UploadProps } from "antd";
+import { Breadcrumb, Empty, Pagination, Segmented, Upload } from "antd";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { type SysFileRow, systemFileService } from "@/api/services/systemFileService";
+import { useConfirmDialog } from "@/components/confirm/use-confirm-dialog";
+import { buildBreadcrumbList, fileTypeName, joinParentPath, normalizeParentPath } from "@/constants/file";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader } from "@/ui/card";
 import { Input } from "@/ui/input";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Breadcrumb, Empty, Modal, Pagination, Segmented, Upload } from "antd";
-import type { UploadProps } from "antd";
-import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-import { buildBreadcrumbList, fileTypeName, joinParentPath, normalizeParentPath } from "@/constants/file";
-import FileList from "./components/FileList";
-import FileGrid from "./components/FileGrid";
 import CreateDirModal from "./components/CreateDirModal";
 import FileDetailModal from "./components/FileDetailModal";
+import FileGrid from "./components/FileGrid";
+import FileList from "./components/FileList";
 import FilePreviewModal from "./components/FilePreviewModal";
 import FileRenameModal from "./components/FileRenameModal";
 
@@ -37,6 +38,7 @@ const sortFiles = (items: SysFileRow[]) => {
 export default function FileMain({ fileType }: { fileType: number }) {
 	const queryClient = useQueryClient();
 	const isDirMode = fileType === 0;
+	const { confirm, ConfirmDialog } = useConfirmDialog();
 
 	const [viewMode, setViewMode] = useState<ViewMode>("list");
 	const [isBatchMode, setIsBatchMode] = useState(false);
@@ -66,7 +68,7 @@ export default function FileMain({ fileType }: { fileType: number }) {
 		} else {
 			setParentPath("/");
 		}
-	}, [isDirMode, fileType]);
+	}, [isDirMode]);
 
 	const query = useMemo(() => {
 		if (isDirMode) {
@@ -101,8 +103,16 @@ export default function FileMain({ fileType }: { fileType: number }) {
 	};
 
 	const uploadMutation = useMutation({
-		mutationFn: (payload: { file: File; parentPath: string; signal: AbortSignal; onProgress?: (percent: number) => void }) =>
-			systemFileService.upload(payload.file, payload.parentPath, { signal: payload.signal, onProgress: payload.onProgress }),
+		mutationFn: (payload: {
+			file: File;
+			parentPath: string;
+			signal: AbortSignal;
+			onProgress?: (percent: number) => void;
+		}) =>
+			systemFileService.upload(payload.file, payload.parentPath, {
+				signal: payload.signal,
+				onProgress: payload.onProgress,
+			}),
 		onSuccess: () => {
 			toast.success("上传成功", { position: "top-center" });
 			invalidateAll();
@@ -142,7 +152,8 @@ export default function FileMain({ fileType }: { fileType: number }) {
 	});
 
 	const renameMutation = useMutation({
-		mutationFn: (payload: { id: number; originalName: string }) => systemFileService.rename(payload.id, payload.originalName),
+		mutationFn: (payload: { id: number; originalName: string }) =>
+			systemFileService.rename(payload.id, payload.originalName),
 		onSuccess: () => {
 			toast.success("重命名成功", { position: "top-center" });
 			invalidateAll();
@@ -157,7 +168,12 @@ export default function FileMain({ fileType }: { fileType: number }) {
 		},
 	});
 
-	const busy = isFetching || uploadMutation.isPending || createDirMutation.isPending || renameMutation.isPending || deleteMutation.isPending;
+	const busy =
+		isFetching ||
+		uploadMutation.isPending ||
+		createDirMutation.isPending ||
+		renameMutation.isPending ||
+		deleteMutation.isPending;
 
 	const breadcrumbs = useMemo(() => buildBreadcrumbList(parentPath), [parentPath]);
 
@@ -206,22 +222,22 @@ export default function FileMain({ fileType }: { fileType: number }) {
 		}
 	};
 
-	const onDelete = (ids: number[]) => {
+	const onDelete = async (ids: number[]) => {
 		if (!ids.length) return;
-		Modal.confirm({
+		const ok = await confirm({
 			title: "提示",
-			content: `是否确定删除所选的 ${ids.length} 个文件？`,
-			okButtonProps: { danger: true },
-			onOk: async () => {
-				try {
-					await deleteMutation.mutateAsync(ids);
-					setSelectedIds([]);
-					setIsBatchMode(false);
-				} catch {
-					// handled by apiClient
-				}
-			},
+			description: `是否确定删除所选的 ${ids.length} 个文件？`,
+			confirmText: "删除",
+			destructive: true,
 		});
+		if (!ok) return;
+		try {
+			await deleteMutation.mutateAsync(ids);
+			setSelectedIds([]);
+			setIsBatchMode(false);
+		} catch {
+			// handled by apiClient
+		}
 	};
 
 	const headerLeft = (
@@ -254,7 +270,12 @@ export default function FileMain({ fileType }: { fileType: number }) {
 	const headerRight = (
 		<div className="flex items-center gap-2 flex-wrap justify-end">
 			{isBatchMode ? (
-				<Button type="button" variant="destructive" disabled={!selectedIds.length || busy} onClick={() => onDelete(selectedIds)}>
+				<Button
+					type="button"
+					variant="destructive"
+					disabled={!selectedIds.length || busy}
+					onClick={() => onDelete(selectedIds)}
+				>
 					批量删除{selectedIds.length ? `（${selectedIds.length}）` : ""}
 				</Button>
 			) : null}
@@ -413,6 +434,7 @@ export default function FileMain({ fileType }: { fileType: number }) {
 			/>
 
 			<FilePreviewModal open={previewOpen} item={activeItem} onOpenChange={setPreviewOpen} />
+			{ConfirmDialog}
 		</Card>
 	);
 }

@@ -1,15 +1,17 @@
-import { systemMenuService, type SysMenuNode, type SysMenuSaveReq } from "@/api/services/systemMenuService";
-import { useUserPermissions } from "@/store/userStore";
-import { Card, CardContent, CardHeader } from "@/ui/card";
-import { Input } from "@/ui/input";
-import { Button } from "@/ui/button";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Modal } from "antd";
-import Table, { type ColumnsType } from "antd/es/table";
-import { useCallback, useMemo, useState } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { BasicStatus } from "#/enum";
 import { toast } from "sonner";
+import { BasicStatus } from "#/enum";
+import { type SysMenuNode, type SysMenuSaveReq, systemMenuService } from "@/api/services/systemMenuService";
+import { useConfirmDialog } from "@/components/confirm/use-confirm-dialog";
+import DataTable from "@/components/data-table/data-table";
+import { useUserPermissions } from "@/store/userStore";
+import { Button } from "@/ui/button";
+import { Card, CardContent } from "@/ui/card";
+import { Input } from "@/ui/input";
 import MenuFormDialog from "./menu-form-dialog";
 
 const stripEmptyChildren = (nodes: SysMenuNode[]): SysMenuNode[] => {
@@ -34,6 +36,7 @@ export default function PermissionPage() {
 	const [dialogMode, setDialogMode] = useState<"create" | "update">("create");
 	const [editing, setEditing] = useState<SysMenuNode | null>(null);
 	const [defaultParentId, setDefaultParentId] = useState<number>(0);
+	const { confirm, ConfirmDialog } = useConfirmDialog();
 
 	const { data, isFetching } = useQuery({
 		queryKey: ["systemMenu.tree"],
@@ -71,9 +74,7 @@ export default function PermissionPage() {
 				(node.title || "").toLowerCase().includes(term) ||
 				(node.path || "").toLowerCase().includes(term) ||
 				(node.permission || "").toLowerCase().includes(term);
-			const children = (node.children || [])
-				.map(filterNode)
-				.filter((x): x is SysMenuNode => x != null);
+			const children = (node.children || []).map(filterNode).filter((x): x is SysMenuNode => x != null);
 			if (hit || children.length > 0) {
 				return { ...node, children: children.length > 0 ? children : undefined };
 			}
@@ -83,37 +84,120 @@ export default function PermissionPage() {
 		return stripEmptyChildren((data || []).map(filterNode).filter((x): x is SysMenuNode => x != null));
 	}, [data, keyword]);
 
-	const columns: ColumnsType<SysMenuNode> = useMemo(
+	type FlatMenuRow = { node: SysMenuNode; depth: number; hasChildren: boolean };
+
+	const [expandedIds, setExpandedIds] = useState<number[]>([]);
+
+	useEffect(() => {
+		const ids: number[] = [];
+		const walk = (nodes: SysMenuNode[]) => {
+			for (const n of nodes || []) {
+				if (n.children?.length) ids.push(Number(n.id));
+				if (n.children?.length) walk(n.children);
+			}
+		};
+		walk(filteredData);
+		setExpandedIds(ids);
+	}, [filteredData]);
+
+	const flatRows: FlatMenuRow[] = useMemo(() => {
+		const expanded = new Set(expandedIds);
+		const rows: FlatMenuRow[] = [];
+		const walk = (nodes: SysMenuNode[], depth: number) => {
+			for (const n of nodes || []) {
+				const hasChildren = (n.children?.length ?? 0) > 0;
+				rows.push({ node: n, depth, hasChildren });
+				if (hasChildren && expanded.has(Number(n.id))) walk(n.children || [], depth + 1);
+			}
+		};
+		walk(filteredData, 0);
+		return rows;
+	}, [expandedIds, filteredData]);
+
+	const columns: Array<ColumnDef<FlatMenuRow>> = useMemo(
 		() => [
-			{ title: t("sys.page.systemPermission.columns.title"), dataIndex: "title", width: 260 },
 			{
-				title: t("sys.page.systemPermission.columns.type"),
-				dataIndex: "type",
-				width: 90,
-				render: (v: number) => {
-					if (Number(v) === 1) return "目录";
-					if (Number(v) === 2) return "菜单";
-					if (Number(v) === 3) return "按钮";
+				header: t("sys.page.systemPermission.columns.title"),
+				id: "title",
+				size: 320,
+				cell: ({ row }) => {
+					const r = row.original;
+					const id = Number(r.node.id);
+					const expanded = expandedIds.includes(id);
+					const indent = Math.max(0, Number(r.depth) || 0) * 16;
+
+					return (
+						<div className="flex items-center gap-2 min-w-0">
+							<div className="flex items-center" style={{ width: indent }} />
+							{r.hasChildren ? (
+								<Button
+									type="button"
+									variant="ghost"
+									size="icon"
+									className="h-7 w-7 shrink-0"
+									onClick={(e) => {
+										e.stopPropagation();
+										setExpandedIds((prev) => {
+											const set = new Set(prev);
+											if (set.has(id)) set.delete(id);
+											else set.add(id);
+											return Array.from(set);
+										});
+									}}
+									aria-label={expanded ? "collapse" : "expand"}
+								>
+									{expanded ? <ChevronDownIcon className="size-4" /> : <ChevronRightIcon className="size-4" />}
+								</Button>
+							) : (
+								<div className="h-7 w-7 shrink-0" />
+							)}
+							<span className="truncate">{r.node.title}</span>
+						</div>
+					);
+				},
+			},
+			{
+				header: t("sys.page.systemPermission.columns.type"),
+				id: "type",
+				size: 90,
+				meta: { align: "center" },
+				cell: ({ row }) => {
+					const v = Number(row.original.node.type);
+					if (v === 1) return "目录";
+					if (v === 2) return "菜单";
+					if (v === 3) return "按钮";
 					return String(v ?? "");
 				},
 			},
-			{ title: t("sys.page.systemPermission.columns.path"), dataIndex: "path", width: 220 },
-			{ title: t("sys.page.systemPermission.columns.permission"), dataIndex: "permission" },
 			{
-				title: t("sys.page.systemPermission.columns.status"),
-				dataIndex: "status",
-				width: 100,
-				render: (v: number) =>
-					v === BasicStatus.DISABLE
+				header: t("sys.page.systemPermission.columns.path"),
+				id: "path",
+				size: 220,
+				cell: ({ row }) => row.original.node.path || "-",
+			},
+			{
+				header: t("sys.page.systemPermission.columns.permission"),
+				id: "permission",
+				size: 260,
+				cell: ({ row }) => row.original.node.permission || "-",
+			},
+			{
+				header: t("sys.page.systemPermission.columns.status"),
+				id: "status",
+				size: 100,
+				meta: { align: "center" },
+				cell: ({ row }) =>
+					Number(row.original.node.status) === BasicStatus.DISABLE
 						? t("sys.page.systemPermission.status.disable")
 						: t("sys.page.systemPermission.status.enable"),
 			},
 			{
-				title: "操作",
-				key: "actions",
-				width: 220,
-				fixed: "right",
-				render: (_: any, record: SysMenuNode) => {
+				header: "操作",
+				id: "actions",
+				size: 240,
+				meta: { align: "center" },
+				cell: ({ row }) => {
+					const record = row.original.node;
 					const id = Number(record.id);
 					const isSystemButton = Number(record.type) === 3;
 					return (
@@ -150,22 +234,20 @@ export default function PermissionPage() {
 								<Button
 									size="sm"
 									variant="destructive"
-									onClick={() => {
-										Modal.confirm({
+									onClick={async () => {
+										const ok = await confirm({
 											title: "确认删除？",
-											content: "将同时删除其所有子级，并解除角色菜单关联。",
-											okText: "删除",
-											cancelText: "取消",
-											okButtonProps: { danger: true },
-											onOk: async () => {
-												try {
-													await deleteMutation.mutateAsync([id]);
-													toast.success("删除成功", { position: "top-center" });
-												} catch {
-													// handled by apiClient
-												}
-											},
+											description: "将同时删除其所有子级，并解除角色菜单关联。",
+											confirmText: "删除",
+											destructive: true,
 										});
+										if (!ok) return;
+										try {
+											await deleteMutation.mutateAsync([id]);
+											toast.success("删除成功", { position: "top-center" });
+										} catch {
+											// handled by apiClient
+										}
 									}}
 								>
 									删除
@@ -176,7 +258,7 @@ export default function PermissionPage() {
 				},
 			},
 		],
-		[can, deleteMutation, t],
+		[can, confirm, deleteMutation, expandedIds, t],
 	);
 
 	const onSubmitDialog = async (payload: SysMenuSaveReq) => {
@@ -195,67 +277,61 @@ export default function PermissionPage() {
 	};
 	return (
 		<Card>
-			<CardHeader>
-				<div className="flex items-center justify-between gap-3">
-					<div>{t("sys.nav.system.permission")}</div>
-					<div className="flex items-center gap-2">
-						{can("system:menu:create") && (
-							<Button
-								onClick={() => {
-									setDialogMode("create");
-									setEditing(null);
-									setDefaultParentId(0);
-									setDialogOpen(true);
-								}}
-							>
-								新增
-							</Button>
-						)}
-						{can("system:menu:clearCache") && (
+			<CardContent>
+				<DataTable<FlatMenuRow>
+					title={t("sys.nav.system.permission")}
+					actions={
+						<div className="flex items-center gap-2">
+							{can("system:menu:create") && (
+								<Button
+									onClick={() => {
+										setDialogMode("create");
+										setEditing(null);
+										setDefaultParentId(0);
+										setDialogOpen(true);
+									}}
+								>
+									新增
+								</Button>
+							)}
+							{can("system:menu:clearCache") && (
+								<Button
+									variant="secondary"
+									disabled={clearCacheMutation.isPending}
+									onClick={async () => {
+										try {
+											await clearCacheMutation.mutateAsync();
+											toast.success("清除缓存成功", { position: "top-center" });
+										} catch {
+											// handled by apiClient
+										}
+									}}
+								>
+									清缓存
+								</Button>
+							)}
 							<Button
 								variant="secondary"
-								disabled={clearCacheMutation.isPending}
-								onClick={async () => {
-									try {
-										await clearCacheMutation.mutateAsync();
-										toast.success("清除缓存成功", { position: "top-center" });
-									} catch {
-										// handled by apiClient
-									}
+								onClick={() => {
+									queryClient.invalidateQueries({ queryKey: ["systemMenu.tree"] });
 								}}
 							>
-								清缓存
+								刷新
 							</Button>
-						)}
-						<Button
-							variant="secondary"
-							onClick={() => {
-								queryClient.invalidateQueries({ queryKey: ["systemMenu.tree"] });
-							}}
-						>
-							刷新
-						</Button>
+						</div>
+					}
+					search={
 						<Input
 							value={keyword}
 							onChange={(e) => setKeyword(e.target.value)}
 							placeholder={t("sys.page.systemPermission.searchPlaceholder")}
 							className="w-[280px]"
 						/>
-					</div>
-				</div>
-			</CardHeader>
-			<CardContent>
-				<Table<SysMenuNode>
-					rowKey="id"
-					size="small"
-					scroll={{ x: "max-content" }}
-					pagination={false}
-					loading={isFetching}
+					}
 					columns={columns}
-					dataSource={filteredData}
-					expandable={{
-						rowExpandable: (record) => (record.children?.length ?? 0) > 0,
-					}}
+					data={flatRows}
+					loading={isFetching}
+					getRowId={(row) => String(row.node.id)}
 				/>
 				<MenuFormDialog
 					open={dialogOpen}
@@ -267,6 +343,7 @@ export default function PermissionPage() {
 					onOpenChange={setDialogOpen}
 					onSubmit={onSubmitDialog}
 				/>
+				{ConfirmDialog}
 			</CardContent>
 		</Card>
 	);

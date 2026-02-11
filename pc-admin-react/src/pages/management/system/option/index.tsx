@@ -1,4 +1,10 @@
-import { systemOptionService, type SysOption, type SysOptionUpdateReq } from "@/api/services/systemOptionService";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { TabsProps } from "antd";
+import { Tabs } from "antd";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { type SysOption, type SysOptionUpdateReq, systemOptionService } from "@/api/services/systemOptionService";
+import { useConfirmDialog } from "@/components/confirm/use-confirm-dialog";
 import Icon from "@/components/icon/icon";
 import { usePathname, useRouter, useSearchParams } from "@/routes/hooks";
 import { useUserPermissions } from "@/store/userStore";
@@ -8,11 +14,6 @@ import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
 import { Switch } from "@/ui/switch";
 import { Textarea } from "@/ui/textarea";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Modal, Tabs } from "antd";
-import type { TabsProps } from "antd";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
 import ClientPage from "../client";
 import StoragePage from "../storage";
 
@@ -65,6 +66,7 @@ const sanitizeNumber = (v: any, fallback = 0) => {
 function SiteConfigPanel({ canUpdate }: { canUpdate: boolean }) {
 	const queryClient = useQueryClient();
 	const category = "SITE";
+	const { confirm, ConfirmDialog } = useConfirmDialog();
 
 	const { data, isFetching } = useQuery({
 		queryKey: ["systemOption.list", category],
@@ -144,22 +146,20 @@ function SiteConfigPanel({ canUpdate }: { canUpdate: boolean }) {
 		}
 	};
 
-	const resetDefault = () => {
-		Modal.confirm({
+	const resetDefault = async () => {
+		const ok = await confirm({
 			title: "确认恢复默认？",
-			content: "确认恢复网站配置为默认值吗？",
-			okText: "恢复默认",
-			cancelText: "取消",
-			okButtonProps: { danger: true },
-			onOk: async () => {
-				try {
-					await resetMutation.mutateAsync();
-					toast.success("恢复成功", { position: "top-center" });
-				} catch {
-					// handled by apiClient
-				}
-			},
+			description: "确认恢复网站配置为默认值吗？",
+			confirmText: "恢复默认",
+			destructive: true,
 		});
+		if (!ok) return;
+		try {
+			await resetMutation.mutateAsync();
+			toast.success("恢复成功", { position: "top-center" });
+		} catch {
+			// handled by apiClient
+		}
 	};
 
 	const renderImageField = (code: string) => {
@@ -168,7 +168,9 @@ function SiteConfigPanel({ canUpdate }: { canUpdate: boolean }) {
 		return (
 			<div className="flex flex-col gap-2">
 				<div className="flex flex-wrap items-center gap-3">
-					{preview ? <img src={preview} alt="preview" className="h-12 w-12 rounded border object-contain bg-muted" /> : null}
+					{preview ? (
+						<img src={preview} alt="preview" className="h-12 w-12 rounded border object-contain bg-muted" />
+					) : null}
 					<input
 						type="file"
 						accept="image/*"
@@ -222,7 +224,9 @@ function SiteConfigPanel({ canUpdate }: { canUpdate: boolean }) {
 	const field = (code: string) => (
 		<div className="space-y-2">
 			<Label>{optionMap[code]?.name || code}</Label>
-			{optionMap[code]?.description ? <div className="text-xs text-muted-foreground">{optionMap[code]?.description}</div> : null}
+			{optionMap[code]?.description ? (
+				<div className="text-xs text-muted-foreground">{optionMap[code]?.description}</div>
+			) : null}
 			{code === "SITE_LOGO" || code === "SITE_FAVICON"
 				? renderImageField(code)
 				: code === "SITE_DESCRIPTION"
@@ -275,6 +279,7 @@ function SiteConfigPanel({ canUpdate }: { canUpdate: boolean }) {
 					</div>
 				)}
 			</CardContent>
+			{ConfirmDialog}
 		</Card>
 	);
 }
@@ -282,6 +287,7 @@ function SiteConfigPanel({ canUpdate }: { canUpdate: boolean }) {
 function SecurityConfigPanel({ canUpdate }: { canUpdate: boolean }) {
 	const queryClient = useQueryClient();
 	const category = "PASSWORD";
+	const { confirm, ConfirmDialog } = useConfirmDialog();
 
 	const { data, isFetching } = useQuery({
 		queryKey: ["systemOption.list", category],
@@ -373,28 +379,28 @@ function SecurityConfigPanel({ canUpdate }: { canUpdate: boolean }) {
 		}
 	};
 
-	const resetDefault = () => {
-		Modal.confirm({
+	const resetDefault = async () => {
+		const ok = await confirm({
 			title: "确认恢复默认？",
-			content: "确认恢复安全配置为默认值吗？",
-			okText: "恢复默认",
-			cancelText: "取消",
-			okButtonProps: { danger: true },
-			onOk: async () => {
-				try {
-					await resetMutation.mutateAsync();
-					toast.success("恢复成功", { position: "top-center" });
-				} catch {
-					// handled by apiClient
-				}
-			},
+			description: "确认恢复安全配置为默认值吗？",
+			confirmText: "恢复默认",
+			destructive: true,
 		});
+		if (!ok) return;
+		try {
+			await resetMutation.mutateAsync();
+			toast.success("恢复成功", { position: "top-center" });
+		} catch {
+			// handled by apiClient
+		}
 	};
 
 	const numberField = (code: string) => (
 		<div className="space-y-2">
 			<Label>{optionMap[code]?.name || code}</Label>
-			{optionMap[code]?.description ? <div className="text-xs text-muted-foreground">{optionMap[code]?.description}</div> : null}
+			{optionMap[code]?.description ? (
+				<div className="text-xs text-muted-foreground">{optionMap[code]?.description}</div>
+			) : null}
 			<Input
 				type="number"
 				value={String(draft[code] ?? 0)}
@@ -407,7 +413,9 @@ function SecurityConfigPanel({ canUpdate }: { canUpdate: boolean }) {
 	const switchField = (code: string) => (
 		<div className="space-y-2">
 			<Label>{optionMap[code]?.name || code}</Label>
-			{optionMap[code]?.description ? <div className="text-xs text-muted-foreground">{optionMap[code]?.description}</div> : null}
+			{optionMap[code]?.description ? (
+				<div className="text-xs text-muted-foreground">{optionMap[code]?.description}</div>
+			) : null}
 			<div className="flex items-center gap-2">
 				<Switch
 					checked={Number(draft[code] ?? 0) === 1}
@@ -465,6 +473,7 @@ function SecurityConfigPanel({ canUpdate }: { canUpdate: boolean }) {
 					</div>
 				)}
 			</CardContent>
+			{ConfirmDialog}
 		</Card>
 	);
 }
@@ -473,6 +482,7 @@ function LoginConfigPanel({ canUpdate }: { canUpdate: boolean }) {
 	const queryClient = useQueryClient();
 	const category = "LOGIN";
 	const code = "LOGIN_CAPTCHA_ENABLED";
+	const { confirm, ConfirmDialog } = useConfirmDialog();
 
 	const { data, isFetching } = useQuery({
 		queryKey: ["systemOption.list", category],
@@ -527,22 +537,20 @@ function LoginConfigPanel({ canUpdate }: { canUpdate: boolean }) {
 		}
 	};
 
-	const resetDefault = () => {
-		Modal.confirm({
+	const resetDefault = async () => {
+		const ok = await confirm({
 			title: "确认恢复默认？",
-			content: "确认恢复登录配置为默认值吗？",
-			okText: "恢复默认",
-			cancelText: "取消",
-			okButtonProps: { danger: true },
-			onOk: async () => {
-				try {
-					await resetMutation.mutateAsync();
-					toast.success("恢复成功", { position: "top-center" });
-				} catch {
-					// handled by apiClient
-				}
-			},
+			description: "确认恢复登录配置为默认值吗？",
+			confirmText: "恢复默认",
+			destructive: true,
 		});
+		if (!ok) return;
+		try {
+			await resetMutation.mutateAsync();
+			toast.success("恢复成功", { position: "top-center" });
+		} catch {
+			// handled by apiClient
+		}
 	};
 
 	return (
@@ -581,7 +589,9 @@ function LoginConfigPanel({ canUpdate }: { canUpdate: boolean }) {
 				{!isFetching && (
 					<div className="space-y-2">
 						<Label>{optionMap[code]?.name || code}</Label>
-						{optionMap[code]?.description ? <div className="text-xs text-muted-foreground">{optionMap[code]?.description}</div> : null}
+						{optionMap[code]?.description ? (
+							<div className="text-xs text-muted-foreground">{optionMap[code]?.description}</div>
+						) : null}
 						<div className="flex items-center gap-2">
 							<Switch
 								checked={Number(draft) === 1}
@@ -593,6 +603,7 @@ function LoginConfigPanel({ canUpdate }: { canUpdate: boolean }) {
 					</div>
 				)}
 			</CardContent>
+			{ConfirmDialog}
 		</Card>
 	);
 }

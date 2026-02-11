@@ -1,11 +1,12 @@
+import { useMutation } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { systemUserService, type UserImportParseResp, type UserImportReq } from "@/api/services/systemUserService";
 import { Button } from "@/ui/button";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/ui/sheet";
-import { useMutation } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
 
 const downloadBlob = (blob: Blob, filename: string) => {
 	const url = URL.createObjectURL(blob);
@@ -136,7 +137,9 @@ export default function UserImportSheet({ open, onOpenChange, onSuccess }: UserI
 							<Button variant="secondary" disabled={busy || !file} onClick={onParse}>
 								上传解析
 							</Button>
-							{parseResult?.importKey && <span className="text-xs text-muted-foreground">importKey: {parseResult.importKey}</span>}
+							{parseResult?.importKey && (
+								<span className="text-xs text-muted-foreground">importKey: {parseResult.importKey}</span>
+							)}
 						</div>
 						{parseResult && (
 							<div className="grid grid-cols-2 gap-3 text-sm">
@@ -154,32 +157,52 @@ export default function UserImportSheet({ open, onOpenChange, onSuccess }: UserI
 						<div className="grid gap-3">
 							<div className="grid gap-2">
 								<Label>用户已存在</Label>
-								<select className="h-9 rounded-md border bg-transparent px-3 text-sm" value={duplicateUser} onChange={(e) => setDuplicateUser(Number(e.target.value))}>
-									<option value={1}>跳过该行</option>
-									<option value={3}>停止导入</option>
-									<option value={2}>修改数据</option>
-								</select>
+								<Select value={String(duplicateUser)} onValueChange={(v) => setDuplicateUser(Number(v))}>
+									<SelectTrigger className="w-full">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="1">跳过该行</SelectItem>
+										<SelectItem value="3">停止导入</SelectItem>
+										<SelectItem value="2">修改数据</SelectItem>
+									</SelectContent>
+								</Select>
 							</div>
 							<div className="grid gap-2">
 								<Label>邮箱已存在</Label>
-								<select className="h-9 rounded-md border bg-transparent px-3 text-sm" value={duplicateEmail} onChange={(e) => setDuplicateEmail(Number(e.target.value))}>
-									<option value={1}>跳过该行</option>
-									<option value={3}>停止导入</option>
-								</select>
+								<Select value={String(duplicateEmail)} onValueChange={(v) => setDuplicateEmail(Number(v))}>
+									<SelectTrigger className="w-full">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="1">跳过该行</SelectItem>
+										<SelectItem value="3">停止导入</SelectItem>
+									</SelectContent>
+								</Select>
 							</div>
 							<div className="grid gap-2">
 								<Label>手机已存在</Label>
-								<select className="h-9 rounded-md border bg-transparent px-3 text-sm" value={duplicatePhone} onChange={(e) => setDuplicatePhone(Number(e.target.value))}>
-									<option value={1}>跳过该行</option>
-									<option value={3}>停止导入</option>
-								</select>
+								<Select value={String(duplicatePhone)} onValueChange={(v) => setDuplicatePhone(Number(v))}>
+									<SelectTrigger className="w-full">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="1">跳过该行</SelectItem>
+										<SelectItem value="3">停止导入</SelectItem>
+									</SelectContent>
+								</Select>
 							</div>
 							<div className="grid gap-2">
 								<Label>默认状态</Label>
-								<select className="h-9 rounded-md border bg-transparent px-3 text-sm" value={defaultStatus} onChange={(e) => setDefaultStatus(Number(e.target.value))}>
-									<option value={1}>启用</option>
-									<option value={2}>禁用</option>
-								</select>
+								<Select value={String(defaultStatus)} onValueChange={(v) => setDefaultStatus(Number(v))}>
+									<SelectTrigger className="w-full">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="1">启用</SelectItem>
+										<SelectItem value="2">禁用</SelectItem>
+									</SelectContent>
+								</Select>
 							</div>
 						</div>
 					</div>
@@ -196,4 +219,3 @@ export default function UserImportSheet({ open, onOpenChange, onSuccess }: UserI
 		</Sheet>
 	);
 }
-

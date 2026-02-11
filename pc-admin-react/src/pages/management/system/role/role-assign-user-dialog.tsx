@@ -1,15 +1,15 @@
 // 角色-分配用户弹窗：从 /system/user 分页选择用户，提交到 /system/role/:id/user
 
-import { systemUserService, type SysUserRow } from "@/api/services/systemUserService";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { systemRoleService } from "@/api/services/systemRoleService";
+import { type SysUserRow, systemUserService } from "@/api/services/systemUserService";
+import DataTable from "@/components/data-table/data-table";
 import { Button } from "@/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Input } from "@/ui/input";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Table } from "antd";
-import type { ColumnsType } from "antd/es/table";
-import { useMemo, useState } from "react";
-import { toast } from "sonner";
 
 export default function RoleAssignUserDialog({
 	open,
@@ -51,23 +51,22 @@ export default function RoleAssignUserDialog({
 		},
 	});
 
-	const columns: ColumnsType<SysUserRow> = useMemo(
+	const columns: Array<ColumnDef<SysUserRow>> = useMemo(
 		() => [
-			{ title: "用户名", dataIndex: "username", width: 160 },
-			{ title: "昵称", dataIndex: "nickname", width: 160 },
-			{ title: "部门", dataIndex: "deptName", width: 180, ellipsis: true },
-			{ title: "角色", dataIndex: "roleNames", render: (v: string[]) => (v && v.length ? v.join(", ") : "-") },
+			{ header: "用户名", accessorKey: "username", size: 160 },
+			{ header: "昵称", accessorKey: "nickname", size: 160 },
+			{ header: "部门", accessorKey: "deptName", size: 180 },
+			{
+				header: "角色",
+				accessorKey: "roleNames",
+				size: 260,
+				cell: ({ row }) => {
+					const v = row.original.roleNames;
+					return v?.length ? v.join(", ") : "-";
+				},
+			},
 		],
 		[],
-	);
-
-	const rowSelection = useMemo(
-		() => ({
-			selectedRowKeys: selectedUserIds,
-			onChange: (keys: React.Key[]) => setSelectedUserIds(keys.map((k) => Number(k)).filter((x) => Number.isFinite(x) && x > 0)),
-			getCheckboxProps: (record: SysUserRow) => ({ disabled: assignedUserIdSet.has(Number(record.id)) }),
-		}),
-		[assignedUserIdSet, selectedUserIds],
 	);
 
 	const onSubmit = async () => {
@@ -101,7 +100,12 @@ export default function RoleAssignUserDialog({
 				</DialogHeader>
 
 				<div className="flex flex-wrap items-center gap-2">
-					<Input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="用户名/昵称/描述" className="w-[260px]" />
+					<Input
+						value={keyword}
+						onChange={(e) => setKeyword(e.target.value)}
+						placeholder="用户名/昵称/描述"
+						className="w-[260px]"
+					/>
 					<Button
 						variant="secondary"
 						onClick={() => {
@@ -123,23 +127,26 @@ export default function RoleAssignUserDialog({
 					</Button>
 				</div>
 
-				<Table<SysUserRow>
-					rowKey="id"
-					size="small"
-					scroll={{ x: 900 }}
-					loading={isFetching}
+				<DataTable<SysUserRow>
 					columns={columns}
-					dataSource={data?.list || []}
-					rowSelection={rowSelection as any}
+					data={data?.list || []}
+					loading={isFetching}
+					getRowId={(row) => String(row.id)}
+					selection={{
+						selectedRowIds: selectedUserIds,
+						onSelectedRowIdsChange: (ids) =>
+							setSelectedUserIds(ids.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0)),
+						isRowSelectable: (record) => !assignedUserIdSet.has(Number(record.id)),
+					}}
 					pagination={{
-						current: page,
+						page,
 						pageSize,
 						total: data?.total || 0,
-						showSizeChanger: true,
 						onChange: (p, s) => {
 							setPage(p);
 							setPageSize(s);
 						},
+						pageSizeOptions: [10, 20, 30, 50, 100],
 					}}
 				/>
 
@@ -155,4 +162,3 @@ export default function RoleAssignUserDialog({
 		</Dialog>
 	);
 }
-

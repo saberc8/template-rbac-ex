@@ -1,13 +1,14 @@
+import { TreeSelect } from "antd";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import type { SysDeptNode } from "@/api/services/systemDeptService";
 import type { SysRoleDetail, SysRoleSaveReq } from "@/api/services/systemRoleService";
 import { Button } from "@/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Switch } from "@/ui/switch";
-import { TreeSelect } from "antd";
-import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
 
 type RoleFormMode = "create" | "update";
 
@@ -121,17 +122,18 @@ export default function RoleFormDialog({
 
 					<div className="space-y-2">
 						<Label>数据权限</Label>
-						<select
-							className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-							value={dataScope}
-							onChange={(e) => setDataScope(Number(e.target.value))}
-						>
-							<option value={4}>全部数据权限</option>
-							<option value={2}>本部门及以下</option>
-							<option value={3}>本部门</option>
-							<option value={5}>仅本人</option>
-							<option value={1}>自定义</option>
-						</select>
+						<Select value={String(dataScope)} onValueChange={(v) => setDataScope(Number(v))}>
+							<SelectTrigger className="w-full">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="4">全部数据权限</SelectItem>
+								<SelectItem value="2">本部门及以下</SelectItem>
+								<SelectItem value="3">本部门</SelectItem>
+								<SelectItem value="5">仅本人</SelectItem>
+								<SelectItem value="1">自定义</SelectItem>
+							</SelectContent>
+						</Select>
 					</div>
 
 					<div className="space-y-2 md:col-span-2">
@@ -145,7 +147,9 @@ export default function RoleFormDialog({
 							className="w-full"
 							treeData={deptSelectData}
 							value={deptIds}
-							onChange={(v) => setDeptIds((v || []).map((x: any) => Number(x)).filter((x: number) => Number.isFinite(x) && x > 0))}
+							onChange={(v) =>
+								setDeptIds((v || []).map((x: any) => Number(x)).filter((x: number) => Number.isFinite(x) && x > 0))
+							}
 							placeholder="选择部门（多选）"
 							treeDefaultExpandAll
 							multiple

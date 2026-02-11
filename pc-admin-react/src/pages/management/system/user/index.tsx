@@ -1,5 +1,13 @@
-import { systemDeptService, type SysDeptNode } from "@/api/services/systemDeptService";
-import { systemUserService, type SysUserRow } from "@/api/services/systemUserService";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
+import { Tree } from "antd";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { BasicStatus } from "#/enum";
+import { type SysDeptNode, systemDeptService } from "@/api/services/systemDeptService";
+import { type SysUserRow, systemUserService } from "@/api/services/systemUserService";
+import { useConfirmDialog } from "@/components/confirm/use-confirm-dialog";
+import DataTable from "@/components/data-table/data-table";
 import { usePathname, useRouter } from "@/routes/hooks";
 import { useUserPermissions } from "@/store/userStore";
 import { Badge } from "@/ui/badge";
@@ -7,12 +15,6 @@ import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Table, Tree } from "antd";
-import type { ColumnsType } from "antd/es/table";
-import { BasicStatus } from "#/enum";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
 import UserFormSheet from "./user-form-sheet";
 import UserImportSheet from "./user-import-sheet";
 import UserResetPasswordDialog from "./user-reset-password-dialog";
@@ -77,6 +79,7 @@ export default function UserPage() {
 	const [updateRoleOpen, setUpdateRoleOpen] = useState(false);
 	const [activeUserId, setActiveUserId] = useState<number | null>(null);
 	const [activeUserRoleIds, setActiveUserRoleIds] = useState<number[] | undefined>(undefined);
+	const { confirm, ConfirmDialog } = useConfirmDialog();
 
 	const deleteMutation = useMutation({
 		mutationFn: (ids: number[]) => systemUserService.delete(ids),
@@ -101,131 +104,164 @@ export default function UserPage() {
 
 	const refresh = () => queryClient.invalidateQueries({ queryKey: ["systemUser.page"] });
 
-	const columns: ColumnsType<SysUserRow> = useMemo(() => {
-		const base: ColumnsType<SysUserRow> = [
+	const columns: Array<ColumnDef<SysUserRow>> = useMemo(() => {
+		const base: Array<ColumnDef<SysUserRow>> = [
 			{
-				title: "用户",
-				dataIndex: "nickname",
-				width: 240,
-				render: (_, record) => (
-					<div className="flex">
-						<img alt="" src={record.avatar} className="h-10 w-10 rounded-full object-cover bg-muted" />
-						<div className="ml-2 flex flex-col">
-							<span className="text-sm">{record.nickname || "-"}</span>
-							<span className="text-xs text-text-secondary">{record.username}</span>
+				header: "用户",
+				id: "user",
+				size: 260,
+				cell: ({ row }) => {
+					const record = row.original;
+					return (
+						<div className="flex">
+							<img alt="" src={record.avatar} className="h-10 w-10 rounded-full object-cover bg-muted" />
+							<div className="ml-2 flex flex-col">
+								<span className="text-sm">{record.nickname || "-"}</span>
+								<span className="text-xs text-text-secondary">{record.username}</span>
+							</div>
 						</div>
-					</div>
-				),
+					);
+				},
 			},
-			{ title: "部门", dataIndex: "deptName", width: 180, ellipsis: true },
+			{ header: "部门", accessorKey: "deptName", size: 180 },
 			{
-				title: "角色",
-				dataIndex: "roleNames",
-				align: "center",
-				width: 220,
-				render: (roleNames: string[]) => <Badge variant="info">{(roleNames || []).join(", ") || "-"}</Badge>,
+				header: "角色",
+				accessorKey: "roleNames",
+				size: 240,
+				meta: { align: "center" },
+				cell: ({ row }) => <Badge variant="info">{(row.original.roleNames || []).join(", ") || "-"}</Badge>,
 			},
 			{
-				title: "状态",
-				dataIndex: "status",
-				align: "center",
-				width: 120,
-				render: (status: number) => (
-					<Badge variant={status === BasicStatus.DISABLE ? "error" : "success"}>{status === BasicStatus.DISABLE ? "禁用" : "启用"}</Badge>
-				),
+				header: "状态",
+				accessorKey: "status",
+				size: 120,
+				meta: { align: "center" },
+				cell: ({ row }) => {
+					const status = Number(row.original.status);
+					return (
+						<Badge variant={status === BasicStatus.DISABLE ? "error" : "success"}>
+							{status === BasicStatus.DISABLE ? "禁用" : "启用"}
+						</Badge>
+					);
+				},
 			},
-			{ title: "手机", dataIndex: "phone", width: 150, ellipsis: true, render: (v?: string) => v || "-" },
-			{ title: "邮箱", dataIndex: "email", width: 180, ellipsis: true, render: (v?: string) => v || "-" },
-			{ title: "创建时间", dataIndex: "createTime", width: 180, render: (v?: string) => v || "-" },
+			{
+				header: "手机",
+				accessorKey: "phone",
+				size: 150,
+				cell: ({ row }) => row.original.phone || "-",
+			},
+			{
+				header: "邮箱",
+				accessorKey: "email",
+				size: 200,
+				cell: ({ row }) => row.original.email || "-",
+			},
+			{ header: "创建时间", accessorKey: "createTime", size: 180, cell: ({ row }) => row.original.createTime || "-" },
 		];
 
-		if (!canAny(["system:user:get", "system:user:update", "system:user:delete", "system:user:resetPwd", "system:user:updateRole"])) {
+		if (
+			!canAny([
+				"system:user:get",
+				"system:user:update",
+				"system:user:delete",
+				"system:user:resetPwd",
+				"system:user:updateRole",
+			])
+		) {
 			return base;
 		}
 
 		base.push({
-			title: "操作",
-			key: "operation",
-			align: "center",
-			width: 420,
-			fixed: "right",
-			render: (_, record) => (
-				<div className="flex w-full flex-wrap items-center justify-center gap-1">
-					{can("system:user:get") && (
-						<Button
-							variant="secondary"
-							size="sm"
-							onClick={() => {
-								push(`${pathname}/${record.id}`);
-							}}
-						>
-							详情
-						</Button>
-					)}
-					{can("system:user:update") && (
-						<Button
-							variant="secondary"
-							size="sm"
-							onClick={() => {
-								setUserFormMode("update");
-								setEditingUserId(record.id);
-								setUserFormOpen(true);
-							}}
-						>
-							修改
-						</Button>
-					)}
-					{can("system:user:delete") && (
-						<Button
-							variant="destructive"
-							size="sm"
-							title={record.isSystem ? "系统内置数据不能删除" : undefined}
-							disabled={Boolean(record.isSystem) || deleteMutation.isPending}
-							onClick={async () => {
-								if (record.isSystem) return;
-								const ok = window.confirm(`是否确定删除用户「${record.nickname}(${record.username})」？`);
-								if (!ok) return;
-								try {
-									await deleteMutation.mutateAsync([record.id]);
-									toast.success("删除成功", { position: "top-center" });
-								} catch {
-									// handled by apiClient
-								}
-							}}
-						>
-							删除
-						</Button>
-					)}
-					{can("system:user:resetPwd") && (
-						<Button
-							variant="secondary"
-							size="sm"
-							onClick={() => {
-								setActiveUserId(record.id);
-								setResetPwdOpen(true);
-							}}
-						>
-							重置密码
-						</Button>
-					)}
-					{can("system:user:updateRole") && (
-						<Button
-							variant="secondary"
-							size="sm"
-							onClick={() => {
-								setActiveUserId(record.id);
-								setActiveUserRoleIds(record.roleIds);
-								setUpdateRoleOpen(true);
-							}}
-						>
-							分配角色
-						</Button>
-					)}
-				</div>
-			),
+			header: "操作",
+			id: "operation",
+			size: 460,
+			meta: { align: "center" },
+			cell: ({ row }) => {
+				const record = row.original;
+				return (
+					<div className="flex w-full flex-wrap items-center justify-center gap-1">
+						{can("system:user:get") && (
+							<Button
+								variant="secondary"
+								size="sm"
+								onClick={() => {
+									push(`${pathname}/${record.id}`);
+								}}
+							>
+								详情
+							</Button>
+						)}
+						{can("system:user:update") && (
+							<Button
+								variant="secondary"
+								size="sm"
+								onClick={() => {
+									setUserFormMode("update");
+									setEditingUserId(record.id);
+									setUserFormOpen(true);
+								}}
+							>
+								修改
+							</Button>
+						)}
+						{can("system:user:delete") && (
+							<Button
+								variant="destructive"
+								size="sm"
+								title={record.isSystem ? "系统内置数据不能删除" : undefined}
+								disabled={Boolean(record.isSystem) || deleteMutation.isPending}
+								onClick={async () => {
+									if (record.isSystem) return;
+									const ok = await confirm({
+										title: "确认删除？",
+										description: `用户：${record.nickname}（${record.username}）`,
+										confirmText: "删除",
+										destructive: true,
+									});
+									if (!ok) return;
+									try {
+										await deleteMutation.mutateAsync([record.id]);
+										toast.success("删除成功", { position: "top-center" });
+									} catch {
+										// handled by apiClient
+									}
+								}}
+							>
+								删除
+							</Button>
+						)}
+						{can("system:user:resetPwd") && (
+							<Button
+								variant="secondary"
+								size="sm"
+								onClick={() => {
+									setActiveUserId(record.id);
+									setResetPwdOpen(true);
+								}}
+							>
+								重置密码
+							</Button>
+						)}
+						{can("system:user:updateRole") && (
+							<Button
+								variant="secondary"
+								size="sm"
+								onClick={() => {
+									setActiveUserId(record.id);
+									setActiveUserRoleIds(record.roleIds);
+									setUpdateRoleOpen(true);
+								}}
+							>
+								分配角色
+							</Button>
+						)}
+					</div>
+				);
+			},
 		});
 		return base;
-	}, [can, canAny, deleteMutation.isPending, pathname, push]);
+	}, [can, canAny, confirm, deleteMutation.isPending, deleteMutation.mutateAsync, pathname, push]);
 
 	const deptTreeData = useMemo(() => {
 		const toNodes = (nodes: SysDeptNode[]): any[] =>
@@ -276,19 +312,19 @@ export default function UserPage() {
 			</Card>
 
 			<Card className="min-w-0">
-				<CardHeader>
-					<div className="flex flex-col gap-3">
-						<div className="flex items-center justify-between gap-3">
-							<div>用户列表</div>
+				<CardContent>
+					<DataTable<SysUserRow>
+						title="用户列表"
+						actions={
 							<div className="flex items-center gap-2">
 								{can("system:user:create") && (
-						<Button
-							size="sm"
-							onClick={() => {
-								setUserFormMode("create");
-								setEditingUserId(null);
-								setUserFormOpen(true);
-							}}
+									<Button
+										size="sm"
+										onClick={() => {
+											setUserFormMode("create");
+											setEditingUserId(null);
+											setUserFormOpen(true);
+										}}
 									>
 										新增
 									</Button>
@@ -316,79 +352,71 @@ export default function UserPage() {
 									</Button>
 								)}
 							</div>
-						</div>
-
-						<div className="flex flex-wrap items-center gap-2">
-							<Input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="用户名/昵称/描述" className="w-[240px]" />
-							<Select
-								value={status === undefined ? "all" : String(status)}
-								onValueChange={(v) => {
-									if (v === "all") {
+						}
+						search={
+							<>
+								<Input
+									value={keyword}
+									onChange={(e) => setKeyword(e.target.value)}
+									placeholder="用户名/昵称/描述"
+									className="w-[240px]"
+								/>
+								<Select
+									value={status === undefined ? "all" : String(status)}
+									onValueChange={(v) => setStatus(v === "all" ? undefined : Number(v))}
+								>
+									<SelectTrigger size="sm" className="w-[140px]">
+										<SelectValue placeholder="状态" />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="all">全部状态</SelectItem>
+										<SelectItem value={String(BasicStatus.ENABLE)}>启用</SelectItem>
+										<SelectItem value={String(BasicStatus.DISABLE)}>禁用</SelectItem>
+									</SelectContent>
+								</Select>
+								<Button
+									size="sm"
+									onClick={() => {
+										setPage(1);
+										setQueryKeyword(keyword.trim());
+										setQueryStatus(status);
+										setQueryDeptId(deptId);
+									}}
+								>
+									查询
+								</Button>
+								<Button
+									size="sm"
+									variant="secondary"
+									onClick={() => {
+										setKeyword("");
 										setStatus(undefined);
-										return;
-									}
-									setStatus(Number(v));
-								}}
-							>
-								<SelectTrigger size="sm">
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="all">全部状态</SelectItem>
-									<SelectItem value={String(BasicStatus.ENABLE)}>启用</SelectItem>
-									<SelectItem value={String(BasicStatus.DISABLE)}>禁用</SelectItem>
-								</SelectContent>
-							</Select>
-							<Button
-								size="sm"
-								onClick={() => {
-									setPage(1);
-									setQueryKeyword(keyword.trim());
-									setQueryStatus(status);
-									setQueryDeptId(deptId);
-								}}
-							>
-								查询
-							</Button>
-							<Button
-								size="sm"
-								variant="secondary"
-								onClick={() => {
-									setKeyword("");
-									setStatus(undefined);
-									setDeptId(undefined);
-									setPage(1);
-									setQueryKeyword("");
-									setQueryStatus(undefined);
-									setQueryDeptId(undefined);
-								}}
-							>
-								重置
-							</Button>
-						</div>
-					</div>
-				</CardHeader>
-				<CardContent>
-					<div className="min-w-0 overflow-x-auto">
-						<Table<SysUserRow>
-							rowKey="id"
-							size="small"
-							scroll={{ x: "max-content" }}
-							loading={isFetching}
-							pagination={{
-								current: page,
-								pageSize,
-								total: data?.total || 0,
-								showSizeChanger: true,
-								onChange: (p, s) => {
-									setPage(p);
-									setPageSize(s);
-								},
-							}}
-							columns={columns as any}
-							dataSource={data?.list || []}
-						/>
-					</div>
+										setDeptId(undefined);
+										setPage(1);
+										setQueryKeyword("");
+										setQueryStatus(undefined);
+										setQueryDeptId(undefined);
+									}}
+								>
+									重置
+								</Button>
+							</>
+						}
+						columns={columns}
+						data={data?.list || []}
+						loading={isFetching}
+						getRowId={(row) => String(row.id)}
+						pagination={{
+							page,
+							pageSize,
+							total: data?.total || 0,
+							onChange: (p, s) => {
+								setPage(p);
+								setPageSize(s);
+							},
+							pageSizeOptions: [10, 20, 30, 50, 100],
+						}}
+					/>
 				</CardContent>
 			</Card>
 
@@ -399,13 +427,16 @@ export default function UserPage() {
 				onOpenChange={setUserFormOpen}
 				onSuccess={refresh}
 			/>
-			<UserImportSheet
-				open={importOpen}
-				onOpenChange={setImportOpen}
+			<UserImportSheet open={importOpen} onOpenChange={setImportOpen} onSuccess={refresh} />
+			<UserResetPasswordDialog open={resetPwdOpen} userId={activeUserId} onOpenChange={setResetPwdOpen} />
+			<UserUpdateRoleDialog
+				open={updateRoleOpen}
+				userId={activeUserId}
+				defaultRoleIds={activeUserRoleIds}
+				onOpenChange={setUpdateRoleOpen}
 				onSuccess={refresh}
 			/>
-			<UserResetPasswordDialog open={resetPwdOpen} userId={activeUserId} onOpenChange={setResetPwdOpen} />
-			<UserUpdateRoleDialog open={updateRoleOpen} userId={activeUserId} defaultRoleIds={activeUserRoleIds} onOpenChange={setUpdateRoleOpen} onSuccess={refresh} />
+			{ConfirmDialog}
 		</div>
 	);
 }

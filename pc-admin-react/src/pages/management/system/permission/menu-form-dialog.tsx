@@ -1,13 +1,14 @@
+import { TreeSelect } from "antd";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { BasicStatus } from "#/enum";
 import type { SysMenuNode, SysMenuSaveReq } from "@/api/services/systemMenuService";
 import { Button } from "@/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Switch } from "@/ui/switch";
-import { TreeSelect } from "antd";
-import { useEffect, useMemo, useState } from "react";
-import { BasicStatus } from "#/enum";
-import { toast } from "sonner";
 
 const collectDescendantIds = (root: SysMenuNode | null): Set<number> => {
 	const ids = new Set<number>();
@@ -185,15 +186,16 @@ export default function MenuFormDialog({
 				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 					<div className="space-y-2">
 						<Label>类型</Label>
-						<select
-							className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-							value={type}
-							onChange={(e) => setType(Number(e.target.value))}
-						>
-							<option value={1}>目录</option>
-							<option value={2}>菜单</option>
-							<option value={3}>按钮</option>
-						</select>
+						<Select value={String(type)} onValueChange={(v) => setType(Number(v))}>
+							<SelectTrigger className="w-full">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="1">目录</SelectItem>
+								<SelectItem value="2">菜单</SelectItem>
+								<SelectItem value="3">按钮</SelectItem>
+							</SelectContent>
+						</Select>
 					</div>
 
 					<div className="space-y-2">
@@ -230,7 +232,11 @@ export default function MenuFormDialog({
 					{!isButton && (
 						<div className="space-y-2">
 							<Label>组件</Label>
-							<Input value={component} onChange={(e) => setComponent(e.target.value)} placeholder="例如：system/menu/index" />
+							<Input
+								value={component}
+								onChange={(e) => setComponent(e.target.value)}
+								placeholder="例如：system/menu/index"
+							/>
 						</div>
 					)}
 
@@ -243,7 +249,11 @@ export default function MenuFormDialog({
 
 					<div className="space-y-2">
 						<Label>权限标识</Label>
-						<Input value={permission} onChange={(e) => setPermission(e.target.value)} placeholder="例如：system:menu:create" />
+						<Input
+							value={permission}
+							onChange={(e) => setPermission(e.target.value)}
+							placeholder="例如：system:menu:create"
+						/>
 					</div>
 
 					<div className="space-y-2">
@@ -258,14 +268,15 @@ export default function MenuFormDialog({
 
 					<div className="space-y-2">
 						<Label>状态</Label>
-						<select
-							className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-							value={status}
-							onChange={(e) => setStatus(Number(e.target.value))}
-						>
-							<option value={BasicStatus.ENABLE}>启用</option>
-							<option value={BasicStatus.DISABLE}>禁用</option>
-						</select>
+						<Select value={String(status)} onValueChange={(v) => setStatus(Number(v))}>
+							<SelectTrigger className="w-full">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value={String(BasicStatus.ENABLE)}>启用</SelectItem>
+								<SelectItem value={String(BasicStatus.DISABLE)}>禁用</SelectItem>
+							</SelectContent>
+						</Select>
 					</div>
 
 					{!isButton && (

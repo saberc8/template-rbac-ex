@@ -1,14 +1,15 @@
 // 存储配置表单弹窗：对接 /system/storage（新增/编辑）
 
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { BasicStatus } from "#/enum";
 import type { SysStorageRow, SysStorageSaveReq } from "@/api/services/systemStorageService";
 import { Button } from "@/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Switch } from "@/ui/switch";
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
-import { BasicStatus } from "#/enum";
 
 type StorageFormMode = "create" | "update";
 
@@ -128,10 +129,15 @@ export default function StorageFormDialog({
 
 					<div className="space-y-2">
 						<Label>类型</Label>
-						<select className="h-9 w-full rounded-md border bg-transparent px-3 text-sm" value={type} onChange={(e) => setType(Number(e.target.value))}>
-							<option value={1}>本地</option>
-							<option value={2}>OSS/MinIO</option>
-						</select>
+						<Select value={String(type)} onValueChange={(v) => setType(Number(v))}>
+							<SelectTrigger className="w-full">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="1">本地</SelectItem>
+								<SelectItem value="2">OSS/MinIO</SelectItem>
+							</SelectContent>
+						</Select>
 					</div>
 
 					<div className="space-y-2">
@@ -155,7 +161,11 @@ export default function StorageFormDialog({
 
 					<div className="space-y-2">
 						<Label>Endpoint</Label>
-						<Input value={endpoint} onChange={(e) => setEndpoint(e.target.value)} placeholder="例如：http://127.0.0.1:9000" />
+						<Input
+							value={endpoint}
+							onChange={(e) => setEndpoint(e.target.value)}
+							placeholder="例如：http://127.0.0.1:9000"
+						/>
 					</div>
 
 					<div className="space-y-2">
@@ -180,7 +190,10 @@ export default function StorageFormDialog({
 
 					<div className="flex flex-wrap items-center gap-4 md:col-span-2">
 						<div className="flex items-center gap-2">
-							<Switch checked={status === BasicStatus.ENABLE} onCheckedChange={(checked) => setStatus(checked ? BasicStatus.ENABLE : BasicStatus.DISABLE)} />
+							<Switch
+								checked={status === BasicStatus.ENABLE}
+								onCheckedChange={(checked) => setStatus(checked ? BasicStatus.ENABLE : BasicStatus.DISABLE)}
+							/>
 							<span className="text-sm text-muted-foreground">{status === BasicStatus.ENABLE ? "启用" : "禁用"}</span>
 						</div>
 						<div className="flex items-center gap-2">

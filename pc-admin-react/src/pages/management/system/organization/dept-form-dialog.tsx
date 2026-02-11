@@ -1,12 +1,13 @@
+import { TreeSelect } from "antd";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { BasicStatus } from "#/enum";
 import type { SysDeptNode, SysDeptSaveReq } from "@/api/services/systemDeptService";
 import { Button } from "@/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
-import { TreeSelect } from "antd";
-import { useEffect, useMemo, useState } from "react";
-import { BasicStatus } from "#/enum";
-import { toast } from "sonner";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 
 const collectDescendantIds = (root: SysDeptNode | null): Set<number> => {
 	const ids = new Set<number>();
@@ -140,7 +141,9 @@ export default function DeptFormDialog({
 							treeDefaultExpandAll
 							disabled={!canChangeParent}
 						/>
-						{mode === "update" && isSystem && <div className="text-xs text-muted-foreground">系统内置部门不允许变更上级部门</div>}
+						{mode === "update" && isSystem && (
+							<div className="text-xs text-muted-foreground">系统内置部门不允许变更上级部门</div>
+						)}
 					</div>
 
 					<div className="space-y-2">
@@ -150,16 +153,22 @@ export default function DeptFormDialog({
 
 					<div className="space-y-2">
 						<Label>状态</Label>
-						<select
-							className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-							value={status}
-							onChange={(e) => setStatus(Number(e.target.value))}
+						<Select
+							value={String(status)}
+							onValueChange={(v) => setStatus(Number(v))}
 							disabled={mode === "update" && isSystem}
 						>
-							<option value={BasicStatus.ENABLE}>启用</option>
-							<option value={BasicStatus.DISABLE}>禁用</option>
-						</select>
-						{mode === "update" && isSystem && <div className="text-xs text-muted-foreground">系统内置部门不允许禁用</div>}
+							<SelectTrigger className="w-full">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value={String(BasicStatus.ENABLE)}>启用</SelectItem>
+								<SelectItem value={String(BasicStatus.DISABLE)}>禁用</SelectItem>
+							</SelectContent>
+						</Select>
+						{mode === "update" && isSystem && (
+							<div className="text-xs text-muted-foreground">系统内置部门不允许禁用</div>
+						)}
 					</div>
 
 					<div className="space-y-2 md:col-span-2">

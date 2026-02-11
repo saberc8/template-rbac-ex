@@ -1,16 +1,17 @@
 // 字典项表单弹窗：对接 /system/dict/item（新增/编辑）
 
-import { systemDictItemService, type SysDictItemSaveReq } from "@/api/services/systemDictItemService";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { BasicStatus } from "#/enum";
+import { type SysDictItemSaveReq, systemDictItemService } from "@/api/services/systemDictItemService";
 import { Button } from "@/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Switch } from "@/ui/switch";
 import { Textarea } from "@/ui/textarea";
-import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
-import { BasicStatus } from "#/enum";
-import { toast } from "sonner";
 
 type DictItemFormMode = "create" | "update";
 
@@ -125,18 +126,28 @@ export default function DictItemFormDialog({
 					<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 						<div className="space-y-2">
 							<Label>颜色</Label>
-							<select className="h-9 w-full rounded-md border bg-transparent px-3 text-sm" value={color} onChange={(e) => setColor(e.target.value)} disabled={loading}>
-								{COLOR_OPTIONS.map((o) => (
-									<option key={o.value} value={o.value}>
-										{o.label}
-									</option>
-								))}
-							</select>
+							<Select value={color || "none"} onValueChange={(v) => setColor(v === "none" ? "" : v)} disabled={loading}>
+								<SelectTrigger className="w-full">
+									<SelectValue placeholder="请选择颜色" />
+								</SelectTrigger>
+								<SelectContent>
+									{COLOR_OPTIONS.map((o) => (
+										<SelectItem key={o.value || "none"} value={o.value || "none"}>
+											{o.label}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
 						</div>
 
 						<div className="space-y-2">
 							<Label>排序</Label>
-							<Input type="number" value={Number.isFinite(sort) ? sort : 999} onChange={(e) => setSort(e.target.value === "" ? 0 : Number(e.target.value))} disabled={loading} />
+							<Input
+								type="number"
+								value={Number.isFinite(sort) ? sort : 999}
+								onChange={(e) => setSort(e.target.value === "" ? 0 : Number(e.target.value))}
+								disabled={loading}
+							/>
 						</div>
 					</div>
 
@@ -146,7 +157,11 @@ export default function DictItemFormDialog({
 					</div>
 
 					<div className="flex items-center gap-3">
-						<Switch checked={status === BasicStatus.ENABLE} onCheckedChange={(checked) => setStatus(checked ? BasicStatus.ENABLE : BasicStatus.DISABLE)} disabled={loading} />
+						<Switch
+							checked={status === BasicStatus.ENABLE}
+							onCheckedChange={(checked) => setStatus(checked ? BasicStatus.ENABLE : BasicStatus.DISABLE)}
+							disabled={loading}
+						/>
 						<span className="text-sm text-muted-foreground">{status === BasicStatus.ENABLE ? "启用" : "禁用"}</span>
 					</div>
 				</div>
@@ -163,4 +178,3 @@ export default function DictItemFormDialog({
 		</Dialog>
 	);
 }
-

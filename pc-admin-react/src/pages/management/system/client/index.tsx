@@ -1,14 +1,16 @@
-import { systemClientService, type SysClientRow, type SysClientSaveReq } from "@/api/services/systemClientService";
-import { useUserPermissions } from "@/store/userStore";
-import { Button } from "@/ui/button";
-import { Card, CardContent, CardHeader } from "@/ui/card";
-import { Input } from "@/ui/input";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Modal, Table } from "antd";
-import type { ColumnsType } from "antd/es/table";
+import type { ColumnDef } from "@tanstack/react-table";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { BasicStatus } from "#/enum";
+import { type SysClientRow, type SysClientSaveReq, systemClientService } from "@/api/services/systemClientService";
+import { useConfirmDialog } from "@/components/confirm/use-confirm-dialog";
+import DataTable from "@/components/data-table/data-table";
+import { useUserPermissions } from "@/store/userStore";
+import { Button } from "@/ui/button";
+import { Card, CardContent } from "@/ui/card";
+import { Input } from "@/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import ClientFormDialog from "./client-form-dialog";
 
 export default function ClientPage() {
@@ -20,7 +22,7 @@ export default function ClientPage() {
 
 	const [clientType, setClientType] = useState("");
 	const [authType, setAuthType] = useState("");
-	const [status, setStatus] = useState("");
+	const [status, setStatus] = useState<string>("all");
 	const [page, setPage] = useState(1);
 	const [pageSize, setPageSize] = useState(30);
 	const [query, setQuery] = useState<{ clientType?: string; authType?: string[]; status?: number }>({});
@@ -59,6 +61,7 @@ export default function ClientPage() {
 	const [formOpen, setFormOpen] = useState(false);
 	const [formMode, setFormMode] = useState<"create" | "update">("create");
 	const [editingId, setEditingId] = useState<number | null>(null);
+	const { confirm, ConfirmDialog } = useConfirmDialog();
 
 	const onSubmit = async (payload: SysClientSaveReq) => {
 		try {
@@ -75,83 +78,88 @@ export default function ClientPage() {
 		}
 	};
 
-	const columns: ColumnsType<SysClientRow> = useMemo(
+	const columns: Array<ColumnDef<SysClientRow>> = useMemo(
 		() => [
-			{ title: "ClientId", dataIndex: "clientId", width: 220, ellipsis: true },
-			{ title: "Type", dataIndex: "clientType", width: 120 },
+			{ header: "ClientId", accessorKey: "clientId", size: 220 },
+			{ header: "Type", accessorKey: "clientType", size: 120 },
 			{
-				title: "AuthType",
-				dataIndex: "authType",
-				width: 220,
-				render: (v: string[]) => (Array.isArray(v) ? v.join(",") : ""),
+				header: "AuthType",
+				accessorKey: "authType",
+				size: 240,
+				cell: ({ row }) => {
+					const v = row.original.authType;
+					return Array.isArray(v) ? v.join(",") : "";
+				},
 			},
-			{ title: "ActiveTimeout", dataIndex: "activeTimeout", width: 130 },
-			{ title: "Timeout", dataIndex: "timeout", width: 110 },
+			{ header: "ActiveTimeout", accessorKey: "activeTimeout", size: 140, meta: { align: "right" } },
+			{ header: "Timeout", accessorKey: "timeout", size: 120, meta: { align: "right" } },
 			{
-				title: "Status",
-				dataIndex: "status",
-				width: 110,
-				render: (v: number) => (Number(v) === BasicStatus.DISABLE ? "禁用" : "启用"),
+				header: "Status",
+				accessorKey: "status",
+				size: 110,
+				meta: { align: "center" },
+				cell: ({ row }) => (Number(row.original.status) === BasicStatus.DISABLE ? "禁用" : "启用"),
 			},
-			{ title: "Created", dataIndex: "createTime", width: 180 },
-			{ title: "Updated", dataIndex: "updateTime", width: 180 },
+			{ header: "Created", accessorKey: "createTime", size: 180 },
+			{ header: "Updated", accessorKey: "updateTime", size: 180 },
 			{
-				title: "操作",
-				key: "actions",
-				width: 180,
-				fixed: "right",
-				render: (_: any, record: SysClientRow) => (
-					<div className="flex items-center gap-2">
-						<Button
-							size="sm"
-							variant="secondary"
-							disabled={!can("system:client:update") || updateMutation.isPending}
-							onClick={() => {
-								setFormMode("update");
-								setEditingId(Number(record.id));
-								setFormOpen(true);
-							}}
-						>
-							编辑
-						</Button>
-						<Button
-							size="sm"
-							variant="destructive"
-							disabled={!can("system:client:delete") || deleteMutation.isPending}
-							onClick={() => {
-								Modal.confirm({
-									title: "确认删除？",
-									content: `客户端：${record.clientId}`,
-									okText: "删除",
-									cancelText: "取消",
-									okButtonProps: { danger: true },
-									onOk: async () => {
-										try {
-											await deleteMutation.mutateAsync([Number(record.id)]);
-											toast.success("删除成功", { position: "top-center" });
-										} catch {
-											// handled by apiClient
-										}
-									},
-								});
-							}}
-						>
-							删除
-						</Button>
-					</div>
-				),
+				header: "操作",
+				id: "actions",
+				size: 200,
+				meta: { align: "center" },
+				cell: ({ row }) => {
+					const record = row.original;
+					return (
+						<div className="flex items-center gap-2">
+							<Button
+								size="sm"
+								variant="secondary"
+								disabled={!can("system:client:update") || updateMutation.isPending}
+								onClick={() => {
+									setFormMode("update");
+									setEditingId(Number(record.id));
+									setFormOpen(true);
+								}}
+							>
+								编辑
+							</Button>
+							<Button
+								size="sm"
+								variant="destructive"
+								disabled={!can("system:client:delete") || deleteMutation.isPending}
+								onClick={async () => {
+									const ok = await confirm({
+										title: "确认删除？",
+										description: `客户端：${record.clientId}`,
+										confirmText: "删除",
+										destructive: true,
+									});
+									if (!ok) return;
+									try {
+										await deleteMutation.mutateAsync([Number(record.id)]);
+										toast.success("删除成功", { position: "top-center" });
+									} catch {
+										// handled by apiClient
+									}
+								}}
+							>
+								删除
+							</Button>
+						</div>
+					);
+				},
 			},
 		],
-		[can, deleteMutation, updateMutation.isPending],
+		[can, confirm, deleteMutation, updateMutation.isPending],
 	);
 
 	return (
 		<Card>
-			<CardHeader>
-				<div className="flex items-center justify-between gap-3">
-					<div>Client</div>
-					<div className="flex flex-wrap items-center gap-2">
-						{can("system:client:create") && (
+			<CardContent>
+				<DataTable<SysClientRow>
+					title="Client"
+					actions={
+						can("system:client:create") ? (
 							<Button
 								onClick={() => {
 									setFormMode("create");
@@ -161,68 +169,83 @@ export default function ClientPage() {
 							>
 								新增
 							</Button>
-						)}
-						<Input value={clientType} onChange={(e) => setClientType(e.target.value)} placeholder="ClientType" className="w-[160px]" />
-						<Input
-							value={authType}
-							onChange={(e) => setAuthType(e.target.value)}
-							placeholder="AuthType (comma separated)"
-							className="w-[220px]"
-						/>
-						<Input value={status} onChange={(e) => setStatus(e.target.value)} placeholder="Status" className="w-[110px]" />
-						<Button
-							onClick={() => {
-								const s = Number(status.trim());
-								const auth = authType
-									.split(",")
-									.map((x) => x.trim())
-									.filter(Boolean);
-								setPage(1);
-								setQuery({
-									clientType: clientType.trim() || undefined,
-									authType: auth.length ? auth : undefined,
-									status: Number.isFinite(s) && s >= 0 ? s : undefined,
-								});
-							}}
-						>
-							Search
-						</Button>
-						<Button
-							variant="secondary"
-							onClick={() => {
-								setClientType("");
-								setAuthType("");
-								setStatus("");
-								setPage(1);
-								setQuery({});
-							}}
-						>
-							Reset
-						</Button>
-						<Button variant="secondary" onClick={() => queryClient.invalidateQueries({ queryKey: ["systemClient.page"] })}>
-							Refresh
-						</Button>
-					</div>
-				</div>
-			</CardHeader>
-			<CardContent>
-				<Table<SysClientRow>
-					rowKey="id"
-					size="small"
-					scroll={{ x: "max-content" }}
+						) : null
+					}
+					search={
+						<>
+							<Input
+								value={clientType}
+								onChange={(e) => setClientType(e.target.value)}
+								placeholder="ClientType"
+								className="w-[160px]"
+							/>
+							<Input
+								value={authType}
+								onChange={(e) => setAuthType(e.target.value)}
+								placeholder="AuthType（逗号分隔）"
+								className="w-[220px]"
+							/>
+							<Select value={status} onValueChange={setStatus}>
+								<SelectTrigger className="w-[140px]">
+									<SelectValue placeholder="状态" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">全部</SelectItem>
+									<SelectItem value={String(BasicStatus.ENABLE)}>启用</SelectItem>
+									<SelectItem value={String(BasicStatus.DISABLE)}>禁用</SelectItem>
+								</SelectContent>
+							</Select>
+							<Button
+								onClick={() => {
+									const auth = authType
+										.split(",")
+										.map((x) => x.trim())
+										.filter(Boolean);
+									const s = status === "all" ? undefined : Number(status);
+									setPage(1);
+									setQuery({
+										clientType: clientType.trim() || undefined,
+										authType: auth.length ? auth : undefined,
+										status: s !== undefined && Number.isFinite(s) ? s : undefined,
+									});
+								}}
+							>
+								查询
+							</Button>
+							<Button
+								variant="secondary"
+								onClick={() => {
+									setClientType("");
+									setAuthType("");
+									setStatus("all");
+									setPage(1);
+									setQuery({});
+								}}
+							>
+								重置
+							</Button>
+							<Button
+								variant="secondary"
+								onClick={() => queryClient.invalidateQueries({ queryKey: ["systemClient.page"] })}
+							>
+								刷新
+							</Button>
+						</>
+					}
+					columns={columns}
+					data={data?.list || []}
 					loading={isFetching}
+					getRowId={(row) => String(row.id)}
 					pagination={{
-						current: page,
+						page,
 						pageSize,
 						total: data?.total || 0,
-						showSizeChanger: true,
 						onChange: (p, s) => {
 							setPage(p);
 							setPageSize(s);
 						},
+						pageSizeOptions: [10, 20, 30, 50, 100],
 					}}
-					columns={columns}
-					dataSource={data?.list || []}
 				/>
 				<ClientFormDialog
 					open={formOpen}
@@ -232,6 +255,7 @@ export default function ClientPage() {
 					onOpenChange={setFormOpen}
 					onSubmit={onSubmit}
 				/>
+				{ConfirmDialog}
 			</CardContent>
 		</Card>
 	);

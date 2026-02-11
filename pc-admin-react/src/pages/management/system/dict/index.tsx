@@ -1,17 +1,30 @@
-import { systemDictService, type SysDict, type SysDictCreateReq, type SysDictUpdateReq } from "@/api/services/systemDictService";
-import { systemDictItemService, type SysDictItemRow, type SysDictItemSaveReq } from "@/api/services/systemDictItemService";
-import { useUserPermissions } from "@/store/userStore";
-import { Button } from "@/ui/button";
-import { Card, CardContent, CardHeader } from "@/ui/card";
-import { Input } from "@/ui/input";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Modal, Table, Tag } from "antd";
-import type { ColumnsType } from "antd/es/table";
+import type { ColumnDef } from "@tanstack/react-table";
 import { useCallback, useMemo, useState } from "react";
-import { BasicStatus } from "#/enum";
 import { toast } from "sonner";
-import DictItemFormDialog from "./dict-item-form-dialog";
+import { BasicStatus } from "#/enum";
+import {
+	type SysDictItemRow,
+	type SysDictItemSaveReq,
+	systemDictItemService,
+} from "@/api/services/systemDictItemService";
+import {
+	type SysDict,
+	type SysDictCreateReq,
+	type SysDictUpdateReq,
+	systemDictService,
+} from "@/api/services/systemDictService";
+import { useConfirmDialog } from "@/components/confirm/use-confirm-dialog";
+import DataTable from "@/components/data-table/data-table";
+import SplitLayout from "@/components/layout/split-layout";
+import { useUserPermissions } from "@/store/userStore";
+import { Badge } from "@/ui/badge";
+import { Button } from "@/ui/button";
+import { Card, CardContent } from "@/ui/card";
+import { Input } from "@/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import DictFormDialog from "./dict-form-dialog";
+import DictItemFormDialog from "./dict-item-form-dialog";
 
 export default function DictPage() {
 	const queryClient = useQueryClient();
@@ -28,13 +41,14 @@ export default function DictPage() {
 	const [editingDict, setEditingDict] = useState<SysDict | null>(null);
 
 	const [itemKeyword, setItemKeyword] = useState("");
-	const [itemStatus, setItemStatus] = useState("");
+	const [itemStatus, setItemStatus] = useState("all");
 	const [itemPage, setItemPage] = useState(1);
 	const [itemPageSize, setItemPageSize] = useState(30);
 	const [itemQuery, setItemQuery] = useState<{ description?: string; status?: number }>({});
 	const [itemFormOpen, setItemFormOpen] = useState(false);
 	const [itemFormMode, setItemFormMode] = useState<"create" | "update">("create");
 	const [editingItemId, setEditingItemId] = useState<number | null>(null);
+	const { confirm, ConfirmDialog } = useConfirmDialog();
 
 	const { data, isFetching } = useQuery({
 		queryKey: ["systemDict.list", queryKeyword],
@@ -75,66 +89,75 @@ export default function DictPage() {
 		}
 	};
 
-	const columns: ColumnsType<SysDict> = useMemo(
+	const columns: Array<ColumnDef<SysDict>> = useMemo(
 		() => [
-			{ title: "Name", dataIndex: "name", width: 220 },
-			{ title: "Code", dataIndex: "code", width: 220 },
-			{ title: "Description", dataIndex: "description" },
+			{ header: "Name", accessorKey: "name", size: 220 },
+			{ header: "Code", accessorKey: "code", size: 220 },
+			{ header: "Description", accessorKey: "description", size: 320 },
 			{
-				title: "System",
-				dataIndex: "isSystem",
-				width: 120,
-				render: (v: boolean) => (v ? "Yes" : "No"),
+				header: "System",
+				accessorKey: "isSystem",
+				size: 120,
+				meta: { align: "center" },
+				cell: ({ row }) => (row.original.isSystem ? "Yes" : "No"),
 			},
 			{
-				title: "操作",
-				key: "actions",
-				width: 160,
-				fixed: "right",
-				render: (_: any, record: SysDict) => (
-					<div className="flex items-center gap-2">
-						<Button
-							size="sm"
-							variant="secondary"
-							disabled={!can("system:dict:update") || record.isSystem || updateDictMutation.isPending}
-							onClick={() => {
-								setDictFormMode("update");
-								setEditingDict(record);
-								setDictFormOpen(true);
-							}}
-						>
-							编辑
-						</Button>
-						<Button
-							size="sm"
-							variant="destructive"
-							disabled={!can("system:dict:delete") || record.isSystem || deleteDictMutation.isPending}
-							onClick={() => {
-								Modal.confirm({
-									title: "确认删除？",
-									content: `字典：${record.name} (${record.code})`,
-									okText: "删除",
-									cancelText: "取消",
-									okButtonProps: { danger: true },
-									onOk: async () => {
-										try {
-											await deleteDictMutation.mutateAsync([Number(record.id)]);
-											if (selectedDict?.id === record.id) setSelectedDict(null);
-											toast.success("删除成功", { position: "top-center" });
-										} catch {
-											// handled by apiClient
-										}
-									},
-								});
-							}}
-						>
-							删除
-						</Button>
-					</div>
-				),
+				header: "操作",
+				id: "actions",
+				size: 180,
+				meta: { align: "center" },
+				cell: ({ row }) => {
+					const record = row.original;
+					return (
+						<div className="flex items-center gap-2">
+							<Button
+								size="sm"
+								variant="secondary"
+								disabled={!can("system:dict:update") || record.isSystem || updateDictMutation.isPending}
+								onClick={() => {
+									setDictFormMode("update");
+									setEditingDict(record);
+									setDictFormOpen(true);
+								}}
+							>
+								编辑
+							</Button>
+							<Button
+								size="sm"
+								variant="destructive"
+								disabled={!can("system:dict:delete") || record.isSystem || deleteDictMutation.isPending}
+								onClick={async () => {
+									const ok = await confirm({
+										title: "确认删除？",
+										description: `字典：${record.name} (${record.code})`,
+										confirmText: "删除",
+										destructive: true,
+									});
+									if (!ok) return;
+									try {
+										await deleteDictMutation.mutateAsync([Number(record.id)]);
+										if (selectedDict?.id === record.id) setSelectedDict(null);
+										toast.success("删除成功", { position: "top-center" });
+									} catch {
+										// handled by apiClient
+									}
+								}}
+							>
+								删除
+							</Button>
+						</div>
+					);
+				},
 			},
 		],
-		[can, deleteDictMutation.isPending, selectedDict?.id, updateDictMutation.isPending],
+		[
+			can,
+			confirm,
+			deleteDictMutation.isPending,
+			deleteDictMutation.mutateAsync,
+			selectedDict?.id,
+			updateDictMutation.isPending,
+		],
 	);
 
 	const { data: itemData, isFetching: isItemFetching } = useQuery({
@@ -142,7 +165,7 @@ export default function DictPage() {
 		enabled: Boolean(selectedDict?.id),
 		queryFn: () =>
 			systemDictItemService.page({
-				dictId: selectedDict!.id,
+				dictId: Number(selectedDict?.id || 0),
 				page: itemPage,
 				size: itemPageSize,
 				description: itemQuery.description,
@@ -157,7 +180,8 @@ export default function DictPage() {
 		},
 	});
 	const updateItemMutation = useMutation({
-		mutationFn: ({ id, payload }: { id: number; payload: SysDictItemSaveReq }) => systemDictItemService.update(id, payload),
+		mutationFn: ({ id, payload }: { id: number; payload: SysDictItemSaveReq }) =>
+			systemDictItemService.update(id, payload),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["systemDictItem.page"] });
 		},
@@ -192,234 +216,287 @@ export default function DictPage() {
 		}
 	};
 
-	const renderLabel = (record: SysDictItemRow) => {
+	const renderLabel = useCallback((record: SysDictItemRow) => {
 		const text = record.label || "";
 		const c = (record.color || "").trim();
 		if (!c) return text;
-		if (c === "primary") return <Tag color="blue">{text}</Tag>;
-		if (c === "success") return <Tag color="green">{text}</Tag>;
-		if (c === "warning") return <Tag color="orange">{text}</Tag>;
-		if (c === "error") return <Tag color="red">{text}</Tag>;
-		if (c === "default") return <Tag>{text}</Tag>;
+		if (c === "primary") return <Badge variant="info">{text}</Badge>;
+		if (c === "success") return <Badge variant="success">{text}</Badge>;
+		if (c === "warning") return <Badge variant="warning">{text}</Badge>;
+		if (c === "error") return <Badge variant="error">{text}</Badge>;
+		if (c === "default") return <Badge variant="secondary">{text}</Badge>;
 		return text;
-	};
+	}, []);
 
-	const itemColumns: ColumnsType<SysDictItemRow> = useMemo(
+	const itemColumns: Array<ColumnDef<SysDictItemRow>> = useMemo(
 		() => [
-			{ title: "Label", dataIndex: "label", width: 220, render: (_: any, record) => renderLabel(record) },
-			{ title: "Value", dataIndex: "value", width: 220 },
-			{ title: "Color", dataIndex: "color", width: 120 },
-			{ title: "Order", dataIndex: "sort", width: 90 },
 			{
-				title: "Status",
-				dataIndex: "status",
-				width: 110,
-				render: (v: number) => (Number(v) === BasicStatus.DISABLE ? "禁用" : "启用"),
+				header: "Label",
+				accessorKey: "label",
+				size: 220,
+				cell: ({ row }) => renderLabel(row.original),
 			},
-			{ title: "Desc", dataIndex: "description", width: 260, ellipsis: true },
-			{ title: "Updated", dataIndex: "updateTime", width: 180 },
+			{ header: "Value", accessorKey: "value", size: 220 },
+			{ header: "Color", accessorKey: "color", size: 120, meta: { align: "center" } },
+			{ header: "Order", accessorKey: "sort", size: 90, meta: { align: "right" } },
 			{
-				title: "操作",
-				key: "actions",
-				width: 160,
-				fixed: "right",
-				render: (_: any, record: SysDictItemRow) => (
-					<div className="flex items-center gap-2">
-						<Button
-							size="sm"
-							variant="secondary"
-							disabled={!can("system:dict:item:update") || updateItemMutation.isPending}
-							onClick={() => {
-								setItemFormMode("update");
-								setEditingItemId(Number(record.id));
-								setItemFormOpen(true);
-							}}
-						>
-							编辑
-						</Button>
-						<Button
-							size="sm"
-							variant="destructive"
-							disabled={!can("system:dict:item:delete") || deleteItemMutation.isPending}
-							onClick={() => {
-								Modal.confirm({
-									title: "确认删除？",
-									content: `字典项：${record.label}`,
-									okText: "删除",
-									cancelText: "取消",
-									okButtonProps: { danger: true },
-									onOk: async () => {
-										try {
-											await deleteItemMutation.mutateAsync([Number(record.id)]);
-											toast.success("删除成功", { position: "top-center" });
-										} catch {
-											// handled by apiClient
-										}
-									},
-								});
-							}}
-						>
-							删除
-						</Button>
-					</div>
-				),
+				header: "Status",
+				accessorKey: "status",
+				size: 110,
+				meta: { align: "center" },
+				cell: ({ row }) => (Number(row.original.status) === BasicStatus.DISABLE ? "禁用" : "启用"),
+			},
+			{ header: "Desc", accessorKey: "description", size: 280 },
+			{ header: "Updated", accessorKey: "updateTime", size: 180 },
+			{
+				header: "操作",
+				id: "actions",
+				size: 180,
+				meta: { align: "center" },
+				cell: ({ row }) => {
+					const record = row.original;
+					return (
+						<div className="flex items-center gap-2">
+							<Button
+								size="sm"
+								variant="secondary"
+								disabled={!can("system:dict:item:update") || updateItemMutation.isPending}
+								onClick={() => {
+									setItemFormMode("update");
+									setEditingItemId(Number(record.id));
+									setItemFormOpen(true);
+								}}
+							>
+								编辑
+							</Button>
+							<Button
+								size="sm"
+								variant="destructive"
+								disabled={!can("system:dict:item:delete") || deleteItemMutation.isPending}
+								onClick={async () => {
+									const ok = await confirm({
+										title: "确认删除？",
+										description: `字典项：${record.label}`,
+										confirmText: "删除",
+										destructive: true,
+									});
+									if (!ok) return;
+									try {
+										await deleteItemMutation.mutateAsync([Number(record.id)]);
+										toast.success("删除成功", { position: "top-center" });
+									} catch {
+										// handled by apiClient
+									}
+								}}
+							>
+								删除
+							</Button>
+						</div>
+					);
+				},
 			},
 		],
-		[can, deleteItemMutation, updateItemMutation.isPending],
+		[
+			can,
+			confirm,
+			deleteItemMutation.isPending,
+			deleteItemMutation.mutateAsync,
+			renderLabel,
+			updateItemMutation.isPending,
+		],
 	);
 
 	return (
-		<div className="grid gap-4 lg:grid-cols-2">
-			<Card>
-				<CardHeader>
-					<div className="flex items-center justify-between gap-3">
-						<div>Dict</div>
-						<div className="flex items-center gap-2">
-							{can("system:dict:create") && (
-								<Button
-									onClick={() => {
-										setDictFormMode("create");
-										setEditingDict(null);
-										setDictFormOpen(true);
-									}}
-								>
-									新增
-								</Button>
-							)}
-							<Input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="Search description" className="w-[240px]" />
-							<Button
-								onClick={() => {
-									setQueryKeyword(keyword.trim());
-								}}
-							>
-								Search
-							</Button>
-						</div>
-					</div>
-				</CardHeader>
-				<CardContent>
-					<Table<SysDict>
-						rowKey="id"
-						size="small"
-						scroll={{ x: "max-content" }}
-						pagination={false}
-						loading={isFetching}
-						columns={columns}
-						dataSource={data || []}
-						onRow={(record) => ({
-							onClick: () => {
-								setSelectedDict(record);
-								setItemPage(1);
-							},
-						})}
-						rowClassName={(record) => (record.id === selectedDict?.id ? "bg-muted/50" : "")}
-					/>
-					<DictFormDialog
-						open={dictFormOpen}
-						mode={dictFormMode}
-						initial={editingDict}
-						busy={createDictMutation.isPending || updateDictMutation.isPending}
-						onOpenChange={setDictFormOpen}
-						onSubmit={onSubmitDict}
-					/>
-				</CardContent>
-			</Card>
-
-			<Card>
-				<CardHeader>
-					<div className="flex items-center justify-between gap-3">
-						<div className="truncate">{selectedDict ? `Items - ${selectedDict.name}` : "Items"}</div>
-						<div className="flex flex-wrap items-center gap-2">
-							{can("system:dict:item:create") && (
-								<Button
-									disabled={!selectedDict}
-									onClick={() => {
-										setItemFormMode("create");
-										setEditingItemId(null);
-										setItemFormOpen(true);
-									}}
-								>
-									新增
-								</Button>
-							)}
-							{can("system:dict:item:clearCache") && (
-								<Button
-									variant="secondary"
-									disabled={!selectedDict || clearCacheMutation.isPending}
-									onClick={async () => {
-										if (!selectedDict?.code) {
-											toast.error("请先选择字典", { position: "top-center" });
-											return;
-										}
-										Modal.confirm({
-											title: "确认清除缓存？",
-											content: `字典：${selectedDict.name} (${selectedDict.code})`,
-											okText: "清除",
-											cancelText: "取消",
-											okButtonProps: { danger: true },
-											onOk: async () => {
-												try {
-													await clearCacheMutation.mutateAsync(selectedDict.code);
-													toast.success("清除成功", { position: "top-center" });
-												} catch {
-													// handled by apiClient
-												}
-											},
-										});
-									}}
-								>
-									清缓存
-								</Button>
-							)}
-							<Input value={itemKeyword} onChange={(e) => setItemKeyword(e.target.value)} placeholder="Search description" className="w-[200px]" />
-							<Input value={itemStatus} onChange={(e) => setItemStatus(e.target.value)} placeholder="Status(1/2)" className="w-[110px]" />
-							<Button
-								disabled={!selectedDict}
-								onClick={() => {
-									const s = Number(itemStatus.trim());
+		<>
+			<SplitLayout
+				leftWidth={520}
+				left={
+					<Card className="min-w-0">
+						<CardContent>
+							<DataTable<SysDict>
+								title="Dict"
+								actions={
+									can("system:dict:create") ? (
+										<Button
+											onClick={() => {
+												setDictFormMode("create");
+												setEditingDict(null);
+												setDictFormOpen(true);
+											}}
+										>
+											新增
+										</Button>
+									) : null
+								}
+								search={
+									<>
+										<Input
+											value={keyword}
+											onChange={(e) => setKeyword(e.target.value)}
+											placeholder="Search description"
+											className="w-[260px]"
+										/>
+										<Button onClick={() => setQueryKeyword(keyword.trim())}>查询</Button>
+										<Button
+											variant="secondary"
+											onClick={() => {
+												setKeyword("");
+												setQueryKeyword("");
+											}}
+										>
+											重置
+										</Button>
+									</>
+								}
+								columns={columns}
+								data={data || []}
+								loading={isFetching}
+								getRowId={(row) => String(row.id)}
+								onRowClick={(record) => {
+									setSelectedDict(record);
 									setItemPage(1);
-									setItemQuery({
-										description: itemKeyword.trim() || undefined,
-										status: Number.isFinite(s) ? s : undefined,
-									});
 								}}
-							>
-								Search
-							</Button>
-						</div>
-					</div>
-				</CardHeader>
-				<CardContent>
-					<Table<SysDictItemRow>
-						rowKey="id"
-						size="small"
-						scroll={{ x: "max-content" }}
-						loading={isItemFetching}
-						columns={itemColumns}
-						dataSource={itemData?.list || []}
-						pagination={{
-							current: itemPage,
-							pageSize: itemPageSize,
-							total: itemData?.total || 0,
-							showSizeChanger: true,
-							onChange: (p, s) => {
-								setItemPage(p);
-								setItemPageSize(s);
-							},
-						}}
-					/>
-					{!selectedDict && <div className="mt-3 text-sm text-muted-foreground">请先从左侧选择一个字典</div>}
-					<DictItemFormDialog
-						open={itemFormOpen}
-						mode={itemFormMode}
-						dictId={selectedDict?.id || null}
-						id={editingItemId}
-						busy={createItemMutation.isPending || updateItemMutation.isPending}
-						onOpenChange={setItemFormOpen}
-						onSubmit={onSubmitItem}
-					/>
-				</CardContent>
-			</Card>
-		</div>
+								rowClassName={(record) => (record.id === selectedDict?.id ? "bg-muted/50" : "")}
+							/>
+							<DictFormDialog
+								open={dictFormOpen}
+								mode={dictFormMode}
+								initial={editingDict}
+								busy={createDictMutation.isPending || updateDictMutation.isPending}
+								onOpenChange={setDictFormOpen}
+								onSubmit={onSubmitDict}
+							/>
+						</CardContent>
+					</Card>
+				}
+				right={
+					<Card className="min-w-0">
+						<CardContent>
+							<DataTable<SysDictItemRow>
+								title={selectedDict ? `Items - ${selectedDict.name}` : "Items"}
+								actions={
+									<div className="flex flex-wrap items-center gap-2">
+										{can("system:dict:item:create") && (
+											<Button
+												disabled={!selectedDict}
+												onClick={() => {
+													setItemFormMode("create");
+													setEditingItemId(null);
+													setItemFormOpen(true);
+												}}
+											>
+												新增
+											</Button>
+										)}
+										{can("system:dict:item:clearCache") && (
+											<Button
+												variant="secondary"
+												disabled={!selectedDict || clearCacheMutation.isPending}
+												onClick={async () => {
+													if (!selectedDict?.code) {
+														toast.error("请先选择字典", { position: "top-center" });
+														return;
+													}
+													const ok = await confirm({
+														title: "确认清除缓存？",
+														description: `字典：${selectedDict.name} (${selectedDict.code})`,
+														confirmText: "清除",
+														destructive: true,
+													});
+													if (!ok) return;
+													try {
+														await clearCacheMutation.mutateAsync(selectedDict.code);
+														toast.success("清除成功", { position: "top-center" });
+													} catch {
+														// handled by apiClient
+													}
+												}}
+											>
+												清缓存
+											</Button>
+										)}
+									</div>
+								}
+								search={
+									<>
+										<Input
+											value={itemKeyword}
+											onChange={(e) => setItemKeyword(e.target.value)}
+											placeholder="Search description"
+											className="w-[220px]"
+										/>
+										<Select value={itemStatus} onValueChange={setItemStatus}>
+											<SelectTrigger className="w-[140px]">
+												<SelectValue placeholder="状态" />
+											</SelectTrigger>
+											<SelectContent>
+												<SelectItem value="all">全部</SelectItem>
+												<SelectItem value={String(BasicStatus.ENABLE)}>启用</SelectItem>
+												<SelectItem value={String(BasicStatus.DISABLE)}>禁用</SelectItem>
+											</SelectContent>
+										</Select>
+										<Button
+											disabled={!selectedDict}
+											onClick={() => {
+												const s = itemStatus === "all" ? undefined : Number(itemStatus);
+												setItemPage(1);
+												setItemQuery({
+													description: itemKeyword.trim() || undefined,
+													status: s !== undefined && Number.isFinite(s) ? s : undefined,
+												});
+											}}
+										>
+											查询
+										</Button>
+										<Button
+											variant="secondary"
+											onClick={() => {
+												setItemKeyword("");
+												setItemStatus("all");
+												setItemPage(1);
+												setItemQuery({});
+											}}
+										>
+											重置
+										</Button>
+									</>
+								}
+								columns={itemColumns}
+								data={itemData?.list || []}
+								loading={isItemFetching}
+								getRowId={(row) => String(row.id)}
+								pagination={{
+									page: itemPage,
+									pageSize: itemPageSize,
+									total: itemData?.total || 0,
+									onChange: (p, s) => {
+										setItemPage(p);
+										setItemPageSize(s);
+									},
+									pageSizeOptions: [10, 20, 30, 50, 100],
+								}}
+								empty={
+									selectedDict ? (
+										<div className="text-sm text-muted-foreground">暂无数据</div>
+									) : (
+										<div className="text-sm text-muted-foreground">请先从左侧选择一个字典</div>
+									)
+								}
+							/>
+							<DictItemFormDialog
+								open={itemFormOpen}
+								mode={itemFormMode}
+								dictId={selectedDict?.id || null}
+								id={editingItemId}
+								busy={createItemMutation.isPending || updateItemMutation.isPending}
+								onOpenChange={setItemFormOpen}
+								onSubmit={onSubmitItem}
+							/>
+						</CardContent>
+					</Card>
+				}
+			/>
+			{ConfirmDialog}
+		</>
 	);
 }
