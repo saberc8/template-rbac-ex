@@ -43,11 +43,6 @@ export default function AccountDropdown() {
 				</div>
 				<DropdownMenuSeparator />
 				<DropdownMenuItem asChild>
-					<NavLink to="https://docs-admin.slashspaces.com/" target="_blank">
-						{t("sys.docs")}
-					</NavLink>
-				</DropdownMenuItem>
-				<DropdownMenuItem asChild>
 					<NavLink to="/management/user/profile">{t("sys.nav.user.profile")}</NavLink>
 				</DropdownMenuItem>
 				<DropdownMenuSeparator />
