@@ -7,27 +7,6 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 		{ path: "workbench", element: Component("/pages/dashboard/workbench") },
 		{ path: "analysis", element: Component("/pages/dashboard/analysis") },
 		{
-			path: "components",
-			children: [
-				{ index: true, element: <Navigate to="animate" replace /> },
-				{ path: "animate", element: Component("/pages/components/animate") },
-				{ path: "scroll", element: Component("/pages/components/scroll") },
-				{ path: "multi-language", element: Component("/pages/components/multi-language") },
-				{ path: "icon", element: Component("/pages/components/icon") },
-				{ path: "upload", element: Component("/pages/components/upload") },
-				{ path: "chart", element: Component("/pages/components/chart") },
-				{ path: "toast", element: Component("/pages/components/toast") },
-			],
-		},
-		{
-			path: "functions",
-			children: [
-				{ index: true, element: <Navigate to="clipboard" replace /> },
-				{ path: "clipboard", element: Component("/pages/functions/clipboard") },
-				{ path: "token_expired", element: Component("/pages/functions/token-expired") },
-			],
-		},
-		{
 			path: "management",
 			children: [
 				{ index: true, element: <Navigate to="user" replace /> },
