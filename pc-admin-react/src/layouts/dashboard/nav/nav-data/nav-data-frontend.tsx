@@ -31,8 +31,8 @@ export const frontendNavData: NavProps["data"] = [
 						path: "/management/system/client",
 					},
 					{
-						title: "sys.nav.system.organization",
-						path: "/management/system/organization",
+						title: "sys.nav.system.dept",
+						path: "/management/system/dept",
 					},
 					{
 						title: "sys.nav.system.option",
@@ -43,8 +43,8 @@ export const frontendNavData: NavProps["data"] = [
 						path: "/management/system/file",
 					},
 					{
-						title: "sys.nav.system.permission",
-						path: "/management/system/permission",
+						title: "sys.nav.system.menu",
+						path: "/management/system/menu",
 					},
 					{
 						title: "sys.nav.system.role",

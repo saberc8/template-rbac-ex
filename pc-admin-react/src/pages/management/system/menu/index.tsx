@@ -2,19 +2,19 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { BasicStatus } from "#/enum";
-import { type SysDeptNode, type SysDeptSaveReq, systemDeptService } from "@/api/services/systemDeptService";
+import { type SysMenuNode, type SysMenuSaveReq, systemMenuService } from "@/api/services/systemMenuService";
 import { useConfirmDialog } from "@/components/confirm/use-confirm-dialog";
 import DataTable from "@/components/data-table/data-table";
 import { useUserPermissions } from "@/store/userStore";
 import { Button } from "@/ui/button";
 import { Card, CardContent } from "@/ui/card";
 import { Input } from "@/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
-import DeptFormDialog from "./dept-form-dialog";
+import MenuFormDialog from "./menu-form-dialog";
 
-const stripEmptyChildren = (nodes: SysDeptNode[]): SysDeptNode[] => {
+const stripEmptyChildren = (nodes: SysMenuNode[]): SysMenuNode[] => {
 	return (nodes || []).map((node) => {
 		const children = node.children && node.children.length > 0 ? stripEmptyChildren(node.children) : undefined;
 		return {
@@ -24,101 +24,108 @@ const stripEmptyChildren = (nodes: SysDeptNode[]): SysDeptNode[] => {
 	});
 };
 
-export default function OrganizationPage() {
+export default function MenuPage() {
+	const { t } = useTranslation();
 	const queryClient = useQueryClient();
 	const permissions = useUserPermissions();
 	const permissionCodes = useMemo(() => permissions.map((p) => p.code), [permissions]);
 	const permissionCodeSet = useMemo(() => new Set(permissionCodes), [permissionCodes]);
 	const can = useCallback((code: string) => permissionCodeSet.has(code), [permissionCodeSet]);
-
 	const [keyword, setKeyword] = useState("");
-	const [queryKeyword, setQueryKeyword] = useState("");
-	const [status, setStatus] = useState<number | undefined>(undefined);
-	const [queryStatus, setQueryStatus] = useState<number | undefined>(undefined);
-
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [dialogMode, setDialogMode] = useState<"create" | "update">("create");
-	const [editing, setEditing] = useState<SysDeptNode | null>(null);
+	const [editing, setEditing] = useState<SysMenuNode | null>(null);
 	const [defaultParentId, setDefaultParentId] = useState<number>(0);
 	const { confirm, ConfirmDialog } = useConfirmDialog();
 
 	const { data, isFetching } = useQuery({
-		queryKey: ["systemDept.tree", queryKeyword, queryStatus],
-		queryFn: () => systemDeptService.tree({ description: queryKeyword || undefined, status: queryStatus }),
+		queryKey: ["systemMenu.tree"],
+		queryFn: () => systemMenuService.tree(),
 	});
 
 	const createMutation = useMutation({
-		mutationFn: (payload: SysDeptSaveReq) => systemDeptService.create(payload),
+		mutationFn: (payload: SysMenuSaveReq) => systemMenuService.create(payload),
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["systemDept.tree"] });
+			queryClient.invalidateQueries({ queryKey: ["systemMenu.tree"] });
 		},
 	});
 	const updateMutation = useMutation({
-		mutationFn: ({ id, payload }: { id: number; payload: SysDeptSaveReq }) => systemDeptService.update(id, payload),
+		mutationFn: ({ id, payload }: { id: number; payload: SysMenuSaveReq }) => systemMenuService.update(id, payload),
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["systemDept.tree"] });
+			queryClient.invalidateQueries({ queryKey: ["systemMenu.tree"] });
 		},
 	});
 	const deleteMutation = useMutation({
-		mutationFn: (ids: number[]) => systemDeptService.delete(ids),
+		mutationFn: (ids: number[]) => systemMenuService.delete(ids),
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["systemDept.tree"] });
+			queryClient.invalidateQueries({ queryKey: ["systemMenu.tree"] });
 		},
 	});
-	const exportMutation = useMutation({
-		mutationFn: () => systemDeptService.exportCsv({ description: queryKeyword || undefined, status: queryStatus }),
+	const clearCacheMutation = useMutation({
+		mutationFn: () => systemMenuService.clearCache(),
 	});
 
-	const downloadBlob = (blob: Blob, filename: string) => {
-		const url = window.URL.createObjectURL(blob);
-		const a = document.createElement("a");
-		a.href = url;
-		a.download = filename;
-		a.click();
-		window.URL.revokeObjectURL(url);
-	};
+	const filteredData = useMemo(() => {
+		const term = keyword.trim().toLowerCase();
+		if (!term) return stripEmptyChildren(data || []);
 
-	type FlatDeptRow = { node: SysDeptNode; depth: number; hasChildren: boolean };
+		const filterNode = (node: SysMenuNode): SysMenuNode | null => {
+			const hit =
+				(node.title || "").toLowerCase().includes(term) ||
+				(node.path || "").toLowerCase().includes(term) ||
+				(node.permission || "").toLowerCase().includes(term);
+			const children = (node.children || []).map(filterNode).filter((x): x is SysMenuNode => x != null);
+			if (hit || children.length > 0) {
+				return { ...node, children: children.length > 0 ? children : undefined };
+			}
+			return null;
+		};
+
+		return stripEmptyChildren((data || []).map(filterNode).filter((x): x is SysMenuNode => x != null));
+	}, [data, keyword]);
+
+	type FlatMenuRow = { node: SysMenuNode; depth: number; hasChildren: boolean };
 
 	const [expandedIds, setExpandedIds] = useState<number[]>([]);
 
 	useEffect(() => {
 		const ids: number[] = [];
-		const walk = (nodes: SysDeptNode[]) => {
+		const walk = (nodes: SysMenuNode[]) => {
 			for (const n of nodes || []) {
 				if (n.children?.length) ids.push(Number(n.id));
 				if (n.children?.length) walk(n.children);
 			}
 		};
-		walk(data || []);
+		walk(filteredData);
 		setExpandedIds(ids);
-	}, [data]);
+	}, [filteredData]);
 
-	const flatRows: FlatDeptRow[] = useMemo(() => {
+	const flatRows: FlatMenuRow[] = useMemo(() => {
 		const expanded = new Set(expandedIds);
-		const rows: FlatDeptRow[] = [];
-		const walk = (nodes: SysDeptNode[], depth: number) => {
+		const rows: FlatMenuRow[] = [];
+		const walk = (nodes: SysMenuNode[], depth: number) => {
 			for (const n of nodes || []) {
 				const hasChildren = (n.children?.length ?? 0) > 0;
 				rows.push({ node: n, depth, hasChildren });
 				if (hasChildren && expanded.has(Number(n.id))) walk(n.children || [], depth + 1);
 			}
 		};
-		walk(stripEmptyChildren(data || []), 0);
+		walk(filteredData, 0);
 		return rows;
-	}, [data, expandedIds]);
+	}, [expandedIds, filteredData]);
 
-	const columns: Array<ColumnDef<FlatDeptRow>> = useMemo(
+	const columns: Array<ColumnDef<FlatMenuRow>> = useMemo(
 		() => [
 			{
-				header: "名称",
-				id: "name",
+				header: t("sys.page.systemPermission.columns.title"),
+				id: "title",
 				size: 320,
 				cell: ({ row }) => {
 					const r = row.original;
 					const id = Number(r.node.id);
 					const expanded = expandedIds.includes(id);
 					const indent = Math.max(0, Number(r.depth) || 0) * 16;
+
 					return (
 						<div className="flex items-center gap-2 min-w-0">
 							<div className="flex items-center" style={{ width: indent }} />
@@ -144,26 +151,46 @@ export default function OrganizationPage() {
 							) : (
 								<div className="h-7 w-7 shrink-0" />
 							)}
-							<span className="truncate">{r.node.name}</span>
+							<span className="truncate">{r.node.title}</span>
 						</div>
 					);
 				},
 			},
 			{
-				header: "排序",
-				id: "sort",
-				size: 80,
-				meta: { align: "right" },
-				cell: ({ row }) => row.original.node.sort ?? "-",
+				header: t("sys.page.systemPermission.columns.type"),
+				id: "type",
+				size: 90,
+				meta: { align: "center" },
+				cell: ({ row }) => {
+					const v = Number(row.original.node.type);
+					if (v === 1) return "目录";
+					if (v === 2) return "菜单";
+					if (v === 3) return "按钮";
+					return String(v ?? "");
+				},
 			},
 			{
-				header: "状态",
-				id: "status",
-				size: 120,
-				meta: { align: "center" },
-				cell: ({ row }) => (Number(row.original.node.status) === BasicStatus.DISABLE ? "禁用" : "启用"),
+				header: t("sys.page.systemPermission.columns.path"),
+				id: "path",
+				size: 220,
+				cell: ({ row }) => row.original.node.path || "-",
 			},
-			{ header: "描述", id: "description", size: 360, cell: ({ row }) => row.original.node.description || "-" },
+			{
+				header: t("sys.page.systemPermission.columns.permission"),
+				id: "permission",
+				size: 260,
+				cell: ({ row }) => row.original.node.permission || "-",
+			},
+			{
+				header: t("sys.page.systemPermission.columns.status"),
+				id: "status",
+				size: 100,
+				meta: { align: "center" },
+				cell: ({ row }) =>
+					Number(row.original.node.status) === BasicStatus.DISABLE
+						? t("sys.page.systemPermission.status.disable")
+						: t("sys.page.systemPermission.status.enable"),
+			},
 			{
 				header: "操作",
 				id: "actions",
@@ -172,10 +199,10 @@ export default function OrganizationPage() {
 				cell: ({ row }) => {
 					const record = row.original.node;
 					const id = Number(record.id);
-					const hasChildren = (record.children?.length ?? 0) > 0;
+					const isSystemButton = Number(record.type) === 3;
 					return (
 						<div className="flex items-center gap-2">
-							{can("system:dept:create") && (
+							{can("system:menu:create") && !isSystemButton && (
 								<Button
 									size="sm"
 									variant="secondary"
@@ -189,7 +216,7 @@ export default function OrganizationPage() {
 									新增子级
 								</Button>
 							)}
-							{can("system:dept:update") && (
+							{can("system:menu:update") && (
 								<Button
 									size="sm"
 									variant="secondary"
@@ -203,15 +230,14 @@ export default function OrganizationPage() {
 									编辑
 								</Button>
 							)}
-							{can("system:dept:delete") && (
+							{can("system:menu:delete") && (
 								<Button
 									size="sm"
 									variant="destructive"
-									disabled={Boolean(record.isSystem) || hasChildren}
 									onClick={async () => {
 										const ok = await confirm({
 											title: "确认删除？",
-											description: hasChildren ? "存在下级部门，不允许删除。" : "删除后不可恢复。",
+											description: "将同时删除其所有子级，并解除角色菜单关联。",
 											confirmText: "删除",
 											destructive: true,
 										});
@@ -232,10 +258,10 @@ export default function OrganizationPage() {
 				},
 			},
 		],
-		[can, confirm, deleteMutation, expandedIds],
+		[can, confirm, deleteMutation, expandedIds, t],
 	);
 
-	const onSubmitDialog = async (payload: SysDeptSaveReq) => {
+	const onSubmitDialog = async (payload: SysMenuSaveReq) => {
 		try {
 			if (dialogMode === "create") {
 				await createMutation.mutateAsync(payload);
@@ -249,47 +275,45 @@ export default function OrganizationPage() {
 			// handled by apiClient
 		}
 	};
-
 	return (
 		<Card>
 			<CardContent>
-				<DataTable<FlatDeptRow>
-					title="部门管理"
+				<DataTable<FlatMenuRow>
+					title={t("sys.nav.system.menu")}
 					actions={
-						<div className="flex flex-wrap items-center gap-2">
-							{can("system:dept:create") && (
+						<div className="flex items-center gap-2">
+							{can("system:menu:create") && (
 								<Button
 									onClick={() => {
-										const firstRootId = Number((data || [])[0]?.id) || 0;
 										setDialogMode("create");
 										setEditing(null);
-										setDefaultParentId(firstRootId);
+										setDefaultParentId(0);
 										setDialogOpen(true);
 									}}
 								>
 									新增
 								</Button>
 							)}
-							{can("system:dept:export") && (
+							{can("system:menu:clearCache") && (
 								<Button
 									variant="secondary"
-									disabled={exportMutation.isPending}
+									disabled={clearCacheMutation.isPending}
 									onClick={async () => {
 										try {
-											const blob = await exportMutation.mutateAsync();
-											downloadBlob(blob, "dept_export.csv");
+											await clearCacheMutation.mutateAsync();
+											toast.success("清除缓存成功", { position: "top-center" });
 										} catch {
 											// handled by apiClient
 										}
 									}}
 								>
-									导出
+									清缓存
 								</Button>
 							)}
 							<Button
 								variant="secondary"
 								onClick={() => {
-									queryClient.invalidateQueries({ queryKey: ["systemDept.tree"] });
+									queryClient.invalidateQueries({ queryKey: ["systemMenu.tree"] });
 								}}
 							>
 								刷新
@@ -297,53 +321,19 @@ export default function OrganizationPage() {
 						</div>
 					}
 					search={
-						<>
-							<Input
-								value={keyword}
-								onChange={(e) => setKeyword(e.target.value)}
-								placeholder="名称/描述"
-								className="w-[220px]"
-							/>
-							<Select
-								value={status === undefined ? "all" : String(status)}
-								onValueChange={(v) => setStatus(v === "all" ? undefined : Number(v))}
-							>
-								<SelectTrigger className="w-[140px]">
-									<SelectValue placeholder="状态" />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="all">全部状态</SelectItem>
-									<SelectItem value={String(BasicStatus.ENABLE)}>启用</SelectItem>
-									<SelectItem value={String(BasicStatus.DISABLE)}>禁用</SelectItem>
-								</SelectContent>
-							</Select>
-							<Button
-								onClick={() => {
-									setQueryKeyword(keyword.trim());
-									setQueryStatus(status);
-								}}
-							>
-								查询
-							</Button>
-							<Button
-								variant="secondary"
-								onClick={() => {
-									setKeyword("");
-									setStatus(undefined);
-									setQueryKeyword("");
-									setQueryStatus(undefined);
-								}}
-							>
-								重置
-							</Button>
-						</>
+						<Input
+							value={keyword}
+							onChange={(e) => setKeyword(e.target.value)}
+							placeholder={t("sys.page.systemPermission.searchPlaceholder")}
+							className="w-[280px]"
+						/>
 					}
 					columns={columns}
 					data={flatRows}
 					loading={isFetching}
 					getRowId={(row) => String(row.node.id)}
 				/>
-				<DeptFormDialog
+				<MenuFormDialog
 					open={dialogOpen}
 					mode={dialogMode}
 					tree={stripEmptyChildren(data || [])}

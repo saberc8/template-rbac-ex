@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Tree } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { BasicStatus } from "#/enum";
@@ -12,9 +11,11 @@ import { usePathname, useRouter } from "@/routes/hooks";
 import { useUserPermissions } from "@/store/userStore";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
-import { Card, CardContent, CardHeader } from "@/ui/card";
+import { Card, CardContent } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
+import SystemSideCard from "../components/system-side-card";
+import SystemSideList from "../components/system-side-list";
 import UserFormSheet from "./user-form-sheet";
 import UserImportSheet from "./user-import-sheet";
 import UserResetPasswordDialog from "./user-reset-password-dialog";
@@ -263,53 +264,41 @@ export default function UserPage() {
 		return base;
 	}, [can, canAny, confirm, deleteMutation.isPending, deleteMutation.mutateAsync, pathname, push]);
 
-	const deptTreeData = useMemo(() => {
-		const toNodes = (nodes: SysDeptNode[]): any[] =>
-			(nodes || []).map((n) => ({
-				title: n.name,
-				key: n.id,
-				children: toNodes(n.children || []),
-			}));
-		return toNodes(deptTree || []);
+	const deptItems = useMemo(() => {
+		const out: Array<{ key: number; title: string; depth: number }> = [];
+		const walk = (nodes: SysDeptNode[], depth: number) => {
+			for (const n of nodes || []) {
+				const id = Number(n.id);
+				if (!Number.isFinite(id) || id <= 0) continue;
+				out.push({ key: id, title: String(n.name || "-"), depth });
+				if (n.children?.length) walk(n.children, depth + 1);
+			}
+		};
+		walk(deptTree || [], 0);
+		return out;
 	}, [deptTree]);
 
 	return (
 		<div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[280px_1fr]">
-			<Card>
-				<CardHeader>
-					<div className="flex items-center justify-between gap-2">
-						<div>部门</div>
-						<Button
-							variant="secondary"
-							size="sm"
-							onClick={() => {
-								setDeptId(undefined);
-								setQueryDeptId(undefined);
-								setPage(1);
-							}}
-						>
-							清空
-						</Button>
-					</div>
-				</CardHeader>
-				<CardContent>
-					{isDeptFetching && <div className="text-sm text-muted-foreground">Loading...</div>}
-					{!isDeptFetching && (
-						<div className="text-sm">
-							<Tree
-								treeData={deptTreeData}
-								selectedKeys={deptId ? [deptId] : []}
-								onSelect={(keys: any[]) => {
-									const v = Number(keys?.[0]) || undefined;
-									setDeptId(v);
-									setPage(1);
-									setQueryDeptId(v);
-								}}
-							/>
-						</div>
-					)}
-				</CardContent>
-			</Card>
+			<SystemSideCard
+				title="部门"
+				extra={undefined}
+				contentClassName="pt-0"
+			>
+				{isDeptFetching && <div className="text-sm text-muted-foreground">Loading...</div>}
+				{!isDeptFetching && (
+					<SystemSideList
+						items={deptItems.map((it) => ({ key: it.key, title: it.title, depth: it.depth }))}
+						selectedKey={deptId ?? null}
+						onSelect={(k) => {
+							const v = Number(k) || undefined;
+							setDeptId(v);
+							setPage(1);
+							setQueryDeptId(v);
+						}}
+					/>
+				)}
+			</SystemSideCard>
 
 			<Card className="min-w-0">
 				<CardContent>

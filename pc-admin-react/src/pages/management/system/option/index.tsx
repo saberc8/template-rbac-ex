@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { type SysOption, type SysOptionUpdateReq, systemOptionService } from "@/api/services/systemOptionService";
 import { useConfirmDialog } from "@/components/confirm/use-confirm-dialog";
 import Icon from "@/components/icon/icon";
+import SplitLayout from "@/components/layout/split-layout";
 import { usePathname, useRouter, useSearchParams } from "@/routes/hooks";
 import { useUserPermissions } from "@/store/userStore";
 import { Button } from "@/ui/button";
@@ -15,6 +16,8 @@ import { Label } from "@/ui/label";
 import { Switch } from "@/ui/switch";
 import { Textarea } from "@/ui/textarea";
 import ClientPage from "../client";
+import SystemSideCard from "../components/system-side-card";
+import SystemSideList from "../components/system-side-list";
 import StoragePage from "../storage";
 
 const fileToBase64 = (file: File): Promise<string> =>
@@ -691,10 +694,45 @@ export default function OptionPage() {
 		[tabs, canUpdateLogin, canUpdateSecurity, canUpdateSite],
 	);
 
+	const content = useMemo(() => {
+		if (!tabs.length) return null;
+		if (activeKey === "site") return <SiteConfigPanel canUpdate={canUpdateSite} />;
+		if (activeKey === "security") return <SecurityConfigPanel canUpdate={canUpdateSecurity} />;
+		if (activeKey === "login") return <LoginConfigPanel canUpdate={canUpdateLogin} />;
+		if (activeKey === "storage") return <StoragePage />;
+		return <ClientPage />;
+	}, [activeKey, canUpdateLogin, canUpdateSecurity, canUpdateSite, tabs.length]);
+
 	return (
 		<div className="min-h-0">
 			{!tabs.length ? (
 				<div className="text-sm text-muted-foreground">暂无可用配置项，请检查权限。</div>
+			) : isDesktop ? (
+				<SplitLayout
+					leftWidth={280}
+					left={
+						<SystemSideCard title="系统配置" contentClassName="pt-0">
+							<SystemSideList
+								items={tabs.map((t) => ({
+									key: t.key,
+									title: (
+										<div className="flex items-center gap-2 min-w-0">
+											<Icon icon={t.icon} size={18} />
+											<span className="truncate">{t.label}</span>
+										</div>
+									),
+								}))}
+								selectedKey={activeKey}
+								onSelect={(k) => {
+									const key = k as ConfigTabKey;
+									setActiveKey(key);
+									setUrlTab(key);
+								}}
+							/>
+						</SystemSideCard>
+					}
+					right={<div className="min-w-0">{content}</div>}
+				/>
 			) : (
 				<Tabs
 					items={items}

@@ -16,13 +16,17 @@ import {
 } from "@/api/services/systemDictService";
 import { useConfirmDialog } from "@/components/confirm/use-confirm-dialog";
 import DataTable from "@/components/data-table/data-table";
+import Icon from "@/components/icon/icon";
 import SplitLayout from "@/components/layout/split-layout";
 import { useUserPermissions } from "@/store/userStore";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent } from "@/ui/card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/ui/dropdown-menu";
 import { Input } from "@/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
+import SystemSideCard from "../components/system-side-card";
+import SystemSideList from "../components/system-side-list";
 import DictFormDialog from "./dict-form-dialog";
 import DictItemFormDialog from "./dict-item-form-dialog";
 
@@ -89,76 +93,82 @@ export default function DictPage() {
 		}
 	};
 
-	const columns: Array<ColumnDef<SysDict>> = useMemo(
-		() => [
-			{ header: "Name", accessorKey: "name", size: 220 },
-			{ header: "Code", accessorKey: "code", size: 220 },
-			{ header: "Description", accessorKey: "description", size: 320 },
-			{
-				header: "System",
-				accessorKey: "isSystem",
-				size: 120,
-				meta: { align: "center" },
-				cell: ({ row }) => (row.original.isSystem ? "Yes" : "No"),
-			},
-			{
-				header: "操作",
-				id: "actions",
-				size: 180,
-				meta: { align: "center" },
-				cell: ({ row }) => {
-					const record = row.original;
-					return (
-						<div className="flex items-center gap-2">
-							<Button
-								size="sm"
-								variant="secondary"
-								disabled={!can("system:dict:update") || record.isSystem || updateDictMutation.isPending}
-								onClick={() => {
-									setDictFormMode("update");
-									setEditingDict(record);
-									setDictFormOpen(true);
-								}}
-							>
-								编辑
-							</Button>
-							<Button
-								size="sm"
-								variant="destructive"
-								disabled={!can("system:dict:delete") || record.isSystem || deleteDictMutation.isPending}
-								onClick={async () => {
-									const ok = await confirm({
-										title: "确认删除？",
-										description: `字典：${record.name} (${record.code})`,
-										confirmText: "删除",
-										destructive: true,
-									});
-									if (!ok) return;
-									try {
-										await deleteDictMutation.mutateAsync([Number(record.id)]);
-										if (selectedDict?.id === record.id) setSelectedDict(null);
-										toast.success("删除成功", { position: "top-center" });
-									} catch {
-										// handled by apiClient
-									}
-								}}
-							>
-								删除
-							</Button>
-						</div>
-					);
-				},
-			},
-		],
-		[
-			can,
-			confirm,
-			deleteDictMutation.isPending,
-			deleteDictMutation.mutateAsync,
-			selectedDict?.id,
-			updateDictMutation.isPending,
-		],
-	);
+	const dictListItems = useMemo(() => {
+		const term = queryKeyword.trim().toLowerCase();
+		const list = (data || []).filter((d) => {
+			if (!term) return true;
+			return (
+				String(d.name || "")
+					.toLowerCase()
+					.includes(term) ||
+				String(d.code || "")
+					.toLowerCase()
+					.includes(term) ||
+				String(d.description || "")
+					.toLowerCase()
+					.includes(term)
+			);
+		});
+		return list.map((d) => {
+			const canUpdate = can("system:dict:update") && !d.isSystem;
+			const canDelete = can("system:dict:delete") && !d.isSystem;
+			return {
+				key: Number(d.id),
+				title: (
+					<div className="flex items-center gap-2 min-w-0">
+						<span className="truncate">{d.name || "-"}</span>
+						{d.isSystem ? <Badge variant="error">系统</Badge> : null}
+					</div>
+				),
+				subtitle: [d.code, d.description].filter(Boolean).join(" · "),
+				right:
+					can("system:dict:update") || can("system:dict:delete") ? (
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<Button type="button" variant="ghost" size="icon" aria-label="更多">
+									<Icon icon="mdi:dots-horizontal" />
+								</Button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="end">
+								<DropdownMenuItem
+									disabled={!canUpdate}
+									onClick={() => {
+										setSelectedDict(d);
+										setDictFormMode("update");
+										setEditingDict(d);
+										setDictFormOpen(true);
+									}}
+								>
+									编辑
+								</DropdownMenuItem>
+								<DropdownMenuItem
+									variant="destructive"
+									disabled={!canDelete}
+									onClick={async () => {
+										const ok = await confirm({
+											title: "确认删除？",
+											description: `字典：${d.name} (${d.code})`,
+											confirmText: "删除",
+											destructive: true,
+										});
+										if (!ok) return;
+										try {
+											await deleteDictMutation.mutateAsync([Number(d.id)]);
+											setSelectedDict(null);
+											toast.success("删除成功", { position: "top-center" });
+										} catch {
+											// handled by apiClient
+										}
+									}}
+								>
+									删除
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
+					) : null,
+			};
+		});
+	}, [can, confirm, data, deleteDictMutation.mutateAsync, queryKeyword]);
 
 	const { data: itemData, isFetching: isItemFetching } = useQuery({
 		queryKey: ["systemDictItem.page", selectedDict?.id || 0, itemPage, itemPageSize, itemQuery],
@@ -309,65 +319,71 @@ export default function DictPage() {
 	return (
 		<>
 			<SplitLayout
-				leftWidth={520}
+				leftWidth={280}
 				left={
-					<Card className="min-w-0">
-						<CardContent>
-							<DataTable<SysDict>
-								title="Dict"
-								actions={
-									can("system:dict:create") ? (
-										<Button
-											onClick={() => {
-												setDictFormMode("create");
-												setEditingDict(null);
-												setDictFormOpen(true);
-											}}
-										>
-											新增
-										</Button>
-									) : null
-								}
-								search={
-									<>
-										<Input
-											value={keyword}
-											onChange={(e) => setKeyword(e.target.value)}
-											placeholder="Search description"
-											className="w-[260px]"
-										/>
-										<Button onClick={() => setQueryKeyword(keyword.trim())}>查询</Button>
-										<Button
-											variant="secondary"
-											onClick={() => {
-												setKeyword("");
-												setQueryKeyword("");
-											}}
-										>
-											重置
-										</Button>
-									</>
-								}
-								columns={columns}
-								data={data || []}
-								loading={isFetching}
-								getRowId={(row) => String(row.id)}
-								onRowClick={(record) => {
+					<SystemSideCard
+						title="字典"
+						extra={
+							can("system:dict:create") ? (
+								<Button
+									size="sm"
+									onClick={() => {
+										setDictFormMode("create");
+										setEditingDict(null);
+										setDictFormOpen(true);
+									}}
+								>
+									新增
+								</Button>
+							) : null
+						}
+						toolbar={
+							<>
+								<Input
+									value={keyword}
+									onChange={(e) => setKeyword(e.target.value)}
+									placeholder="Search description"
+									className="w-[240px]"
+								/>
+								<Button size="sm" onClick={() => setQueryKeyword(keyword.trim())}>
+									查询
+								</Button>
+								<Button
+									size="sm"
+									variant="secondary"
+									onClick={() => {
+										setKeyword("");
+										setQueryKeyword("");
+									}}
+								>
+									重置
+								</Button>
+							</>
+						}
+						contentClassName="pt-0"
+					>
+						{isFetching ? <div className="text-sm text-muted-foreground">Loading...</div> : null}
+						{!isFetching && (
+							<SystemSideList
+								items={dictListItems}
+								selectedKey={selectedDict?.id ?? null}
+								onSelect={(k) => {
+									const id = Number(k) || 0;
+									const record = (data || []).find((x) => Number(x.id) === id) || null;
 									setSelectedDict(record);
 									setItemPage(1);
 								}}
-								rowClassName={(record) => (record.id === selectedDict?.id ? "bg-muted/50" : "")}
 							/>
-							<DictFormDialog
-								open={dictFormOpen}
-								mode={dictFormMode}
-								initial={editingDict}
-								busy={createDictMutation.isPending || updateDictMutation.isPending}
-								onOpenChange={setDictFormOpen}
-								onSubmit={onSubmitDict}
-							/>
-						</CardContent>
-					</Card>
+						)}
+						<DictFormDialog
+							open={dictFormOpen}
+							mode={dictFormMode}
+							initial={editingDict}
+							busy={createDictMutation.isPending || updateDictMutation.isPending}
+							onOpenChange={setDictFormOpen}
+							onSubmit={onSubmitDict}
+						/>
+					</SystemSideCard>
 				}
 				right={
 					<Card className="min-w-0">
