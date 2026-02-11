@@ -7,6 +7,7 @@ import { type SysDeptNode, systemDeptService } from "@/api/services/systemDeptSe
 import { type SysUserRow, systemUserService } from "@/api/services/systemUserService";
 import { useConfirmDialog } from "@/components/confirm/use-confirm-dialog";
 import DataTable from "@/components/data-table/data-table";
+import OperationActions from "@/components/data-table/operation-actions";
 import { usePathname, useRouter } from "@/routes/hooks";
 import { useUserPermissions } from "@/store/userStore";
 import { Badge } from "@/ui/badge";
@@ -176,43 +177,39 @@ export default function UserPage() {
 		base.push({
 			header: "操作",
 			id: "operation",
-			size: 460,
+			size: 260,
 			meta: { align: "center" },
 			cell: ({ row }) => {
 				const record = row.original;
 				return (
-					<div className="flex w-full flex-wrap items-center justify-center gap-1">
-						{can("system:user:get") && (
-							<Button
-								variant="secondary"
-								size="sm"
-								onClick={() => {
+					<OperationActions
+						items={[
+							{
+								key: "detail",
+								label: "详情",
+								hidden: !can("system:user:get"),
+								onClick: () => {
 									push(`${pathname}/${record.id}`);
-								}}
-							>
-								详情
-							</Button>
-						)}
-						{can("system:user:update") && (
-							<Button
-								variant="secondary"
-								size="sm"
-								onClick={() => {
+								},
+							},
+							{
+								key: "update",
+								label: "修改",
+								hidden: !can("system:user:update"),
+								onClick: () => {
 									setUserFormMode("update");
 									setEditingUserId(record.id);
 									setUserFormOpen(true);
-								}}
-							>
-								修改
-							</Button>
-						)}
-						{can("system:user:delete") && (
-							<Button
-								variant="destructive"
-								size="sm"
-								title={record.isSystem ? "系统内置数据不能删除" : undefined}
-								disabled={Boolean(record.isSystem) || deleteMutation.isPending}
-								onClick={async () => {
+								},
+							},
+							{
+								key: "delete",
+								label: "删除",
+								variant: "destructive",
+								hidden: !can("system:user:delete"),
+								disabled: Boolean(record.isSystem) || deleteMutation.isPending,
+								title: record.isSystem ? "系统内置数据不能删除" : undefined,
+								onClick: async () => {
 									if (record.isSystem) return;
 									const ok = await confirm({
 										title: "确认删除？",
@@ -227,37 +224,30 @@ export default function UserPage() {
 									} catch {
 										// handled by apiClient
 									}
-								}}
-							>
-								删除
-							</Button>
-						)}
-						{can("system:user:resetPwd") && (
-							<Button
-								variant="secondary"
-								size="sm"
-								onClick={() => {
+								},
+							},
+							{
+								key: "resetPwd",
+								label: "重置密码",
+								hidden: !can("system:user:resetPwd"),
+								onClick: () => {
 									setActiveUserId(record.id);
 									setResetPwdOpen(true);
-								}}
-							>
-								重置密码
-							</Button>
-						)}
-						{can("system:user:updateRole") && (
-							<Button
-								variant="secondary"
-								size="sm"
-								onClick={() => {
+								},
+							},
+							{
+								key: "updateRole",
+								label: "分配角色",
+								hidden: !can("system:user:updateRole"),
+								onClick: () => {
 									setActiveUserId(record.id);
 									setActiveUserRoleIds(record.roleIds);
 									setUpdateRoleOpen(true);
-								}}
-							>
-								分配角色
-							</Button>
-						)}
-					</div>
+								},
+							},
+						]}
+						maxVisible={3}
+					/>
 				);
 			},
 		});
@@ -364,7 +354,6 @@ export default function UserPage() {
 									</SelectContent>
 								</Select>
 								<Button
-									size="sm"
 									onClick={() => {
 										setPage(1);
 										setQueryKeyword(keyword.trim());
@@ -375,7 +364,6 @@ export default function UserPage() {
 									查询
 								</Button>
 								<Button
-									size="sm"
 									variant="secondary"
 									onClick={() => {
 										setKeyword("");

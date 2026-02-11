@@ -9,7 +9,7 @@ import { type SysFileRow, systemFileService } from "@/api/services/systemFileSer
 import { useConfirmDialog } from "@/components/confirm/use-confirm-dialog";
 import { buildBreadcrumbList, fileTypeName, joinParentPath, normalizeParentPath } from "@/constants/file";
 import { Button } from "@/ui/button";
-import { Card, CardContent, CardHeader } from "@/ui/card";
+import { Card, CardContent } from "@/ui/card";
 import { Input } from "@/ui/input";
 import CreateDirModal from "./components/CreateDirModal";
 import FileDetailModal from "./components/FileDetailModal";
@@ -303,101 +303,103 @@ export default function FileMain({ fileType }: { fileType: number }) {
 	);
 
 	return (
-		<Card className="h-full min-h-0 flex flex-col">
-			<CardHeader className="pb-3">
-				{isDirMode ? (
-					<div className="mb-3">
-						<Breadcrumb>
-							<Breadcrumb.Item
-								onClick={() => {
-									setParentPath("/");
-									setPage(1);
-								}}
-								className="cursor-pointer"
-							>
-								根目录
-							</Breadcrumb.Item>
-							{breadcrumbs.map((b) => (
+		<Card className="min-w-0 h-full min-h-0">
+			<CardContent className="flex-1 min-h-0">
+				<div className="flex min-h-0 flex-col gap-4">
+					{isDirMode ? (
+						<div>
+							<Breadcrumb>
 								<Breadcrumb.Item
-									key={b.path}
 									onClick={() => {
-										setParentPath(b.path);
+										setParentPath("/");
 										setPage(1);
 									}}
 									className="cursor-pointer"
 								>
-									{b.name}
+									根目录
 								</Breadcrumb.Item>
-							))}
-						</Breadcrumb>
+								{breadcrumbs.map((b) => (
+									<Breadcrumb.Item
+										key={b.path}
+										onClick={() => {
+											setParentPath(b.path);
+											setPage(1);
+										}}
+										className="cursor-pointer"
+									>
+										{b.name}
+									</Breadcrumb.Item>
+								))}
+							</Breadcrumb>
+						</div>
+					) : (
+						<div className="text-sm text-muted-foreground">当前筛选：{fileTypeName(fileType)}</div>
+					)}
+
+					<div className="flex items-center justify-between gap-3 flex-wrap">
+						{headerLeft}
+						{headerRight}
 					</div>
-				) : (
-					<div className="mb-3 text-sm text-muted-foreground">当前筛选：{fileTypeName(fileType)}</div>
-				)}
 
-				<div className="flex items-center justify-between gap-3 flex-wrap">
-					{headerLeft}
-					{headerRight}
-				</div>
-			</CardHeader>
-
-			<CardContent className="flex-1 min-h-0 overflow-auto">
-				{viewMode === "list" ? (
-					<FileList
-						loading={isFetching}
-						data={list}
-						page={page}
-						pageSize={pageSize}
-						total={total}
-						isDirMode={isDirMode}
-						isBatchMode={isBatchMode}
-						selectedIds={selectedIds}
-						onSelectedIdsChange={setSelectedIds}
-						onPageChange={(p, s) => {
-							setPage(p);
-							setPageSize(s);
-						}}
-						onEnterDir={onEnterDir}
-						onPreview={onPreview}
-						onDetail={onDetail}
-						onRename={onRename}
-						onDownload={onDownload}
-						onDelete={(id) => onDelete([id])}
-					/>
-				) : (
-					<div className="space-y-4">
-						<FileGrid
-							loading={isFetching}
-							data={list}
-							isDirMode={isDirMode}
-							isBatchMode={isBatchMode}
-							selectedIds={selectedIds}
-							onSelectedIdsChange={setSelectedIds}
-							onEnterDir={onEnterDir}
-							onPreview={onPreview}
-							onDetail={onDetail}
-							onRename={onRename}
-							onDownload={onDownload}
-							onDelete={(id) => onDelete([id])}
-						/>
-						{isFetching ? null : list.length ? (
-							<div className="flex justify-end">
-								<Pagination
-									current={page}
-									pageSize={pageSize}
-									total={total}
-									showSizeChanger
-									onChange={(p, s) => {
-										setPage(p);
-										setPageSize(s);
-									}}
-								/>
-							</div>
+					<div className="flex-1 min-h-0 overflow-auto">
+						{viewMode === "list" ? (
+							<FileList
+								loading={isFetching}
+								data={list}
+								page={page}
+								pageSize={pageSize}
+								total={total}
+								isDirMode={isDirMode}
+								isBatchMode={isBatchMode}
+								selectedIds={selectedIds}
+								onSelectedIdsChange={setSelectedIds}
+								onPageChange={(p, s) => {
+									setPage(p);
+									setPageSize(s);
+								}}
+								onEnterDir={onEnterDir}
+								onPreview={onPreview}
+								onDetail={onDetail}
+								onRename={onRename}
+								onDownload={onDownload}
+								onDelete={(id) => onDelete([id])}
+							/>
 						) : (
-							<Empty />
+							<div className="space-y-4">
+								<FileGrid
+									loading={isFetching}
+									data={list}
+									isDirMode={isDirMode}
+									isBatchMode={isBatchMode}
+									selectedIds={selectedIds}
+									onSelectedIdsChange={setSelectedIds}
+									onEnterDir={onEnterDir}
+									onPreview={onPreview}
+									onDetail={onDetail}
+									onRename={onRename}
+									onDownload={onDownload}
+									onDelete={(id) => onDelete([id])}
+								/>
+								{isFetching ? null : list.length ? (
+									<div className="flex justify-end">
+										<Pagination
+											current={page}
+											pageSize={pageSize}
+											total={total}
+											showSizeChanger
+											onChange={(p, s) => {
+												setPage(p);
+												setPageSize(s);
+											}}
+										/>
+									</div>
+								) : (
+									<Empty />
+								)}
+							</div>
 						)}
 					</div>
-				)}
+				</div>
 			</CardContent>
 
 			<CreateDirModal

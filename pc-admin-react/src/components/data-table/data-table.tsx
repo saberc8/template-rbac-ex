@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/ui/table";
 import { cn } from "@/utils";
 
+type ColumnFixedSide = "left" | "right";
+
 type PaginationProps = {
 	page: number;
 	pageSize: number;
@@ -114,6 +116,15 @@ export default function DataTable<TData extends object>({
 }) {
 	const emptyNode = empty ?? <div className="text-sm text-muted-foreground">暂无数据</div>;
 
+	const inferFixedSide = (colDef: ColumnDef<TData, any>): ColumnFixedSide | undefined => {
+		const meta = colDef.meta as any;
+		const declared = meta?.fixed as ColumnFixedSide | undefined;
+		if (declared === "left" || declared === "right") return declared;
+
+		if (typeof colDef.header === "string" && colDef.header === "操作") return "right";
+		return undefined;
+	};
+
 	const selectionColumn = useMemo(() => {
 		if (!selection) return null;
 
@@ -186,6 +197,27 @@ export default function DataTable<TData extends object>({
 		getRowId: getRowId as any,
 	});
 
+	const leafColumns = table.getVisibleLeafColumns();
+	const leftOffsets = new Map<string, number>();
+	const rightOffsets = new Map<string, number>();
+
+	let accLeft = 0;
+	for (const col of leafColumns) {
+		const fixed = inferFixedSide(col.columnDef as any);
+		if (fixed !== "left") continue;
+		leftOffsets.set(col.id, accLeft);
+		accLeft += col.getSize();
+	}
+
+	let accRight = 0;
+	for (let i = leafColumns.length - 1; i >= 0; i -= 1) {
+		const col = leafColumns[i];
+		const fixed = inferFixedSide(col.columnDef as any);
+		if (fixed !== "right") continue;
+		rightOffsets.set(col.id, accRight);
+		accRight += col.getSize();
+	}
+
 	return (
 		<div className="flex flex-col gap-3 min-w-0">
 			{title || actions ? (
@@ -198,22 +230,34 @@ export default function DataTable<TData extends object>({
 			{search ? <div className="flex flex-wrap items-center gap-2">{search}</div> : null}
 
 			<div className="rounded-md border min-w-0">
-				<Table>
+				<Table className="w-max min-w-full">
 					<TableHeader>
 						{table.getHeaderGroups().map((headerGroup) => (
 							<TableRow key={headerGroup.id}>
 								{headerGroup.headers.map((header) => {
 									const meta = header.column.columnDef.meta as any;
+									const fixed = inferFixedSide(header.column.columnDef as any);
+									const stickyOffset =
+										fixed === "left"
+											? leftOffsets.get(header.column.id)
+											: fixed === "right"
+												? rightOffsets.get(header.column.id)
+												: undefined;
 									return (
 										<TableHead
 											key={header.id}
 											className={cn(
 												meta?.align === "center" && "text-center",
 												meta?.align === "right" && "text-right",
+												fixed && "sticky bg-background",
+												fixed === "left" && "z-30 border-r",
+												fixed === "right" && "z-30 border-l",
 												meta?.className,
 											)}
 											style={{
 												width: header.getSize() ? `${header.getSize()}px` : undefined,
+												left: fixed === "left" && stickyOffset !== undefined ? `${stickyOffset}px` : undefined,
+												right: fixed === "right" && stickyOffset !== undefined ? `${stickyOffset}px` : undefined,
 											}}
 										>
 											{header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
@@ -236,6 +280,7 @@ export default function DataTable<TData extends object>({
 								<TableRow
 									key={row.id}
 									className={cn(
+										"group",
 										onRowClick || onRowDoubleClick ? "cursor-pointer" : "",
 										rowClassName ? rowClassName(row.original as TData) : "",
 									)}
@@ -244,16 +289,28 @@ export default function DataTable<TData extends object>({
 								>
 									{row.getVisibleCells().map((cell) => {
 										const meta = cell.column.columnDef.meta as any;
+										const fixed = inferFixedSide(cell.column.columnDef as any);
+										const stickyOffset =
+											fixed === "left"
+												? leftOffsets.get(cell.column.id)
+												: fixed === "right"
+													? rightOffsets.get(cell.column.id)
+													: undefined;
 										return (
 											<TableCell
 												key={cell.id}
 												className={cn(
 													meta?.align === "center" && "text-center",
 													meta?.align === "right" && "text-right",
+													fixed && "sticky bg-background group-hover:bg-muted",
+													fixed === "left" && "z-20 border-r",
+													fixed === "right" && "z-20 border-l",
 													meta?.className,
 												)}
 												style={{
 													width: cell.column.getSize() ? `${cell.column.getSize()}px` : undefined,
+													left: fixed === "left" && stickyOffset !== undefined ? `${stickyOffset}px` : undefined,
+													right: fixed === "right" && stickyOffset !== undefined ? `${stickyOffset}px` : undefined,
 												}}
 											>
 												{flexRender(cell.column.columnDef.cell, cell.getContext())}
