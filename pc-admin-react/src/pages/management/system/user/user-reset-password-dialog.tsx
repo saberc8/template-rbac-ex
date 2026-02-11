@@ -11,7 +11,7 @@ const passwordRule = (raw: string) => {
 	const value = (raw || "").trim();
 	if (value.length < 8 || value.length > 32) return false;
 	const hasLetter = /[a-zA-Z]/.test(value);
-	const hasDigit = /\\d/.test(value);
+	const hasDigit = /\d/.test(value);
 	return hasLetter && hasDigit;
 };
 
@@ -77,4 +77,3 @@ export default function UserResetPasswordDialog({ open, userId, onOpenChange }: 
 		</Dialog>
 	);
 }
-

@@ -68,6 +68,7 @@ export default function UserUpdateRoleDialog({ open, userId, defaultRoleIds, onO
 						value={roleIds}
 						options={roleOptions}
 						placeholder="请选择角色"
+						getPopupContainer={(triggerNode) => triggerNode?.parentElement || document.body}
 						onChange={(v) => setRoleIds((v || []).map((x) => Number(x)))}
 					/>
 				</div>
@@ -83,4 +84,3 @@ export default function UserUpdateRoleDialog({ open, userId, defaultRoleIds, onO
 		</Dialog>
 	);
 }
-

@@ -1,4 +1,3 @@
-import { Icon } from "@/components/icon";
 import { systemDeptService, type SysDeptNode } from "@/api/services/systemDeptService";
 import { systemUserService, type SysUserRow } from "@/api/services/systemUserService";
 import { usePathname, useRouter } from "@/routes/hooks";
@@ -7,6 +6,7 @@ import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader } from "@/ui/card";
 import { Input } from "@/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Table, Tree } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -17,7 +17,6 @@ import UserFormSheet from "./user-form-sheet";
 import UserImportSheet from "./user-import-sheet";
 import UserResetPasswordDialog from "./user-reset-password-dialog";
 import UserUpdateRoleDialog from "./user-update-role-dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/ui/dropdown-menu";
 
 export default function UserPage() {
 	const { push } = useRouter();
@@ -148,41 +147,39 @@ export default function UserPage() {
 			title: "操作",
 			key: "operation",
 			align: "center",
-			width: 220,
+			width: 420,
 			fixed: "right",
 			render: (_, record) => (
-				<div className="flex w-full items-center justify-center gap-1 text-gray-500">
+				<div className="flex w-full flex-wrap items-center justify-center gap-1">
 					{can("system:user:get") && (
 						<Button
-							variant="ghost"
-							size="icon"
-							title="详情"
+							variant="secondary"
+							size="sm"
 							onClick={() => {
 								push(`${pathname}/${record.id}`);
 							}}
 						>
-							<Icon icon="mdi:card-account-details" size={18} />
+							详情
 						</Button>
 					)}
 					{can("system:user:update") && (
 						<Button
-							variant="ghost"
-							size="icon"
-							title="修改"
+							variant="secondary"
+							size="sm"
 							onClick={() => {
 								setUserFormMode("update");
 								setEditingUserId(record.id);
 								setUserFormOpen(true);
 							}}
 						>
-							<Icon icon="mdi:pencil" size={18} />
+							修改
 						</Button>
 					)}
 					{can("system:user:delete") && (
 						<Button
-							variant="ghost"
-							size="icon"
-							title={record.isSystem ? "系统内置数据不能删除" : "删除"}
+							variant="destructive"
+							size="sm"
+							title={record.isSystem ? "系统内置数据不能删除" : undefined}
 							disabled={Boolean(record.isSystem) || deleteMutation.isPending}
 							onClick={async () => {
 								if (record.isSystem) return;
@@ -196,48 +193,33 @@ export default function UserPage() {
 								}
 							}}
 						>
-							<Icon icon="mdi:delete-outline" size={18} />
+							删除
 						</Button>
 					)}
-					{canAny(["system:user:resetPwd", "system:user:updateRole"]) && (
-						<DropdownMenu>
-							<DropdownMenuTrigger asChild>
-								<Button
-									variant="ghost"
-									size="icon"
-									title="更多"
-									onClick={() => {
-										setActiveUserId(record.id);
-										setActiveUserRoleIds(record.roleIds);
-									}}
-								>
-									<Icon icon="dashicons:ellipsis" size={18} />
-								</Button>
-							</DropdownMenuTrigger>
-							<DropdownMenuContent align="end">
-								{can("system:user:resetPwd") && (
-									<DropdownMenuItem
-										onClick={() => {
-											setActiveUserId(record.id);
-											setResetPwdOpen(true);
-										}}
-									>
-										重置密码
-									</DropdownMenuItem>
-								)}
-								{can("system:user:updateRole") && (
-									<DropdownMenuItem
-										onClick={() => {
-											setActiveUserId(record.id);
-											setActiveUserRoleIds(record.roleIds);
-											setUpdateRoleOpen(true);
-										}}
-									>
-										分配角色
-									</DropdownMenuItem>
-								)}
-							</DropdownMenuContent>
-						</DropdownMenu>
+					{can("system:user:resetPwd") && (
+						<Button
+							variant="secondary"
+							size="sm"
+							onClick={() => {
+								setActiveUserId(record.id);
+								setResetPwdOpen(true);
+							}}
+						>
+							重置密码
+						</Button>
+					)}
+					{can("system:user:updateRole") && (
+						<Button
+							variant="secondary"
+							size="sm"
+							onClick={() => {
+								setActiveUserId(record.id);
+								setActiveUserRoleIds(record.roleIds);
+								setUpdateRoleOpen(true);
+							}}
+						>
+							分配角色
+						</Button>
 					)}
 				</div>
 			),
@@ -300,23 +282,25 @@ export default function UserPage() {
 							<div>用户列表</div>
 							<div className="flex items-center gap-2">
 								{can("system:user:create") && (
-									<Button
-										onClick={() => {
-											setUserFormMode("create");
-											setEditingUserId(null);
-											setUserFormOpen(true);
-										}}
+						<Button
+							size="sm"
+							onClick={() => {
+								setUserFormMode("create");
+								setEditingUserId(null);
+								setUserFormOpen(true);
+							}}
 									>
 										新增
 									</Button>
 								)}
 								{can("system:user:import") && (
-									<Button variant="secondary" onClick={() => setImportOpen(true)}>
+									<Button size="sm" variant="secondary" onClick={() => setImportOpen(true)}>
 										导入
 									</Button>
 								)}
 								{can("system:user:export") && (
 									<Button
+										size="sm"
 										variant="secondary"
 										disabled={exportMutation.isPending}
 										onClick={async () => {
@@ -336,19 +320,27 @@ export default function UserPage() {
 
 						<div className="flex flex-wrap items-center gap-2">
 							<Input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="用户名/昵称/描述" className="w-[240px]" />
-							<select
-								className="h-9 rounded-md border bg-transparent px-3 text-sm"
-								value={status ?? ""}
-								onChange={(e) => {
-									const v = e.target.value === "" ? undefined : Number(e.target.value);
-									setStatus(v);
+							<Select
+								value={status === undefined ? "all" : String(status)}
+								onValueChange={(v) => {
+									if (v === "all") {
+										setStatus(undefined);
+										return;
+									}
+									setStatus(Number(v));
 								}}
 							>
-								<option value="">全部状态</option>
-								<option value={BasicStatus.ENABLE}>启用</option>
-								<option value={BasicStatus.DISABLE}>禁用</option>
-							</select>
+								<SelectTrigger size="sm">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">全部状态</SelectItem>
+									<SelectItem value={String(BasicStatus.ENABLE)}>启用</SelectItem>
+									<SelectItem value={String(BasicStatus.DISABLE)}>禁用</SelectItem>
+								</SelectContent>
+							</Select>
 							<Button
+								size="sm"
 								onClick={() => {
 									setPage(1);
 									setQueryKeyword(keyword.trim());
@@ -359,6 +351,7 @@ export default function UserPage() {
 								查询
 							</Button>
 							<Button
+								size="sm"
 								variant="secondary"
 								onClick={() => {
 									setKeyword("");

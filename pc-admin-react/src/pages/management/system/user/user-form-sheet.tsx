@@ -33,7 +33,7 @@ const passwordRule = (raw: string) => {
 	const value = (raw || "").trim();
 	if (value.length < 8 || value.length > 32) return false;
 	const hasLetter = /[a-zA-Z]/.test(value);
-	const hasDigit = /\\d/.test(value);
+	const hasDigit = /\d/.test(value);
 	return hasLetter && hasDigit;
 };
 
@@ -252,6 +252,7 @@ export default function UserFormSheet({ open, mode, userId, onOpenChange, onSucc
 							<div className="grid grid-cols-1 gap-2">
 								<Label>性别</Label>
 								<Select
+									getPopupContainer={(triggerNode) => triggerNode?.parentElement || document.body}
 									value={form.watch("gender")}
 									onChange={(v) => form.setValue("gender", Number(v))}
 									options={[
@@ -279,6 +280,7 @@ export default function UserFormSheet({ open, mode, userId, onOpenChange, onSucc
 								placeholder="请选择部门"
 								treeDefaultExpandAll
 								allowClear
+								getPopupContainer={(triggerNode) => triggerNode?.parentElement || document.body}
 								onChange={(v) => form.setValue("deptId", Number(v) || 0)}
 							/>
 						</div>
@@ -286,6 +288,7 @@ export default function UserFormSheet({ open, mode, userId, onOpenChange, onSucc
 						<div className="grid grid-cols-1 gap-2">
 							<Label>角色</Label>
 							<Select
+								getPopupContainer={(triggerNode) => triggerNode?.parentElement || document.body}
 								mode="multiple"
 								value={form.watch("roleIds")}
 								options={roleOptions}
@@ -312,4 +315,3 @@ export default function UserFormSheet({ open, mode, userId, onOpenChange, onSucc
 		</Sheet>
 	);
 }
-

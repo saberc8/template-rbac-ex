@@ -43,7 +43,7 @@ def main() -> int:
         dest="force",
         action="store_true",
         default=seed_force_env,
-        help="强制同步菜单快照到数据库（仅更新/插入，不删除；默认读 DB_SEED_FORCE）",
+        help="强制同步菜单快照到数据库（更新/插入；React 菜单会清理快照已移除项；默认读 DB_SEED_FORCE）",
     )
     parser.add_argument(
         "--no-force",

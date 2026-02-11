@@ -122,6 +122,8 @@ def _seed_react_menu(conn: Connection, *, force: bool) -> None:
             continue
         id_map[sid] = _stable_i64_from_string(sid)
 
+    desired_menu_ids = set(id_map.values())
+
     def _pid(s: str) -> int:
         s = str(s or "").strip()
         if s == "":
@@ -217,6 +219,27 @@ WHERE NOT EXISTS (SELECT 1 FROM sys_role_menu WHERE role_id = 1 AND menu_id = :m
             ),
             {"menu_id": mid},
         )
+
+    if not force:
+        return
+
+    # 强制同步时，清理已从快照移除的 React 菜单（仅删除 seed 生成的 create_user=1 数据）。
+    stale_rows = conn.execute(
+        text(
+            """
+SELECT id
+FROM sys_menu
+WHERE frontend = 'react' AND create_user = 1;
+"""
+        )
+    ).all()
+    stale_ids = [int(r[0]) for r in stale_rows if int(r[0]) not in desired_menu_ids]
+    if not stale_ids:
+        return
+
+    for mid in stale_ids:
+        conn.execute(text("DELETE FROM sys_role_menu WHERE menu_id = :id"), {"id": mid})
+        conn.execute(text("DELETE FROM sys_menu WHERE id = :id"), {"id": mid})
 
 
 def _parse_bool(value: str | None) -> tuple[bool, bool]:

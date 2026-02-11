@@ -95,5 +95,16 @@ const convertToRoute = (items: MenuTree[], parent?: MenuTree): RouteObject[] => 
 export function getBackendDashboardRoutes() {
 	const tree = getBackendMenuTreeSnapshot();
 	const menuTree = tree && tree.length > 0 ? tree : convertFlatToTree(MENU_SNAPSHOT);
-	return convertToRoute(menuTree);
+	const routes = convertToRoute(menuTree);
+
+	// 详情页等“非菜单直达”路由在 backend 路由模式下可能不存在于菜单树中，
+	// 这里补充静态路由，避免从列表页跳转后命中 404。
+	const extraRoutes: RouteObject[] = [
+		{ path: "management/system/user/:id", element: Component("/pages/management/system/user/detail") },
+	];
+
+	for (const r of extraRoutes) {
+		if (!routes.some((x) => x.path === r.path)) routes.push(r);
+	}
+	return routes;
 }
