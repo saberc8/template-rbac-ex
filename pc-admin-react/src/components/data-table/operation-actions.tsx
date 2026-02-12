@@ -1,5 +1,5 @@
 import { MoreHorizontalIcon } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/ui/dropdown-menu";
 
@@ -39,6 +39,12 @@ export default function OperationActions({
 		closeTimerRef.current = window.setTimeout(() => setOpen(false), 120);
 	};
 
+	useEffect(() => {
+		return () => {
+			clearCloseTimer();
+		};
+	}, []);
+
 	if (!effectiveItems.length) return null;
 
 	return (
@@ -57,17 +63,17 @@ export default function OperationActions({
 			))}
 
 			{overflowItems.length ? (
-				<DropdownMenu open={open} onOpenChange={setOpen}>
+				<DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
 					<DropdownMenuTrigger asChild>
 						<Button
 							type="button"
 							size="sm"
 							variant="secondary"
-							onMouseEnter={() => {
+							onPointerEnter={() => {
 								clearCloseTimer();
 								setOpen(true);
 							}}
-							onMouseLeave={() => {
+							onPointerLeave={() => {
 								scheduleClose();
 							}}
 							aria-label="更多操作"
@@ -77,10 +83,12 @@ export default function OperationActions({
 					</DropdownMenuTrigger>
 					<DropdownMenuContent
 						align="end"
-						onMouseEnter={() => {
+						className="data-[state=closed]:animate-none"
+						onCloseAutoFocus={(e: Event) => e.preventDefault()}
+						onPointerEnter={() => {
 							clearCloseTimer();
 						}}
-						onMouseLeave={() => {
+						onPointerLeave={() => {
 							scheduleClose();
 						}}
 					>
@@ -92,6 +100,7 @@ export default function OperationActions({
 								variant={it.menuVariant ?? (it.variant === "destructive" ? "destructive" : "default")}
 								onSelect={() => {
 									void it.onClick();
+									setOpen(false);
 								}}
 							>
 								{it.label}
