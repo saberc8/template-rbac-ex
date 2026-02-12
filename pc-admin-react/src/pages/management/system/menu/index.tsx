@@ -8,6 +8,8 @@ import { BasicStatus } from "#/enum";
 import { type SysMenuNode, type SysMenuSaveReq, systemMenuService } from "@/api/services/systemMenuService";
 import { useConfirmDialog } from "@/components/confirm/use-confirm-dialog";
 import DataTable from "@/components/data-table/data-table";
+import { GLOBAL_CONFIG } from "@/global-config";
+import { useMenuStore } from "@/store/menuStore";
 import { useUserPermissions } from "@/store/userStore";
 import { Button } from "@/ui/button";
 import { Card, CardContent } from "@/ui/card";
@@ -44,7 +46,7 @@ export default function MenuPage() {
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [dialogMode, setDialogMode] = useState<"create" | "update">("create");
 	const [editing, setEditing] = useState<SysMenuNode | null>(null);
-	const [defaultParentId, setDefaultParentId] = useState<number>(0);
+	const [defaultParentId, setDefaultParentId] = useState<string>("0");
 	const { confirm, ConfirmDialog } = useConfirmDialog();
 
 	const { data, isFetching } = useQuery({
@@ -59,13 +61,13 @@ export default function MenuPage() {
 		},
 	});
 	const updateMutation = useMutation({
-		mutationFn: ({ id, payload }: { id: number; payload: SysMenuSaveReq }) => systemMenuService.update(id, payload),
+		mutationFn: ({ id, payload }: { id: string | number; payload: SysMenuSaveReq }) => systemMenuService.update(id, payload),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["systemMenu.tree"] });
 		},
 	});
 	const deleteMutation = useMutation({
-		mutationFn: (ids: number[]) => systemMenuService.delete(ids),
+		mutationFn: (ids: Array<string | number>) => systemMenuService.delete(ids),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["systemMenu.tree"] });
 		},
@@ -97,13 +99,13 @@ export default function MenuPage() {
 
 	type FlatMenuRow = { node: SysMenuNode; depth: number; hasChildren: boolean };
 
-	const [expandedIds, setExpandedIds] = useState<number[]>([]);
+	const [expandedIds, setExpandedIds] = useState<string[]>([]);
 
 	useEffect(() => {
-		const ids: number[] = [];
+		const ids: string[] = [];
 		const walk = (nodes: SysMenuNode[]) => {
 			for (const n of nodes || []) {
-				if (n.children?.length) ids.push(Number(n.id));
+				if (n.children?.length) ids.push(String(n.id));
 				if (n.children?.length) walk(n.children);
 			}
 		};
@@ -118,7 +120,7 @@ export default function MenuPage() {
 			for (const n of nodes || []) {
 				const hasChildren = (n.children?.length ?? 0) > 0;
 				rows.push({ node: n, depth, hasChildren });
-				if (hasChildren && expanded.has(Number(n.id))) walk(n.children || [], depth + 1);
+				if (hasChildren && expanded.has(String(n.id))) walk(n.children || [], depth + 1);
 			}
 		};
 		walk(filteredData, 0);
@@ -133,7 +135,7 @@ export default function MenuPage() {
 				size: 320,
 				cell: ({ row }) => {
 					const r = row.original;
-					const id = Number(r.node.id);
+					const id = String(r.node.id);
 					const expanded = expandedIds.includes(id);
 					const indent = Math.max(0, Number(r.depth) || 0) * 16;
 
@@ -209,7 +211,7 @@ export default function MenuPage() {
 				meta: { align: "center" },
 				cell: ({ row }) => {
 					const record = row.original.node;
-					const id = Number(record.id);
+					const id = String(record.id);
 					const isSystemButton = Number(record.type) === 3;
 					return (
 						<div className="flex items-center gap-2">
@@ -234,7 +236,7 @@ export default function MenuPage() {
 									onClick={() => {
 										setDialogMode("update");
 										setEditing(record);
-										setDefaultParentId(Number(record.parentId) || 0);
+										setDefaultParentId(String(record.parentId ?? "0"));
 										setDialogOpen(true);
 									}}
 								>
@@ -252,14 +254,21 @@ export default function MenuPage() {
 											confirmText: "删除",
 											destructive: true,
 										});
-										if (!ok) return;
-										try {
-											await deleteMutation.mutateAsync([id]);
-											toast.success("删除成功", { position: "top-center" });
-										} catch {
-											// handled by apiClient
-										}
-									}}
+											if (!ok) return;
+											try {
+												await deleteMutation.mutateAsync([id]);
+												if (GLOBAL_CONFIG.routerMode === "backend") {
+													try {
+														await useMenuStore.getState().actions.initBackendMenuTree();
+													} catch {
+														// best-effort
+													}
+												}
+												toast.success("删除成功", { position: "top-center" });
+											} catch {
+												// handled by apiClient
+											}
+										}}
 								>
 									删除
 								</Button>
@@ -278,8 +287,15 @@ export default function MenuPage() {
 				await createMutation.mutateAsync(payload);
 				toast.success("新增成功", { position: "top-center" });
 			} else if (dialogMode === "update" && editing) {
-				await updateMutation.mutateAsync({ id: Number(editing.id), payload });
+				await updateMutation.mutateAsync({ id: String(editing.id), payload });
 				toast.success("保存成功", { position: "top-center" });
+			}
+			if (GLOBAL_CONFIG.routerMode === "backend") {
+				try {
+					await useMenuStore.getState().actions.initBackendMenuTree();
+				} catch {
+					// best-effort: /menu 刷新失败不阻断菜单管理保存
+				}
 			}
 			setDialogOpen(false);
 		} catch {
@@ -298,7 +314,7 @@ export default function MenuPage() {
 									onClick={() => {
 										setDialogMode("create");
 										setEditing(null);
-										setDefaultParentId(0);
+										setDefaultParentId("0");
 										setDialogOpen(true);
 									}}
 								>

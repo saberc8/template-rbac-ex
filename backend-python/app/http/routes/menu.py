@@ -29,15 +29,25 @@ def _has_frontend_column(db: Session) -> bool:
     return any(str(c.get("name") or "") == "frontend" for c in cols)
 
 
-def _active_frontend(db: Session) -> Optional[str]:
+def _frontend_from_request(request: Request | None) -> Optional[str]:
+    if request is None:
+        return None
+    v = (request.headers.get("X-Admin-Frontend") or request.headers.get("X-Frontend") or "").strip().lower()
+    return v if v in {"vue3", "react"} else None
+
+
+def _active_frontend(db: Session, request: Request | None = None) -> Optional[str]:
     """根据运行配置选择当前菜单数据集。
 
     - 未升级到 frontend 字段时：返回 None，表示不做过滤
-    - 已升级：按 ADMIN_FRONTEND_TYPE 选择 react/vue3
+    - 已升级：优先按请求头 X-Admin-Frontend 选择 react/vue3；否则按 ADMIN_FRONTEND_TYPE
     """
 
     if not _has_frontend_column(db):
         return None
+    by_header = _frontend_from_request(request)
+    if by_header is not None:
+        return by_header
     v = str(runtime_settings.admin_frontend_type or "vue3").strip().lower()
     return v if v in {"vue3", "react"} else "vue3"
 
@@ -130,8 +140,17 @@ def _to_menu_resp(row: dict) -> dict:
     }
 
 
+def _stringify_tree_ids(nodes: list[dict]) -> list[dict]:
+    for n in nodes:
+        n["id"] = str(n.get("id") or "0")
+        n["parentId"] = str(n.get("parentId") or "0")
+        if n.get("children"):
+            _stringify_tree_ids(n["children"])
+    return nodes
+
+
 @router.get("/system/menu/tree")
-def list_menu_tree(db: Session = Depends(get_db)):
+def list_menu_tree(request: Request, db: Session = Depends(get_db)):
     cu = aliased(SysUser)
     uu = aliased(SysUser)
     stmt = (
@@ -161,7 +180,7 @@ def list_menu_tree(db: Session = Depends(get_db)):
         .join(uu, uu.id == SysMenu.update_user, isouter=True)
         .order_by(SysMenu.sort.asc(), SysMenu.id.asc())
     )
-    frontend = _active_frontend(db)
+    frontend = _active_frontend(db, request)
     if frontend is not None:
         stmt = stmt.where(SysMenu.frontend == frontend)
     rows = db.execute(stmt).all()
@@ -216,11 +235,13 @@ def list_menu_tree(db: Session = Depends(get_db)):
 
     roots.sort(key=lambda x: (int(x.get("sort") or 0), int(x.get("id") or 0)))
     _sort_children(roots)
+    if frontend == "react":
+        _stringify_tree_ids(roots)
     return ok(roots)
 
 
 @router.get("/system/menu/{id}")
-def get_menu(id: int, db: Session = Depends(get_db)):
+def get_menu(id: int, request: Request, db: Session = Depends(get_db)):
     if id <= 0:
         return fail("400", "ID 参数不正确")
 
@@ -254,7 +275,7 @@ def get_menu(id: int, db: Session = Depends(get_db)):
         .where(SysMenu.id == id)
         .limit(1)
     )
-    frontend = _active_frontend(db)
+    frontend = _active_frontend(db, request)
     if frontend is not None:
         stmt = stmt.where(SysMenu.frontend == frontend)
     row = db.execute(stmt).first()
@@ -285,6 +306,9 @@ def get_menu(id: int, db: Session = Depends(get_db)):
         }
     )
     item["children"] = []
+    if frontend == "react":
+        item["id"] = str(item.get("id") or "0")
+        item["parentId"] = str(item.get("parentId") or "0")
     return ok(item)
 
 
@@ -308,7 +332,7 @@ def create_menu(
 
     now = datetime.now()
     try:
-        frontend = _active_frontend(db)
+        frontend = _active_frontend(db, request)
         menu_kwargs = {
             "id": mid,
             "title": payload["title"],
@@ -338,12 +362,16 @@ def create_menu(
         db.rollback()
         return fail("500", "新增菜单失败")
 
+    frontend = _active_frontend(db, request)
+    if frontend == "react":
+        return ok({"id": str(mid)})
     return ok({"id": mid})
 
 
 @router.put("/system/menu/{id}")
 def update_menu(
     id: int,
+    request: Request,
     body: Optional[dict] = Body(default=None),
     db: Session = Depends(get_db),
     user_id: int = Depends(require_user_id),
@@ -360,10 +388,10 @@ def update_menu(
     now = datetime.now()
     try:
         stmt = update(SysMenu).where(SysMenu.id == int(id))
-        frontend = _active_frontend(db)
+        frontend = _active_frontend(db, request)
         if frontend is not None:
             stmt = stmt.where(SysMenu.frontend == frontend)
-        db.execute(
+        res = db.execute(
             stmt.values(
                 parent_id=payload["parent_id"],
                 type=payload["type"],
@@ -383,6 +411,9 @@ def update_menu(
                 update_time=now,
             )
         )
+        if int(getattr(res, "rowcount", 0) or 0) <= 0:
+            db.rollback()
+            return fail("404", "菜单不存在")
         db.commit()
     except Exception:
         db.rollback()
@@ -393,6 +424,7 @@ def update_menu(
 
 @router.delete("/system/menu")
 def delete_menu(
+    request: Request,
     body: Optional[dict] = Body(default=None),
     db: Session = Depends(get_db),
     _user_id: int = Depends(require_user_id),
@@ -414,7 +446,7 @@ def delete_menu(
         return fail("400", "ID 列表不能为空")
 
     stmt = select(SysMenu.id, SysMenu.parent_id)
-    frontend = _active_frontend(db)
+    frontend = _active_frontend(db, request)
     if frontend is not None:
         stmt = stmt.where(SysMenu.frontend == frontend)
     rows = db.execute(stmt).all()

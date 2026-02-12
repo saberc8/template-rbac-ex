@@ -11,21 +11,21 @@ import { Label } from "@/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Switch } from "@/ui/switch";
 
-const collectDescendantIds = (root: SysMenuNode | null): Set<number> => {
-	const ids = new Set<number>();
+const collectDescendantIds = (root: SysMenuNode | null): Set<string> => {
+	const ids = new Set<string>();
 	if (!root) return ids;
 	const walk = (n: SysMenuNode) => {
-		ids.add(Number(n.id));
+		ids.add(String(n.id));
 		for (const ch of n.children || []) walk(ch);
 	};
 	walk(root);
 	return ids;
 };
 
-const findNode = (nodes: SysMenuNode[], id: number): SysMenuNode | null => {
+const findNode = (nodes: SysMenuNode[], id: string): SysMenuNode | null => {
 	for (const n of nodes) {
-		if (Number(n.id) === Number(id)) return n;
-		const found = n.children ? findNode(n.children, id) : null;
+		if (String(n.id) === String(id)) return n;
+		const found = n.children ? findNode(n.children, String(id)) : null;
 		if (found) return found;
 	}
 	return null;
@@ -47,7 +47,7 @@ export default function MenuFormDialog({
 	mode: MenuFormMode;
 	tree: SysMenuNode[];
 	initial: SysMenuNode | null;
-	defaultParentId?: number;
+	defaultParentId?: string;
 	busy?: boolean;
 	onOpenChange: (open: boolean) => void;
 	onSubmit: (payload: SysMenuSaveReq) => Promise<void> | void;
@@ -55,7 +55,7 @@ export default function MenuFormDialog({
 	const { t } = useTranslation();
 	const [type, setType] = useState<number>(2);
 	const [title, setTitle] = useState("");
-	const [parentId, setParentId] = useState<number>(0);
+	const [parentId, setParentId] = useState<string>("0");
 	const [path, setPath] = useState("");
 	const [name, setName] = useState("");
 	const [component, setComponent] = useState("");
@@ -74,7 +74,7 @@ export default function MenuFormDialog({
 		if (mode === "update" && initial) {
 			setType(Number(initial.type) || 1);
 			setTitle(initial.title || "");
-			setParentId(Number(initial.parentId) || 0);
+			setParentId(String(initial.parentId ?? "0"));
 			setPath(initial.path || "");
 			setName(initial.name || "");
 			setComponent(initial.component || "");
@@ -91,7 +91,7 @@ export default function MenuFormDialog({
 
 		setType(2);
 		setTitle("");
-		setParentId(Number(defaultParentId) || 0);
+		setParentId(String(defaultParentId ?? "0"));
 		setPath("");
 		setName("");
 		setComponent("");
@@ -106,8 +106,8 @@ export default function MenuFormDialog({
 	}, [defaultParentId, initial, mode, open]);
 
 	const disabledParentIds = useMemo(() => {
-		if (mode !== "update" || !initial) return new Set<number>();
-		const node = findNode(tree, Number(initial.id));
+		if (mode !== "update" || !initial) return new Set<string>();
+		const node = findNode(tree, String(initial.id));
 		return collectDescendantIds(node);
 	}, [initial, mode, tree]);
 
@@ -124,14 +124,14 @@ export default function MenuFormDialog({
 		const map = (nodes: SysMenuNode[]): any[] =>
 			(nodes || []).map((n) => ({
 				title: translateTitle(n.title),
-				value: n.id,
-				disabled: disabledParentIds.has(Number(n.id)),
+				value: String(n.id),
+				disabled: disabledParentIds.has(String(n.id)),
 				children: map(n.children || []),
 			}));
 		return [
 			{
 				title: "根节点",
-				value: 0,
+				value: "0",
 				disabled: false,
 				children: map(tree),
 			},
@@ -161,7 +161,7 @@ export default function MenuFormDialog({
 			isExternal: Boolean(isExternal),
 			isCache: Boolean(isCache),
 			isHidden: Boolean(isHidden),
-			parentId: Number(parentId) || 0,
+			parentId: parentId || "0",
 			status: Number(status) || BasicStatus.ENABLE,
 		};
 
@@ -215,7 +215,7 @@ export default function MenuFormDialog({
 							className="w-full"
 							treeData={treeSelectData}
 							value={parentId}
-							onChange={(v) => setParentId(Number(v) || 0)}
+							onChange={(v) => setParentId(String(v ?? "0"))}
 							placeholder="请选择上级菜单"
 							treeDefaultExpandAll
 						/>

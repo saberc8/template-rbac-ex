@@ -18,6 +18,8 @@ export type GlobalConfig = {
 	clientId: string;
 	/** Routing mode: frontend routing or backend routing */
 	routerMode: "frontend" | "backend";
+	/** Target admin menu dataset: vue3/react (backend-python sys_menu.frontend selection) */
+	adminFrontendType: "vue3" | "react";
 };
 
 /**
@@ -35,4 +37,6 @@ export const GLOBAL_CONFIG: GlobalConfig = {
 	apiBaseUrl: import.meta.env.VITE_APP_API_BASE_URL || "/api",
 	clientId: import.meta.env.VITE_CLIENT_ID || import.meta.env.VITE_APP_CLIENT_ID || "",
 	routerMode: import.meta.env.VITE_APP_ROUTER_MODE || "frontend",
+	adminFrontendType:
+		(import.meta.env.VITE_APP_ADMIN_FRONTEND_TYPE || "react").toLowerCase() === "vue3" ? "vue3" : "react",
 };

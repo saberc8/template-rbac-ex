@@ -1,9 +1,9 @@
 import apiClient from "../apiClient";
 
 export type SysMenuNode = {
-	id: number;
+	id: string | number;
 	title: string;
-	parentId: number;
+	parentId: string | number;
 	type: number;
 	path: string;
 	name: string;
@@ -32,15 +32,15 @@ export type SysMenuSaveReq = {
 	isExternal: boolean;
 	isCache: boolean;
 	isHidden: boolean;
-	parentId: number;
+	parentId: string | number;
 	status: number;
 };
 
 export const systemMenuService = {
 	tree: () => apiClient.get<SysMenuNode[]>({ url: "/system/menu/tree" }),
-	get: (id: number) => apiClient.get<SysMenuNode>({ url: `/system/menu/${id}` }),
+	get: (id: string | number) => apiClient.get<SysMenuNode>({ url: `/system/menu/${id}` }),
 	create: (data: SysMenuSaveReq) => apiClient.post<{ id: number }>({ url: "/system/menu", data }),
-	update: (id: number, data: SysMenuSaveReq) => apiClient.put<boolean>({ url: `/system/menu/${id}`, data }),
-	delete: (ids: number[]) => apiClient.delete<boolean>({ url: "/system/menu", data: { ids } }),
+	update: (id: string | number, data: SysMenuSaveReq) => apiClient.put<boolean>({ url: `/system/menu/${id}`, data }),
+	delete: (ids: Array<string | number>) => apiClient.delete<boolean>({ url: "/system/menu", data: { ids } }),
 	clearCache: () => apiClient.delete<boolean>({ url: "/system/menu/cache" }),
 };

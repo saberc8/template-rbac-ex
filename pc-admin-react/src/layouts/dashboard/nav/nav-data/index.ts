@@ -33,11 +33,11 @@ const filterItems = (items: NavItemDataProps[], permissions: string[]): NavItemD
 /**
  *
  * 根据权限过滤导航数据
+ * @param menuTree 后端菜单树
  * @param permissions 权限列表
  * @returns 过滤后的导航数据
  */
-const filterNavData = (permissions: string[]) => {
-	const menuTree = useMenuStore.getState().backendMenuTree;
+const filterNavData = (menuTree: ReturnType<typeof useMenuStore.getState>["backendMenuTree"], permissions: string[]) => {
 	const rawNavData = GLOBAL_CONFIG.routerMode === "backend" ? buildBackendNavData(menuTree) : frontendNavData;
 
 	return rawNavData
@@ -64,8 +64,9 @@ const filterNavData = (permissions: string[]) => {
  * @returns Filtered navigation data
  */
 export const useFilteredNavData = () => {
+	const menuTree = useMenuStore((s) => s.backendMenuTree);
 	const permissions = useUserPermissions();
 	const permissionCodes = useMemo(() => permissions.map((p) => p.code), [permissions]);
-	const filteredNavData = useMemo(() => filterNavData(permissionCodes), [permissionCodes]);
+	const filteredNavData = useMemo(() => filterNavData(menuTree, permissionCodes), [menuTree, permissionCodes]);
 	return filteredNavData;
 };

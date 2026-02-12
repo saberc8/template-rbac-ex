@@ -34,6 +34,8 @@ axiosInstance.interceptors.request.use(
 		if (token) {
 			config.headers.Authorization = `Bearer ${token}`;
 		}
+		// backend-python: allow per-request selection of sys_menu.frontend dataset
+		(config.headers as any)["X-Admin-Frontend"] = GLOBAL_CONFIG.adminFrontendType;
 		const isFormData = typeof FormData !== "undefined" && config.data instanceof FormData;
 		if (isFormData && config.headers) {
 			const h: any = config.headers as any;
