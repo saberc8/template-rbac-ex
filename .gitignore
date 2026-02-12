@@ -46,6 +46,7 @@ target/
 
 # 日志与运行时文件
 logs/
+data/
 *.sqlite
 *.db
 
