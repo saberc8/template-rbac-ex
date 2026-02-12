@@ -20,16 +20,6 @@ REACT_MENU_FLAT: list[dict] = [
         "component": "/pages/dashboard/workbench",
     },
     {
-        "id": "analysis",
-        "parentId": "",
-        "name": "sys.nav.analysis",
-        "code": "analysis",
-        "icon": "local:ic-analysis",
-        "type": 2,
-        "path": "/analysis",
-        "component": "/pages/dashboard/analysis",
-    },
-    {
         "id": "management",
         "parentId": "",
         "name": "sys.nav.management",
