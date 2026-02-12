@@ -33,14 +33,14 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 						{ path: "dict", element: Component("/pages/management/system/dict") },
 					],
 				},
-				{
-					path: "monitor",
-					children: [
-						{ index: true, element: <Navigate to="online" replace /> },
-						{ path: "online", element: Component("/pages/management/monitor/online") },
-						{ path: "log", element: Component("/pages/management/monitor/log") },
-					],
-				},
+			],
+		},
+		{
+			path: "monitor",
+			children: [
+				{ index: true, element: <Navigate to="online" replace /> },
+				{ path: "online", element: Component("/pages/management/monitor/online") },
+				{ path: "log", element: Component("/pages/management/monitor/log") },
 			],
 		},
 		{

@@ -60,13 +60,20 @@ export const frontendNavData: NavProps["data"] = [
 						title: "sys.nav.system.dict",
 						path: "/management/system/dict",
 					},
+				],
+			},
+			{
+				title: "sys.nav.monitor.index",
+				path: "/monitor",
+				icon: <Icon icon="mdi:monitor-dashboard" size="24" />,
+				children: [
 					{
 						title: "sys.nav.monitor.online",
-						path: "/management/monitor/online",
+						path: "/monitor/online",
 					},
 					{
 						title: "sys.nav.monitor.log",
-						path: "/management/monitor/log",
+						path: "/monitor/log",
 					},
 				],
 			},

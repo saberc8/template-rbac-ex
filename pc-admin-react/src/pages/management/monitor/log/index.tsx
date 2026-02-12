@@ -1,13 +1,18 @@
 import { systemLogService, type SysLogDetail, type SysLogRow, type SysLogExportQuery } from "@/api/services/systemLogService";
+import { useConfirmDialog } from "@/components/confirm/use-confirm-dialog";
+import DataTable from "@/components/data-table/data-table";
+import OperationActions from "@/components/data-table/operation-actions";
 import { useUserPermissions } from "@/store/userStore";
 import { Button } from "@/ui/button";
-import { Card, CardContent, CardHeader } from "@/ui/card";
+import { Card, CardContent } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { ScrollArea } from "@/ui/scroll-area";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/ui/sheet";
+import { Badge } from "@/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/tooltip";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { DatePicker, Modal, Table, Tag, Tooltip } from "antd";
-import type { ColumnsType } from "antd/es/table";
+import type { ColumnDef } from "@tanstack/react-table";
+import { DatePicker } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -18,6 +23,7 @@ export default function SysLogPage() {
 	const permissionCodes = useMemo(() => permissions.map((p) => p.code), [permissions]);
 	const permissionCodeSet = useMemo(() => new Set(permissionCodes), [permissionCodes]);
 	const can = useCallback((code: string) => permissionCodeSet.has(code), [permissionCodeSet]);
+	const { confirm, ConfirmDialog } = useConfirmDialog();
 
 	const [description, setDescription] = useState("");
 	const [module, setModule] = useState("");
@@ -74,36 +80,82 @@ export default function SysLogPage() {
 		window.URL.revokeObjectURL(url);
 	};
 
-	const columns: ColumnsType<SysLogRow> = useMemo(
-		() => [
-			{ title: "ID", dataIndex: "id", width: 90 },
-			{ title: "Module", dataIndex: "module", width: 140 },
-			{ title: "Description", dataIndex: "description", width: 280, ellipsis: true },
-			{ title: "User", dataIndex: "createUserString", width: 140 },
-			{ title: "IP", dataIndex: "ip", width: 140 },
+	const refresh = () => queryClient.invalidateQueries({ queryKey: ["system.log.page"] });
+
+	const columns: Array<ColumnDef<SysLogRow>> = useMemo(() => {
+		const base: Array<ColumnDef<SysLogRow>> = [
+			{ header: "ID", accessorKey: "id", size: 90 },
+			{ header: "模块", accessorKey: "module", size: 140 },
 			{
-				title: "Status",
-				dataIndex: "status",
-				width: 110,
-				render: (_: any, record) => {
-					const ok = Number(record.status) === 1;
-					const tag = (
-						<Tag color={ok ? "green" : "red"}>{ok ? "成功" : "失败"}</Tag>
-					);
-					if (ok) return tag;
+				header: "描述",
+				accessorKey: "description",
+				size: 320,
+				cell: ({ row }) => (
+					<span className="block max-w-[420px] truncate" title={row.original.description || ""}>
+						{row.original.description || "-"}
+					</span>
+				),
+			},
+			{ header: "用户", accessorKey: "createUserString", size: 140 },
+			{ header: "IP", accessorKey: "ip", size: 140 },
+			{
+				header: "状态",
+				id: "status",
+				size: 120,
+				meta: { align: "center" },
+				cell: ({ row }) => {
+					const ok = Number(row.original.status) === 1;
+					const badge = <Badge variant={ok ? "success" : "error"}>{ok ? "成功" : "失败"}</Badge>;
+					if (ok) return badge;
 					return (
-						<Tooltip title={record.errorMsg || ""}>
-							<span className="cursor-pointer">{tag}</span>
+						<Tooltip>
+							<TooltipTrigger asChild>
+								<span className="cursor-pointer">{badge}</span>
+							</TooltipTrigger>
+							<TooltipContent>{row.original.errorMsg || "-"}</TooltipContent>
 						</Tooltip>
 					);
 				},
 			},
-			{ title: "Time(ms)", dataIndex: "timeTaken", width: 110 },
-			{ title: "Error", dataIndex: "errorMsg", width: 240, ellipsis: true },
-			{ title: "Created", dataIndex: "createTime", width: 180 },
-		],
-		[],
-	);
+			{ header: "耗时(ms)", accessorKey: "timeTaken", size: 120, meta: { align: "right" } },
+			{
+				header: "错误",
+				accessorKey: "errorMsg",
+				size: 260,
+				cell: ({ row }) => (
+					<span className="block max-w-[360px] truncate" title={row.original.errorMsg || ""}>
+						{row.original.errorMsg || "-"}
+					</span>
+				),
+			},
+			{ header: "创建时间", accessorKey: "createTime", size: 180 },
+		];
+
+		if (!can("monitor:log:get")) return base;
+
+		base.push({
+			header: "操作",
+			id: "operation",
+			size: 140,
+			meta: { align: "center" },
+			cell: ({ row }) => (
+				<OperationActions
+					items={[
+						{
+							key: "detail",
+							label: "详情",
+							onClick: () => {
+								setDetailId(row.original.id);
+								setDetailOpen(true);
+							},
+						},
+					]}
+					maxVisible={1}
+				/>
+			),
+		});
+		return base;
+	}, [can]);
 
 	const { data: detail, isFetching: isDetailFetching } = useQuery({
 		queryKey: ["system.log.get", detailId || 0],
@@ -132,15 +184,87 @@ export default function SysLogPage() {
 	return (
 		<>
 			<Card>
-				<CardHeader>
-					<div className="flex items-center justify-between gap-3">
-							<div>Log</div>
-							<div className="flex flex-wrap items-center gap-2">
-								<Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Keyword" className="w-[200px]" />
-								<Input value={module} onChange={(e) => setModule(e.target.value)} placeholder="Module" className="w-[150px]" />
+				<CardContent>
+					<DataTable<SysLogRow>
+						title="系统日志"
+						actions={
+							<div className="flex items-center gap-2">
+								<Button size="sm" variant="secondary" onClick={refresh}>
+									刷新
+								</Button>
+								{can("monitor:log:export") && (
+									<>
+										<Button
+											size="sm"
+											variant="secondary"
+											disabled={exportLoginMutation.isPending}
+											onClick={async () => {
+												const ok = await confirm({
+													title: "导出登录日志？",
+													description: "将按当前筛选条件导出 CSV。",
+													confirmText: "导出",
+												});
+												if (!ok) return;
+												try {
+													const q: SysLogExportQuery = {
+														description: query.description,
+														module: "登录",
+														ip: query.ip,
+														createUserString: query.createUserString,
+														createTime: query.createTime,
+														status: query.status,
+													};
+													const blob = await exportLoginMutation.mutateAsync(q);
+													downloadBlob(blob, "login-log.csv");
+													toast.success("导出成功", { position: "top-center" });
+												} catch {
+													// handled by apiClient
+												}
+											}}
+										>
+											导出登录
+										</Button>
+										<Button
+											size="sm"
+											variant="secondary"
+											disabled={exportOperationMutation.isPending}
+											onClick={async () => {
+												const ok = await confirm({
+													title: "导出操作日志？",
+													description: "将按当前筛选条件导出 CSV。",
+													confirmText: "导出",
+												});
+												if (!ok) return;
+												try {
+													const q: SysLogExportQuery = {
+														description: query.description,
+														module: query.module,
+														ip: query.ip,
+														createUserString: query.createUserString,
+														createTime: query.createTime,
+														status: query.status,
+													};
+													const blob = await exportOperationMutation.mutateAsync(q);
+													downloadBlob(blob, "operation-log.csv");
+													toast.success("导出成功", { position: "top-center" });
+												} catch {
+													// handled by apiClient
+												}
+											}}
+										>
+											导出操作
+										</Button>
+									</>
+								)}
+							</div>
+						}
+						search={
+							<>
+								<Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="关键字" className="w-[200px]" />
+								<Input value={module} onChange={(e) => setModule(e.target.value)} placeholder="模块" className="w-[150px]" />
 								<Input value={ip} onChange={(e) => setIp(e.target.value)} placeholder="IP" className="w-[150px]" />
-								<Input value={createUser} onChange={(e) => setCreateUser(e.target.value)} placeholder="User" className="w-[150px]" />
-								<Input value={status} onChange={(e) => setStatus(e.target.value)} placeholder="Status(1/2)" className="w-[110px]" />
+								<Input value={createUser} onChange={(e) => setCreateUser(e.target.value)} placeholder="用户" className="w-[150px]" />
+								<Input value={status} onChange={(e) => setStatus(e.target.value)} placeholder="状态(1/2)" className="w-[110px]" />
 								<DatePicker.RangePicker
 									value={createTimeRange}
 									onChange={(v) => {
@@ -163,7 +287,7 @@ export default function SysLogPage() {
 										});
 									}}
 								>
-									Search
+									查询
 								</Button>
 								<Button
 									variant="secondary"
@@ -180,109 +304,33 @@ export default function SysLogPage() {
 										});
 									}}
 								>
-									Reset
+									重置
 								</Button>
-							<Button variant="secondary" onClick={() => queryClient.invalidateQueries({ queryKey: ["system.log.page"] })}>
-								Refresh
-							</Button>
-							{can("monitor:log:export") && (
-								<>
-									<Button
-										variant="secondary"
-										disabled={exportLoginMutation.isPending}
-										onClick={async () => {
-											Modal.confirm({
-												title: "导出登录日志？",
-												content: "将按当前筛选条件导出 CSV。",
-												okText: "导出",
-												cancelText: "取消",
-													onOk: async () => {
-														try {
-															const q: SysLogExportQuery = {
-																description: query.description,
-																module: "登录",
-																ip: query.ip,
-																createUserString: query.createUserString,
-																createTime: query.createTime,
-																status: query.status,
-															};
-															const blob = await exportLoginMutation.mutateAsync(q);
-															downloadBlob(blob, "login-log.csv");
-															toast.success("导出成功", { position: "top-center" });
-													} catch {
-														// handled by apiClient
-													}
-												},
-											});
-										}}
-									>
-										导出登录
-									</Button>
-									<Button
-										variant="secondary"
-										disabled={exportOperationMutation.isPending}
-										onClick={async () => {
-											Modal.confirm({
-												title: "导出操作日志？",
-												content: "将按当前筛选条件导出 CSV。",
-												okText: "导出",
-												cancelText: "取消",
-													onOk: async () => {
-														try {
-															const q: SysLogExportQuery = {
-																description: query.description,
-																module: query.module,
-																ip: query.ip,
-																createUserString: query.createUserString,
-																createTime: query.createTime,
-																status: query.status,
-															};
-															const blob = await exportOperationMutation.mutateAsync(q);
-															downloadBlob(blob, "operation-log.csv");
-															toast.success("导出成功", { position: "top-center" });
-													} catch {
-														// handled by apiClient
-													}
-												},
-											});
-										}}
-									>
-										导出操作
-									</Button>
-								</>
-							)}
-						</div>
-					</div>
-				</CardHeader>
-				<CardContent>
-					<Table<SysLogRow>
-						rowKey="id"
-						size="small"
-						scroll={{ x: "max-content" }}
+							</>
+						}
+						columns={columns}
+						data={data?.list || []}
 						loading={isFetching}
+						getRowId={(row) => String(row.id)}
+						onRowClick={
+							can("monitor:log:get")
+								? (row) => {
+										setDetailId(row.id);
+										setDetailOpen(true);
+									}
+								: undefined
+						}
+						rowClassName={can("monitor:log:get") ? () => "cursor-pointer" : undefined}
 						pagination={{
-							current: page,
+							page,
 							pageSize,
 							total: data?.total || 0,
-							showSizeChanger: true,
 							onChange: (p, s) => {
 								setPage(p);
 								setPageSize(s);
 							},
+							pageSizeOptions: [10, 20, 30, 50, 100],
 						}}
-						columns={columns}
-						dataSource={data?.list || []}
-						onRow={(record) =>
-							can("monitor:log:get")
-								? {
-										onClick: () => {
-											setDetailId(record.id);
-											setDetailOpen(true);
-										},
-									}
-								: {}
-						}
-						rowClassName={can("monitor:log:get") ? "cursor-pointer" : ""}
 					/>
 					<div className="mt-2 text-xs text-muted-foreground">{can("monitor:log:get") ? "点击行查看详情" : "无查看详情权限"}</div>
 				</CardContent>
@@ -306,6 +354,7 @@ export default function SysLogPage() {
 					</div>
 				</SheetContent>
 			</Sheet>
+			{ConfirmDialog}
 		</>
 	);
 }

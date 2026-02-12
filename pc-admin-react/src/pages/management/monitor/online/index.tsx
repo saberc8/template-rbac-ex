@@ -1,11 +1,14 @@
 import { systemOnlineService, type OnlineUserRow } from "@/api/services/systemOnlineService";
+import { useConfirmDialog } from "@/components/confirm/use-confirm-dialog";
+import DataTable from "@/components/data-table/data-table";
+import OperationActions from "@/components/data-table/operation-actions";
 import { useUserPermissions, useUserToken } from "@/store/userStore";
 import { Button } from "@/ui/button";
-import { Card, CardContent, CardHeader } from "@/ui/card";
+import { Card, CardContent } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { DatePicker, Modal, Table } from "antd";
-import type { ColumnsType } from "antd/es/table";
+import type { ColumnDef } from "@tanstack/react-table";
+import { DatePicker } from "antd";
 import type { Dayjs } from "dayjs";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -17,22 +20,24 @@ export default function OnlineUserPage() {
 	const permissionCodeSet = useMemo(() => new Set(permissionCodes), [permissionCodes]);
 	const can = useCallback((code: string) => permissionCodeSet.has(code), [permissionCodeSet]);
 	const { accessToken } = useUserToken();
+	const { confirm, ConfirmDialog } = useConfirmDialog();
 
 	const [nickname, setNickname] = useState("");
 	const [loginTimeRange, setLoginTimeRange] = useState<[Dayjs, Dayjs] | null>(null);
+	const [queryNickname, setQueryNickname] = useState<string>("");
+	const [queryLoginTime, setQueryLoginTime] = useState<string[] | undefined>(undefined);
 	const [page, setPage] = useState(1);
 	const [pageSize, setPageSize] = useState(30);
-	const [query, setQuery] = useState<{ nickname?: string; loginTime?: string[] }>({});
 
 	const { data, isFetching } = useQuery({
-		queryKey: ["monitor.online.page", page, pageSize, query],
+		queryKey: ["monitor.online.page", page, pageSize, queryNickname, queryLoginTime],
 		queryFn: () =>
-				systemOnlineService.page({
-					page,
-					size: pageSize,
-					nickname: query.nickname,
-					loginTime: query.loginTime,
-				}),
+			systemOnlineService.page({
+				page,
+				size: pageSize,
+				nickname: queryNickname || undefined,
+				loginTime: queryLoginTime,
+			}),
 	});
 
 	const kickoutMutation = useMutation({
@@ -42,63 +47,126 @@ export default function OnlineUserPage() {
 		},
 	});
 
-	const columns: ColumnsType<OnlineUserRow> = useMemo(
-		() => [
-			{ title: "Username", dataIndex: "username", width: 140 },
-			{ title: "Nickname", dataIndex: "nickname", width: 160 },
-			{ title: "Client", dataIndex: "clientType", width: 90 },
-			{ title: "ClientId", dataIndex: "clientId", width: 160, ellipsis: true },
-			{ title: "IP", dataIndex: "ip", width: 140 },
-			{ title: "Browser", dataIndex: "browser", width: 220, ellipsis: true },
-			{ title: "LoginTime", dataIndex: "loginTime", width: 180 },
-			{ title: "LastActive", dataIndex: "lastActiveTime", width: 180 },
-			{ title: "Token", dataIndex: "token", ellipsis: true },
+	const refresh = () => queryClient.invalidateQueries({ queryKey: ["monitor.online.page"] });
+
+	const columns: Array<ColumnDef<OnlineUserRow>> = useMemo(() => {
+		const base: Array<ColumnDef<OnlineUserRow>> = [
 			{
-				title: "操作",
-				key: "actions",
-				width: 120,
-				fixed: "right",
-				render: (_: any, record: OnlineUserRow) => {
-					const isSelf = Boolean(accessToken && record.token && record.token === accessToken);
+				header: "用户",
+				id: "user",
+				size: 220,
+				cell: ({ row }) => {
+					const record = row.original;
 					return (
-						<Button
-							size="sm"
-							variant="destructive"
-							disabled={!can("monitor:online:kickout") || isSelf || kickoutMutation.isPending}
-							onClick={() => {
-								Modal.confirm({
-									title: "确认强退？",
-									content: isSelf ? "不能强退自己" : `用户：${record.nickname || record.username}`,
-									okText: "强退",
-									cancelText: "取消",
-									okButtonProps: { danger: true, disabled: isSelf },
-									onOk: async () => {
-										try {
-											await kickoutMutation.mutateAsync(record.token);
-											toast.success("强退成功", { position: "top-center" });
-										} catch {
-											// handled by apiClient
-										}
-									},
-								});
-							}}
-						>
-							强退
-						</Button>
+						<div className="flex flex-col">
+							<span className="text-sm">{record.nickname || "-"}</span>
+							<span className="text-xs text-muted-foreground">{record.username || "-"}</span>
+						</div>
 					);
 				},
 			},
-		],
-		[accessToken, can, kickoutMutation.isPending],
-	);
+			{ header: "客户端", accessorKey: "clientType", size: 110, meta: { align: "center" } },
+			{
+				header: "ClientId",
+				accessorKey: "clientId",
+				size: 200,
+				cell: ({ row }) => (
+					<span className="block max-w-[260px] truncate" title={row.original.clientId || ""}>
+						{row.original.clientId || "-"}
+					</span>
+				),
+			},
+			{ header: "IP", accessorKey: "ip", size: 150 },
+			{
+				header: "浏览器",
+				accessorKey: "browser",
+				size: 220,
+				cell: ({ row }) => (
+					<span className="block max-w-[320px] truncate" title={row.original.browser || ""}>
+						{row.original.browser || "-"}
+					</span>
+				),
+			},
+			{ header: "登录时间", accessorKey: "loginTime", size: 180 },
+			{ header: "最后活跃", accessorKey: "lastActiveTime", size: 180 },
+			{
+				header: "Token",
+				accessorKey: "token",
+				size: 260,
+				cell: ({ row }) => (
+					<span className="block max-w-[420px] truncate" title={row.original.token || ""}>
+						{row.original.token || "-"}
+					</span>
+				),
+			},
+		];
+
+		if (!can("monitor:online:kickout")) return base;
+
+		base.push({
+			header: "操作",
+			id: "operation",
+			size: 140,
+			meta: { align: "center" },
+			cell: ({ row }) => {
+				const record = row.original;
+				const isSelf = Boolean(accessToken && record.token && record.token === accessToken);
+				return (
+					<OperationActions
+						items={[
+							{
+								key: "kickout",
+								label: "强退",
+								variant: "destructive",
+								disabled: isSelf || kickoutMutation.isPending,
+								title: isSelf ? "不能强退自己" : undefined,
+								onClick: async () => {
+									if (isSelf) {
+										toast.error("不能强退自己", { position: "top-center" });
+										return;
+									}
+									const ok = await confirm({
+										title: "确认强退？",
+										description: `用户：${record.nickname || record.username || "-"}`,
+										confirmText: "强退",
+										destructive: true,
+									});
+									if (!ok) return;
+									try {
+										await kickoutMutation.mutateAsync(record.token);
+										toast.success("强退成功", { position: "top-center" });
+									} catch {
+										// handled by apiClient
+									}
+								},
+							},
+						]}
+						maxVisible={1}
+					/>
+				);
+			},
+		});
+		return base;
+	}, [accessToken, can, confirm, kickoutMutation.isPending, kickoutMutation.mutateAsync]);
 
 	return (
 		<Card>
-			<CardHeader>
-				<div className="flex items-center justify-between gap-3">
-						<div>Online</div>
-						<div className="flex items-center gap-2">
-							<Input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="Nickname / Username" className="w-[240px]" />
+			<CardContent>
+				<DataTable<OnlineUserRow>
+					title="在线用户"
+					actions={
+						<Button size="sm" variant="secondary" onClick={refresh}>
+							刷新
+						</Button>
+					}
+					search={
+						<>
+							<Input
+								value={nickname}
+								onChange={(e) => setNickname(e.target.value)}
+								placeholder="昵称/用户名"
+								className="w-[240px]"
+							/>
 							<DatePicker.RangePicker
 								value={loginTimeRange}
 								onChange={(v) => {
@@ -114,15 +182,15 @@ export default function OnlineUserPage() {
 							<Button
 								onClick={() => {
 									setPage(1);
-									setQuery({
-										nickname: nickname.trim() || undefined,
-										loginTime: loginTimeRange
+									setQueryNickname(nickname.trim());
+									setQueryLoginTime(
+										loginTimeRange
 											? [loginTimeRange[0].format("YYYY-MM-DD HH:mm:ss"), loginTimeRange[1].format("YYYY-MM-DD HH:mm:ss")]
 											: undefined,
-									});
+									);
 								}}
 							>
-								Search
+								查询
 							</Button>
 							<Button
 								variant="secondary"
@@ -130,37 +198,31 @@ export default function OnlineUserPage() {
 									setNickname("");
 									setLoginTimeRange(null);
 									setPage(1);
-									setQuery({});
+									setQueryNickname("");
+									setQueryLoginTime(undefined);
 								}}
 							>
-								Reset
+								重置
 							</Button>
-							<Button variant="secondary" onClick={() => queryClient.invalidateQueries({ queryKey: ["monitor.online.page"] })}>
-								Refresh
-							</Button>
-						</div>
-					</div>
-				</CardHeader>
-			<CardContent>
-				<Table<OnlineUserRow>
-					rowKey="token"
-					size="small"
-					scroll={{ x: "max-content" }}
+						</>
+					}
+					columns={columns}
+					data={data?.list || []}
 					loading={isFetching}
+					getRowId={(row) => String(row.token)}
 					pagination={{
-						current: page,
+						page,
 						pageSize,
 						total: data?.total || 0,
-						showSizeChanger: true,
 						onChange: (p, s) => {
 							setPage(p);
 							setPageSize(s);
 						},
+						pageSizeOptions: [10, 20, 30, 50, 100],
 					}}
-					columns={columns}
-					dataSource={data?.list || []}
 				/>
 			</CardContent>
+			{ConfirmDialog}
 		</Card>
 	);
 }
