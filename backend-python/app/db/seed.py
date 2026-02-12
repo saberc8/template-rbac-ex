@@ -150,8 +150,8 @@ def _seed_react_menu(conn: Connection, *, force: bool) -> None:
         icon = item.get("icon")
         icon = (str(icon).strip() if icon is not None else None) or None
 
-        # React 菜单的“权限码”：只给 MENU(2) 写入，避免目录/分组被误判为权限点
-        perm = code if typ == 2 else None
+        # React 菜单的“权限码”：给 MENU(2) 与 BUTTON(3) 写入；目录/分组不写入避免被误判为权限点
+        perm = code if typ in {2, 3} else None
 
         params = {
             "id": mid,

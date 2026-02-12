@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, Request
-from sqlalchemy import delete, func, inspect, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session, aliased
 
 from app.core.id import next_id
@@ -14,26 +14,21 @@ from app.db.models.sys_menu import SysMenu
 from app.db.models.sys_role_menu import SysRoleMenu
 from app.db.models.sys_user import SysUser
 from app.http.deps import get_db, require_user_id
+from app.http.frontend import active_frontend, has_frontend_column
 from app.http.response import fail, ok
 from app.http.utils import format_time
-from app.runtime import settings as runtime_settings
 
 router = APIRouter()
 
 
 def _has_frontend_column(db: Session) -> bool:
-    try:
-        cols = inspect(db.get_bind()).get_columns("sys_menu")
-    except Exception:
-        return False
-    return any(str(c.get("name") or "") == "frontend" for c in cols)
+    return has_frontend_column(db)
 
 
 def _frontend_from_request(request: Request | None) -> Optional[str]:
-    if request is None:
-        return None
-    v = (request.headers.get("X-Admin-Frontend") or request.headers.get("X-Frontend") or "").strip().lower()
-    return v if v in {"vue3", "react"} else None
+    from app.http.frontend import frontend_from_request
+
+    return frontend_from_request(request)
 
 
 def _active_frontend(db: Session, request: Request | None = None) -> Optional[str]:
@@ -43,13 +38,7 @@ def _active_frontend(db: Session, request: Request | None = None) -> Optional[st
     - 已升级：优先按请求头 X-Admin-Frontend 选择 react/vue3；否则按 ADMIN_FRONTEND_TYPE
     """
 
-    if not _has_frontend_column(db):
-        return None
-    by_header = _frontend_from_request(request)
-    if by_header is not None:
-        return by_header
-    v = str(runtime_settings.admin_frontend_type or "vue3").strip().lower()
-    return v if v in {"vue3", "react"} else "vue3"
+    return active_frontend(db, request)
 
 
 def _build_menu_for_save(menu_id: int, body: dict) -> tuple[Optional[dict], Optional[tuple[str, str]]]:

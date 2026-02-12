@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.http.deps import get_db, require_user_id
+from app.http.frontend import active_frontend
 from app.http.response import fail, ok
 from app.services import user_query
 
@@ -14,11 +15,13 @@ router = APIRouter()
 
 @router.get("/auth/user/info")
 def get_user_info(
+    request: Request,
     user_id: int = Depends(require_user_id),
     db: Session = Depends(get_db),
 ):
     try:
-        info = user_query.get_user_info(db, int(user_id))
+        frontend = active_frontend(db, request)
+        info = user_query.get_user_info(db, int(user_id), frontend=frontend)
     except ValueError:
         return fail("401", "未授权，请重新登录")
     except Exception:

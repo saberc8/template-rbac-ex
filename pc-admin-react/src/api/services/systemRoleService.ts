@@ -16,7 +16,7 @@ export type SysRole = {
 };
 
 export type SysRoleDetail = SysRole & {
-	menuIds: number[];
+	menuIds: Array<string | number>;
 	deptIds: number[];
 	menuCheckStrictly: boolean;
 	deptCheckStrictly: boolean;
@@ -33,7 +33,7 @@ export type SysRoleSaveReq = {
 };
 
 export type RolePermissionSaveReq = {
-	menuIds: number[];
+	menuIds: Array<string | number>;
 	menuCheckStrictly: boolean;
 };
 

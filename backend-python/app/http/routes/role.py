@@ -11,12 +11,14 @@ from sqlalchemy.orm import Session, aliased
 
 from app.core.id import next_id
 from app.db.models.sys_dept import SysDept
+from app.db.models.sys_menu import SysMenu
 from app.db.models.sys_role import SysRole
 from app.db.models.sys_role_dept import SysRoleDept
 from app.db.models.sys_role_menu import SysRoleMenu
 from app.db.models.sys_user import SysUser
 from app.db.models.sys_user_role import SysUserRole
 from app.http.deps import get_db, require_user_id
+from app.http.frontend import active_frontend, has_frontend_column
 from app.http.response import fail, ok
 from app.http.utils import format_time
 
@@ -93,7 +95,7 @@ def list_role(description: Optional[str] = None, db: Session = Depends(get_db)):
 
 
 @router.get("/system/role/{id}")
-def get_role(id: int, db: Session = Depends(get_db)):
+def get_role(id: int, request: Request, db: Session = Depends(get_db)):
     if id <= 0:
         return fail("400", "ID 参数不正确")
 
@@ -141,13 +143,26 @@ def get_role(id: int, db: Session = Depends(get_db)):
     )
     base["disabled"] = base["isSystem"] and base["code"] == "admin"
 
-    menu_ids = [int(r[0]) for r in db.execute(select(SysRoleMenu.menu_id).where(SysRoleMenu.role_id == int(id))).all()]
+    frontend = active_frontend(db, request) if has_frontend_column(db) else None
+    if frontend is not None:
+        menu_ids = [
+            int(r[0])
+            for r in db.execute(
+                select(SysRoleMenu.menu_id)
+                .select_from(SysRoleMenu)
+                .join(SysMenu, SysMenu.id == SysRoleMenu.menu_id)
+                .where(SysRoleMenu.role_id == int(id))
+                .where(SysMenu.frontend == frontend)
+            ).all()
+        ]
+    else:
+        menu_ids = [int(r[0]) for r in db.execute(select(SysRoleMenu.menu_id).where(SysRoleMenu.role_id == int(id))).all()]
     dept_ids = [int(r[0]) for r in db.execute(select(SysRoleDept.dept_id).where(SysRoleDept.role_id == int(id))).all()]
 
     resp = dict(base)
     resp.update(
         {
-            "menuIds": menu_ids,
+            "menuIds": [str(x) for x in menu_ids] if frontend == "react" else menu_ids,
             "deptIds": dept_ids,
             "menuCheckStrictly": bool(row[7]),
             "deptCheckStrictly": bool(row[8]),
@@ -321,6 +336,7 @@ def delete_role(
 @router.put("/system/role/{id}/permission")
 def update_role_permission(
     id: int,
+    request: Request,
     body: Optional[dict] = Body(default=None),
     db: Session = Depends(get_db),
     user_id: int = Depends(require_user_id),
@@ -344,8 +360,28 @@ def update_role_permission(
     menu_check_strict = bool(body.get("menuCheckStrictly") or False)
     now = datetime.now()
 
+    frontend = active_frontend(db, request)
+    if frontend is not None:
+        # 仅允许保存当前前端数据集下的 menu_id，避免跨数据集误绑定/覆盖。
+        allowed = (
+            db.execute(select(SysMenu.id).where(SysMenu.id.in_(menu_ids)).where(SysMenu.frontend == frontend)).scalars().all()
+            if menu_ids
+            else []
+        )
+        allowed_ids = [int(x) for x in allowed if int(x) > 0]
+        menu_ids = list(dict.fromkeys(allowed_ids))
+
     try:
-        db.execute(delete(SysRoleMenu).where(SysRoleMenu.role_id == int(id)))
+        if frontend is None:
+            db.execute(delete(SysRoleMenu).where(SysRoleMenu.role_id == int(id)))
+        else:
+            # 仅清理当前前端数据集下的 role-menu 关联，避免另一个前端权限被覆盖。
+            db.execute(
+                delete(SysRoleMenu)
+                .where(SysRoleMenu.role_id == int(id))
+                .where(SysRoleMenu.menu_id.in_(select(SysMenu.id).where(SysMenu.frontend == frontend)))
+            )
+
         for mid in menu_ids:
             db.add(SysRoleMenu(role_id=int(id), menu_id=mid))
         db.execute(

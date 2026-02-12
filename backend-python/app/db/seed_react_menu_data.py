@@ -39,6 +39,15 @@ REACT_MENU_FLAT: list[dict] = [
         "path": "/management/system/user",
         "component": "/pages/management/system/user",
     },
+    # 用户管理 - 按钮权限（type=3）
+    {"id": "management_system_user_btn_create", "parentId": "management_system_user", "name": "新增", "code": "system:user:create", "icon": None, "type": 3},
+    {"id": "management_system_user_btn_import", "parentId": "management_system_user", "name": "导入", "code": "system:user:import", "icon": None, "type": 3},
+    {"id": "management_system_user_btn_export", "parentId": "management_system_user", "name": "导出", "code": "system:user:export", "icon": None, "type": 3},
+    {"id": "management_system_user_btn_get", "parentId": "management_system_user", "name": "详情", "code": "system:user:get", "icon": None, "type": 3},
+    {"id": "management_system_user_btn_update", "parentId": "management_system_user", "name": "修改", "code": "system:user:update", "icon": None, "type": 3},
+    {"id": "management_system_user_btn_delete", "parentId": "management_system_user", "name": "删除", "code": "system:user:delete", "icon": None, "type": 3},
+    {"id": "management_system_user_btn_reset_pwd", "parentId": "management_system_user", "name": "重置密码", "code": "system:user:resetPwd", "icon": None, "type": 3},
+    {"id": "management_system_user_btn_update_role", "parentId": "management_system_user", "name": "分配角色", "code": "system:user:updateRole", "icon": None, "type": 3},
     {
         "id": "management_system_role",
         "parentId": "management",
@@ -49,6 +58,13 @@ REACT_MENU_FLAT: list[dict] = [
         "path": "/management/system/role",
         "component": "/pages/management/system/role",
     },
+    # 角色管理 - 按钮权限（type=3）
+    {"id": "management_system_role_btn_create", "parentId": "management_system_role", "name": "新增", "code": "system:role:create", "icon": None, "type": 3},
+    {"id": "management_system_role_btn_update", "parentId": "management_system_role", "name": "编辑", "code": "system:role:update", "icon": None, "type": 3},
+    {"id": "management_system_role_btn_delete", "parentId": "management_system_role", "name": "删除", "code": "system:role:delete", "icon": None, "type": 3},
+    {"id": "management_system_role_btn_update_permission", "parentId": "management_system_role", "name": "保存权限", "code": "system:role:updatePermission", "icon": None, "type": 3},
+    {"id": "management_system_role_btn_assign", "parentId": "management_system_role", "name": "分配用户", "code": "system:role:assign", "icon": None, "type": 3},
+    {"id": "management_system_role_btn_unassign", "parentId": "management_system_role", "name": "取消分配", "code": "system:role:unassign", "icon": None, "type": 3},
     {
         "id": "management_system_menu",
         "parentId": "management",
@@ -59,6 +75,11 @@ REACT_MENU_FLAT: list[dict] = [
         "path": "/management/system/menu",
         "component": "/pages/management/system/menu",
     },
+    # 菜单管理 - 按钮权限（type=3）
+    {"id": "management_system_menu_btn_create", "parentId": "management_system_menu", "name": "新增", "code": "system:menu:create", "icon": None, "type": 3},
+    {"id": "management_system_menu_btn_update", "parentId": "management_system_menu", "name": "编辑", "code": "system:menu:update", "icon": None, "type": 3},
+    {"id": "management_system_menu_btn_delete", "parentId": "management_system_menu", "name": "删除", "code": "system:menu:delete", "icon": None, "type": 3},
+    {"id": "management_system_menu_btn_clear_cache", "parentId": "management_system_menu", "name": "清缓存", "code": "system:menu:clearCache", "icon": None, "type": 3},
     {
         "id": "management_system_dept",
         "parentId": "management",

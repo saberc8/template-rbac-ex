@@ -27,7 +27,7 @@ def _has_frontend_column(db: Session) -> bool:
     return any(str(c.get("name") or "") == "frontend" for c in cols)
 
 
-def get_user_info(db: Session, user_id: int) -> dict:
+def get_user_info(db: Session, user_id: int, *, frontend: str | None = None) -> dict:
     if user_id <= 0:
         raise ValueError("unauthorized")
 
@@ -42,7 +42,7 @@ def get_user_info(db: Session, user_id: int) -> dict:
     ).all()
     role_codes = [_str_or_empty(r.code) for r in roles_rows if _str_or_empty(r.code) != ""]
 
-    perms_rows = db.execute(
+    stmt = (
         select(distinct(SysMenu.permission))
         .select_from(SysMenu)
         .join(SysRoleMenu, SysRoleMenu.menu_id == SysMenu.id, isouter=True)
@@ -50,7 +50,12 @@ def get_user_info(db: Session, user_id: int) -> dict:
         .where(SysUserRole.user_id == user_id)
         .where(SysMenu.status == 1)
         .where(SysMenu.permission.is_not(None))
-    ).all()
+    )
+    if frontend is not None and _has_frontend_column(db):
+        v = str(frontend or "").strip().lower()
+        if v in {"vue3", "react"}:
+            stmt = stmt.where(SysMenu.frontend == v)
+    perms_rows = db.execute(stmt).all()
     permissions = [str(r[0]) for r in perms_rows if r[0] is not None and str(r[0]).strip() != ""]
 
     pwd_reset_time = ""

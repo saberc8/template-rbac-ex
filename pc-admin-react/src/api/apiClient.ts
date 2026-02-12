@@ -30,6 +30,12 @@ const isResult = (v: any): v is Result => {
 
 axiosInstance.interceptors.request.use(
 	(config) => {
+		// 让后端按当前前端数据集隔离 sys_menu / role-menu（react/vue3）
+		config.headers = config.headers || {};
+		if (!(config.headers as any)["X-Admin-Frontend"]) {
+			(config.headers as any)["X-Admin-Frontend"] = GLOBAL_CONFIG.adminFrontendType;
+		}
+
 		const token = userStore.getState().userToken.accessToken;
 		if (token) {
 			config.headers.Authorization = `Bearer ${token}`;
