@@ -161,12 +161,22 @@
 		},
 		"page": {
 			"systemPermission": {
-				"searchPlaceholder": "搜索 标题/路径/权限标识",
+				"searchPlaceholder": "搜索 标题/路径/权限标识/组件",
 				"columns": {
 					"title": "标题",
 					"type": "类型",
+					"sort": "排序",
 					"path": "路径",
+					"name": "组件名称",
+					"component": "组件路径",
 					"permission": "权限标识",
+					"isExternal": "外链",
+					"isHidden": "隐藏",
+					"isCache": "缓存",
+					"createUserString": "创建人",
+					"createTime": "创建时间",
+					"updateUserString": "修改人",
+					"updateTime": "修改时间",
 					"status": "状态"
 				},
 				"status": {

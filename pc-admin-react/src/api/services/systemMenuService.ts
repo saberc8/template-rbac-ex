@@ -17,6 +17,10 @@ export type SysMenuNode = {
 	permission: string;
 	sort: number;
 	status: number;
+	createUserString?: string;
+	createTime?: string;
+	updateUserString?: string;
+	updateTime?: string;
 	children?: SysMenuNode[];
 };
 

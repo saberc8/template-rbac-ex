@@ -6,11 +6,13 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { BasicStatus } from "#/enum";
 import { type SysMenuNode, type SysMenuSaveReq, systemMenuService } from "@/api/services/systemMenuService";
+import { Icon } from "@/components/icon";
 import { useConfirmDialog } from "@/components/confirm/use-confirm-dialog";
 import DataTable from "@/components/data-table/data-table";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { useMenuStore } from "@/store/menuStore";
 import { useUserPermissions } from "@/store/userStore";
+import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent } from "@/ui/card";
 import { Input } from "@/ui/input";
@@ -86,6 +88,8 @@ export default function MenuPage() {
 				(node.title || "").toLowerCase().includes(term) ||
 				displayTitle.toLowerCase().includes(term) ||
 				(node.path || "").toLowerCase().includes(term) ||
+				(node.name || "").toLowerCase().includes(term) ||
+				(node.component || "").toLowerCase().includes(term) ||
 				(node.permission || "").toLowerCase().includes(term);
 			const children = (node.children || []).map(filterNode).filter((x): x is SysMenuNode => x != null);
 			if (hit || children.length > 0) {
@@ -132,7 +136,8 @@ export default function MenuPage() {
 			{
 				header: t("sys.page.systemPermission.columns.title"),
 				id: "title",
-				size: 320,
+				size: 280,
+				meta: { fixed: "left" as const },
 				cell: ({ row }) => {
 					const r = row.original;
 					const id = String(r.node.id);
@@ -164,6 +169,7 @@ export default function MenuPage() {
 							) : (
 								<div className="h-7 w-7 shrink-0" />
 							)}
+							{r.node.icon ? <Icon icon={r.node.icon} size={16} className="shrink-0" /> : null}
 							<span className="truncate">{translateTitle(r.node.title)}</span>
 						</div>
 					);
@@ -172,7 +178,7 @@ export default function MenuPage() {
 			{
 				header: t("sys.page.systemPermission.columns.type"),
 				id: "type",
-				size: 90,
+				size: 84,
 				meta: { align: "center" },
 				cell: ({ row }) => {
 					const v = Number(row.original.node.type);
@@ -183,21 +189,70 @@ export default function MenuPage() {
 				},
 			},
 			{
+				header: t("sys.page.systemPermission.columns.sort"),
+				id: "sort",
+				size: 76,
+				meta: { align: "center" },
+				cell: ({ row }) => String(row.original.node.sort ?? "-"),
+			},
+			{
 				header: t("sys.page.systemPermission.columns.path"),
 				id: "path",
+				size: 200,
+				cell: ({ row }) => <span className="block truncate">{row.original.node.path || "-"}</span>,
+			},
+			{
+				header: t("sys.page.systemPermission.columns.name"),
+				id: "name",
+				size: 160,
+				cell: ({ row }) => <span className="block truncate">{row.original.node.name || "-"}</span>,
+			},
+			{
+				header: t("sys.page.systemPermission.columns.component"),
+				id: "component",
 				size: 220,
-				cell: ({ row }) => row.original.node.path || "-",
+				cell: ({ row }) => <span className="block truncate">{row.original.node.component || "-"}</span>,
 			},
 			{
 				header: t("sys.page.systemPermission.columns.permission"),
 				id: "permission",
-				size: 260,
-				cell: ({ row }) => row.original.node.permission || "-",
+				size: 220,
+				cell: ({ row }) => <span className="block truncate">{row.original.node.permission || "-"}</span>,
+			},
+			{
+				header: t("sys.page.systemPermission.columns.isExternal"),
+				id: "isExternal",
+				size: 80,
+				meta: { align: "center" },
+				cell: ({ row }) => {
+					const v = Boolean(row.original.node.isExternal);
+					return <Badge variant={v ? "info" : "error"}>{v ? t("common.yes") : t("common.no")}</Badge>;
+				},
+			},
+			{
+				header: t("sys.page.systemPermission.columns.isHidden"),
+				id: "isHidden",
+				size: 80,
+				meta: { align: "center" },
+				cell: ({ row }) => {
+					const v = Boolean(row.original.node.isHidden);
+					return <Badge variant={v ? "info" : "error"}>{v ? t("common.yes") : t("common.no")}</Badge>;
+				},
+			},
+			{
+				header: t("sys.page.systemPermission.columns.isCache"),
+				id: "isCache",
+				size: 80,
+				meta: { align: "center" },
+				cell: ({ row }) => {
+					const v = Boolean(row.original.node.isCache);
+					return <Badge variant={v ? "info" : "error"}>{v ? t("common.yes") : t("common.no")}</Badge>;
+				},
 			},
 			{
 				header: t("sys.page.systemPermission.columns.status"),
 				id: "status",
-				size: 100,
+				size: 90,
 				meta: { align: "center" },
 				cell: ({ row }) =>
 					Number(row.original.node.status) === BasicStatus.DISABLE
@@ -205,16 +260,40 @@ export default function MenuPage() {
 						: t("sys.page.systemPermission.status.enable"),
 			},
 			{
+				header: t("sys.page.systemPermission.columns.createUserString"),
+				id: "createUserString",
+				size: 120,
+				cell: ({ row }) => <span className="block truncate">{row.original.node.createUserString || "-"}</span>,
+			},
+			{
+				header: t("sys.page.systemPermission.columns.createTime"),
+				id: "createTime",
+				size: 160,
+				cell: ({ row }) => <span className="block truncate">{row.original.node.createTime || "-"}</span>,
+			},
+			{
+				header: t("sys.page.systemPermission.columns.updateUserString"),
+				id: "updateUserString",
+				size: 120,
+				cell: ({ row }) => <span className="block truncate">{row.original.node.updateUserString || "-"}</span>,
+			},
+			{
+				header: t("sys.page.systemPermission.columns.updateTime"),
+				id: "updateTime",
+				size: 160,
+				cell: ({ row }) => <span className="block truncate">{row.original.node.updateTime || "-"}</span>,
+			},
+			{
 				header: "操作",
 				id: "actions",
-				size: 240,
+				size: 220,
 				meta: { align: "center" },
 				cell: ({ row }) => {
 					const record = row.original.node;
 					const id = String(record.id);
 					const isSystemButton = Number(record.type) === 3;
 					return (
-						<div className="flex items-center gap-2">
+						<div className="flex items-center justify-center gap-2">
 							{can("system:menu:create") && !isSystemButton && (
 								<Button
 									size="sm"

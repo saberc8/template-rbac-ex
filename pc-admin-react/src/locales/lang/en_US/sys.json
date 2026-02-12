@@ -147,12 +147,22 @@
 		},
 		"page": {
 			"systemPermission": {
-				"searchPlaceholder": "Search title/path/permission",
+				"searchPlaceholder": "Search title/path/permission/component",
 				"columns": {
 					"title": "Title",
 					"type": "Type",
+					"sort": "Sort",
 					"path": "Path",
+					"name": "Name",
+					"component": "Component",
 					"permission": "Permission",
+					"isExternal": "External",
+					"isHidden": "Hidden",
+					"isCache": "Cache",
+					"createUserString": "Created By",
+					"createTime": "Created At",
+					"updateUserString": "Updated By",
+					"updateTime": "Updated At",
 					"status": "Status"
 				},
 				"status": {
