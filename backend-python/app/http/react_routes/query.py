@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Optional, TypedDict
 
 from sqlalchemy import distinct, func, select
 from sqlalchemy.orm import Session
@@ -12,6 +12,21 @@ from app.db.models.sys_role import SysRole
 from app.db.models.sys_role_menu import SysRoleMenu
 from app.db.models.sys_user_role import SysUserRole
 from app.http.frontend import has_frontend_column as _has_frontend_column
+
+
+class ReactMenuNode(TypedDict):
+    id: str
+    parentId: str
+    name: str
+    code: str
+    type: int
+    order: int
+    path: str
+    component: str
+    icon: Optional[str]
+    auth: Optional[list[str]]
+    hidden: Optional[bool]
+    children: list[ReactMenuNode]
 
 
 def has_frontend_column(db: Session) -> bool:
@@ -62,7 +77,7 @@ def list_user_permissions(db: Session, user_id: int) -> list[dict]:
     return out
 
 
-def list_menu_tree(db: Session, role_ids: Optional[list[int]] = None) -> list[dict]:
+def list_menu_tree(db: Session, role_ids: Optional[list[int]] = None) -> list[ReactMenuNode]:
     # 未升级到支持 frontend 字段时，无法与 Vue3 菜单集隔离，直接返回空列表（提示用户执行迁移）。
     if not has_frontend_column(db):
         return []
@@ -100,7 +115,7 @@ def list_menu_tree(db: Session, role_ids: Optional[list[int]] = None) -> list[di
             continue
         menu_map[mid] = m
 
-    flat: list[dict] = []
+    flat: list[ReactMenuNode] = []
     for m in menu_map.values():
         typ = int(m[3] or 0)
         if typ == 3:
@@ -119,7 +134,7 @@ def list_menu_tree(db: Session, role_ids: Optional[list[int]] = None) -> list[di
 
         code = permission or (name.strip() if name.strip() else title)
 
-        item = {
+        item: ReactMenuNode = {
             "id": str(menu_id),
             "parentId": str(parent_id),
             "name": title,
@@ -137,8 +152,8 @@ def list_menu_tree(db: Session, role_ids: Optional[list[int]] = None) -> list[di
 
     flat.sort(key=lambda x: (int(x.get("order") or 0), int(x.get("id") or 0)))
 
-    node_map: dict[str, dict] = {str(n["id"]): n for n in flat}
-    roots: list[dict] = []
+    node_map: dict[str, ReactMenuNode] = {str(n["id"]): n for n in flat}
+    roots: list[ReactMenuNode] = []
 
     for n in flat:
         pid = str(n.get("parentId") or "0")
@@ -151,7 +166,7 @@ def list_menu_tree(db: Session, role_ids: Optional[list[int]] = None) -> list[di
             continue
         parent["children"].append(n)
 
-    def _sort_children(nodes: list[dict]) -> None:
+    def _sort_children(nodes: list[ReactMenuNode]) -> None:
         for node in nodes:
             if node.get("children"):
                 node["children"].sort(key=lambda x: (int(x.get("order") or 0), int(x.get("id") or 0)))

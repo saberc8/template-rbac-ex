@@ -1,52 +1,24 @@
 from __future__ import annotations
 
-import os
-from collections.abc import Generator
 from datetime import datetime
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
 
 
 @pytest.fixture()
-def client() -> Generator[TestClient, None, None]:
-    os.environ.setdefault("APP_ENV", "production")
-    os.environ.setdefault("AUTH_JWT_SECRET", "test-secret")
+def user_id() -> int:
+    return 100
 
-    from app.db import models as _  # noqa: F401
-    from app.db.base import Base
-    from app.http.deps import get_db, require_user_id
-    from app.main import create_app
+
+@pytest.fixture()
+def seed_data(session_local: sessionmaker[Session]) -> None:
+    from app.db.models.sys_user import SysUser
     from app.security.password import hash_password
 
-    engine = create_engine(
-        "sqlite+pysqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
-    Base.metadata.create_all(bind=engine)
-
-    app = create_app()
-
-    def _override_get_db() -> Generator[Session, None, None]:
-        db = TestingSessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    app.dependency_overrides[get_db] = _override_get_db
-    app.dependency_overrides[require_user_id] = lambda: 100
-
-    # seed: user
-    from app.db.models.sys_user import SysUser
-
     now = datetime.now()
-    with TestingSessionLocal() as db:
+    with session_local() as db:
         db.add(
             SysUser(
                 id=100,
@@ -69,12 +41,6 @@ def client() -> Generator[TestClient, None, None]:
             )
         )
         db.commit()
-
-    with TestClient(app) as c:
-        from app.runtime import token_service
-
-        c.headers.update({"Authorization": f"Bearer {token_service.generate(100)}"})
-        yield c
 
 
 def _assert_ok(resp):

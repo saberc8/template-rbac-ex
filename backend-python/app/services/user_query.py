@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import distinct, func, inspect, select
+from sqlalchemy import distinct, func, select
 from sqlalchemy.orm import Session
 
 from app.db.models.sys_menu import SysMenu
@@ -12,19 +12,12 @@ from app.db.models.sys_role import SysRole
 from app.db.models.sys_role_menu import SysRoleMenu
 from app.db.models.sys_user import SysUser
 from app.db.models.sys_user_role import SysUserRole
+from app.http.frontend import has_frontend_column as _has_frontend_column
 from app.http.utils import format_time
 
 
 def _str_or_empty(v) -> str:
     return "" if v is None else str(v)
-
-
-def _has_frontend_column(db: Session) -> bool:
-    try:
-        cols = inspect(db.get_bind()).get_columns("sys_menu")
-    except Exception:
-        return False
-    return any(str(c.get("name") or "") == "frontend" for c in cols)
 
 
 def get_user_info(db: Session, user_id: int, *, frontend: str | None = None) -> dict:

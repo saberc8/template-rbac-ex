@@ -1,50 +1,6 @@
 from __future__ import annotations
 
-import os
-from collections.abc import Generator
-
-import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
-
-
-@pytest.fixture()
-def client() -> Generator[TestClient, None, None]:
-    os.environ.setdefault("APP_ENV", "production")
-    os.environ.setdefault("AUTH_JWT_SECRET", "test-secret")
-
-    from app.db import models as _  # noqa: F401
-    from app.db.base import Base
-    from app.http.deps import get_db, require_user_id
-    from app.main import create_app
-
-    engine = create_engine(
-        "sqlite+pysqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
-    Base.metadata.create_all(bind=engine)
-
-    app = create_app()
-
-    def _override_get_db() -> Generator[Session, None, None]:
-        db = TestingSessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    app.dependency_overrides[get_db] = _override_get_db
-    app.dependency_overrides[require_user_id] = lambda: 1
-
-    with TestClient(app) as c:
-        from app.runtime import token_service
-
-        c.headers.update({"Authorization": f"Bearer {token_service.generate(1)}"})
-        yield c
 
 
 def test_storage_write_routes_smoke(client: TestClient) -> None:

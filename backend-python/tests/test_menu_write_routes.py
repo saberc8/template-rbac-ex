@@ -1,50 +1,6 @@
 from __future__ import annotations
 
-import os
-from collections.abc import Generator
-
-import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
-
-
-@pytest.fixture()
-def client() -> Generator[TestClient, None, None]:
-    os.environ.setdefault("APP_ENV", "production")
-    os.environ.setdefault("AUTH_JWT_SECRET", "test-secret")
-
-    from app.db import models as _  # noqa: F401
-    from app.db.base import Base
-    from app.http.deps import get_db, require_user_id
-    from app.main import create_app
-
-    engine = create_engine(
-        "sqlite+pysqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
-    Base.metadata.create_all(bind=engine)
-
-    app = create_app()
-
-    def _override_get_db() -> Generator[Session, None, None]:
-        db = TestingSessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    app.dependency_overrides[get_db] = _override_get_db
-    app.dependency_overrides[require_user_id] = lambda: 1
-
-    with TestClient(app) as c:
-        from app.runtime import token_service
-
-        c.headers.update({"Authorization": f"Bearer {token_service.generate(1)}"})
-        yield c
 
 
 def test_menu_create_update_delete_smoke_with_frontend_isolation(client: TestClient) -> None:
@@ -60,6 +16,26 @@ def test_menu_create_update_delete_smoke_with_frontend_isolation(client: TestCli
     mid_react = j1["data"]["id"]
     assert isinstance(mid_react, str)
     assert int(mid_react) > 0
+
+    # create child (react) to ensure recursive id stringify in /tree
+    r1b = client.post(
+        "/system/menu",
+        headers={"X-Admin-Frontend": "react"},
+        json={
+            "title": "m1-1",
+            "parentId": int(mid_react),
+            "type": 1,
+            "path": "/m1/child",
+            "name": "m11",
+            "component": "m1/child/index",
+        },
+    )
+    assert r1b.status_code == 200
+    j1b = r1b.json()
+    assert j1b["success"] is True
+    mid_react_child = j1b["data"]["id"]
+    assert isinstance(mid_react_child, str)
+    assert int(mid_react_child) > 0
 
     # create (vue3)
     r2 = client.post(
@@ -91,6 +67,10 @@ def test_menu_create_update_delete_smoke_with_frontend_isolation(client: TestCli
     roots_react = j4["data"]
     assert isinstance(roots_react, list)
     assert any(isinstance(n.get("id"), str) for n in roots_react)
+    parent = [n for n in roots_react if str(n.get("id") or "") == str(mid_react)][0]
+    child = [n for n in (parent.get("children") or []) if str(n.get("id") or "") == str(mid_react_child)][0]
+    assert isinstance(child.get("id"), str)
+    assert isinstance(child.get("parentId"), str)
 
     # delete only react dataset
     r5 = client.request(
