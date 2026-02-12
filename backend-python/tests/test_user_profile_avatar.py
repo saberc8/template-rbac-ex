@@ -93,6 +93,9 @@ def client(tmp_path) -> Generator[TestClient, None, None]:
         db.commit()
 
     with TestClient(app) as c:
+        from app.runtime import token_service
+
+        c.headers.update({"Authorization": f"Bearer {token_service.generate(100)}"})
         yield c
 
 

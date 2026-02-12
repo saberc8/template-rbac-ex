@@ -40,6 +40,9 @@ def client() -> Generator[TestClient, None, None]:
     app.dependency_overrides[get_db] = _override_get_db
 
     with TestClient(app) as c:
+        from app.runtime import token_service
+
+        c.headers.update({"Authorization": f"Bearer {token_service.generate(100)}"})
         yield c
 
 

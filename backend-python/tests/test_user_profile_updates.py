@@ -71,6 +71,9 @@ def client() -> Generator[TestClient, None, None]:
         db.commit()
 
     with TestClient(app) as c:
+        from app.runtime import token_service
+
+        c.headers.update({"Authorization": f"Bearer {token_service.generate(100)}"})
         yield c
 
 
@@ -130,4 +133,3 @@ def test_update_password_validates_and_sets_pwd_reset_time(client: TestClient) -
     resp2 = client.put("/user/profile/phone", json={"phone": "13800138001", "oldPassword": "OldPass123"})
     assert resp2.status_code == 200
     assert resp2.json()["success"] is False
-
