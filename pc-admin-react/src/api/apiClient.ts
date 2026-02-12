@@ -69,6 +69,9 @@ axiosInstance.interceptors.response.use(
 		if (isResult(res.data)) {
 			const { status, data, message } = res.data;
 			if (status === ResultStatus.SUCCESS) return data;
+			if (status === ResultStatus.TIMEOUT) {
+				userStore.getState().actions.clearUserInfoAndToken();
+			}
 			throw new Error(message || t("sys.api.apiRequestFailed"));
 		}
 
