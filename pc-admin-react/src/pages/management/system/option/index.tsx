@@ -7,6 +7,7 @@ import { type SysOption, type SysOptionUpdateReq, systemOptionService } from "@/
 import { useConfirmDialog } from "@/components/confirm/use-confirm-dialog";
 import Icon from "@/components/icon/icon";
 import SplitLayout from "@/components/layout/split-layout";
+import { GLOBAL_CONFIG } from "@/global-config";
 import { usePathname, useRouter, useSearchParams } from "@/routes/hooks";
 import { useUserPermissions } from "@/store/userStore";
 import { Button } from "@/ui/button";
@@ -28,12 +29,39 @@ const fileToBase64 = (file: File): Promise<string> =>
 		reader.readAsDataURL(file);
 	});
 
+const guessImageMimeFromBase64 = (raw: string): string | null => {
+	const v = (raw || "").trim();
+	if (!v) return null;
+	// png: 89 50 4E 47 => iVBORw0KGgo
+	if (v.startsWith("iVBORw0KGgo")) return "image/png";
+	// jpg: FF D8 FF => /9j/
+	if (v.startsWith("/9j/")) return "image/jpeg";
+	// gif: GIF87a/GIF89a => R0lGODdh/R0lGODlh
+	if (v.startsWith("R0lGODdh") || v.startsWith("R0lGODlh")) return "image/gif";
+	// webp: RIFF....WEBP => UklGR
+	if (v.startsWith("UklGR")) return "image/webp";
+	return null;
+};
+
+const isLikelyBase64 = (raw: string): boolean => {
+	const v = (raw || "").trim();
+	if (!v) return false;
+	if (v.length < 80) return false;
+	return /^[A-Za-z0-9+/]+={0,2}$/.test(v);
+};
+
 const toPreviewUrl = (raw: string): string | null => {
 	const v = (raw || "").trim();
 	if (!v) return null;
 	if (v.startsWith("data:image/")) return v;
+	if (v.startsWith("data:")) return v;
 	if (v.startsWith("http://") || v.startsWith("https://")) return v;
 	if (v.startsWith("/")) return v;
+	if (isLikelyBase64(v)) {
+		const mime = guessImageMimeFromBase64(v) || "image/png";
+		return `data:${mime};base64,${v}`;
+	}
+	if (v.includes("/") || v.includes(".")) return `/${v}`;
 	return null;
 };
 
@@ -165,15 +193,48 @@ function SiteConfigPanel({ canUpdate }: { canUpdate: boolean }) {
 		}
 	};
 
+	const SiteImagePreview = ({ value }: { value: string }) => {
+		const preview = toPreviewUrl(value);
+		const candidates = useMemo(() => {
+			if (!preview) return [] as string[];
+			if (preview.startsWith("http://") || preview.startsWith("https://") || preview.startsWith("data:")) return [preview];
+			if (!preview.startsWith("/")) return [preview];
+
+			const out = [preview];
+			const apiBase = String(GLOBAL_CONFIG.apiBaseUrl || "").trim();
+			if (apiBase && apiBase !== "/" && !preview.startsWith(apiBase)) {
+				out.push(`${apiBase}${preview}`);
+			}
+			return out;
+		}, [preview]);
+
+		const [idx, setIdx] = useState(0);
+
+		useEffect(() => {
+			setIdx(0);
+		}, [preview]);
+
+		const src = candidates[idx] || null;
+		if (!src) return null;
+		return (
+			<img
+				key={src}
+				src={src}
+				alt="preview"
+				className="h-12 w-12 rounded border object-contain bg-muted"
+				onError={() => {
+					if (idx + 1 < candidates.length) setIdx(idx + 1);
+				}}
+			/>
+		);
+	};
+
 	const renderImageField = (code: string) => {
 		const val = String(draft[code] ?? "");
-		const preview = toPreviewUrl(val);
 		return (
 			<div className="flex flex-col gap-2">
 				<div className="flex flex-wrap items-center gap-3">
-					{preview ? (
-						<img src={preview} alt="preview" className="h-12 w-12 rounded border object-contain bg-muted" />
-					) : null}
+					<SiteImagePreview value={val} />
 					<input
 						type="file"
 						accept="image/*"
@@ -639,6 +700,14 @@ export default function OptionPage() {
 		return base.filter((t) => t.canView);
 	}, [can]);
 
+	const tabIconColor = useCallback((key: ConfigTabKey) => {
+		if (key === "site") return "#0ea5e9"; // sky-500
+		if (key === "security") return "#f97316"; // orange-500
+		if (key === "login") return "#a855f7"; // purple-500
+		if (key === "storage") return "#22c55e"; // green-500
+		return "#ef4444"; // red-500 (client)
+	}, []);
+
 	const setUrlTab = useCallback(
 		(key: ConfigTabKey) => {
 			const params = new URLSearchParams(searchParams);
@@ -674,7 +743,7 @@ export default function OptionPage() {
 				key: t.key,
 				label: (
 					<div className="flex items-center gap-2">
-						<Icon icon={t.icon} size={18} />
+						<Icon icon={t.icon} size={18} color={tabIconColor(t.key)} />
 						<span>{t.label}</span>
 					</div>
 				),
@@ -691,7 +760,7 @@ export default function OptionPage() {
 						<ClientPage />
 					),
 			})),
-		[tabs, canUpdateLogin, canUpdateSecurity, canUpdateSite],
+		[tabs, canUpdateLogin, canUpdateSecurity, canUpdateSite, tabIconColor],
 	);
 
 	const content = useMemo(() => {
@@ -717,7 +786,7 @@ export default function OptionPage() {
 									key: t.key,
 									title: (
 										<div className="flex items-center gap-2 min-w-0">
-											<Icon icon={t.icon} size={18} />
+											<Icon icon={t.icon} size={18} color={tabIconColor(t.key)} />
 											<span className="truncate">{t.label}</span>
 										</div>
 									),

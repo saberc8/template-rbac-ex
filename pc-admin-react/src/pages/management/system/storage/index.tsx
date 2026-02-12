@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { BasicStatus } from "#/enum";
 import { type SysStorageRow, type SysStorageSaveReq, systemStorageService } from "@/api/services/systemStorageService";
@@ -10,10 +11,12 @@ import { useUserPermissions } from "@/store/userStore";
 import { Button } from "@/ui/button";
 import { Card, CardContent } from "@/ui/card";
 import { Input } from "@/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Switch } from "@/ui/switch";
 import StorageFormDialog from "./storage-form-dialog";
 
 export default function StoragePage() {
+	const { t } = useTranslation();
 	const queryClient = useQueryClient();
 	const permissions = useUserPermissions();
 	const permissionCodes = useMemo(() => permissions.map((p) => p.code), [permissions]);
@@ -21,7 +24,7 @@ export default function StoragePage() {
 	const can = useCallback((code: string) => permissionCodeSet.has(code), [permissionCodeSet]);
 
 	const [description, setDescription] = useState("");
-	const [type, setType] = useState("");
+	const [type, setType] = useState<"all" | "1" | "2">("all");
 	const [query, setQuery] = useState<{ description?: string; type?: number }>({});
 	const [formOpen, setFormOpen] = useState(false);
 	const [formMode, setFormMode] = useState<"create" | "update">("create");
@@ -82,32 +85,40 @@ export default function StoragePage() {
 
 	const columns: Array<ColumnDef<SysStorageRow>> = useMemo(
 		() => [
-			{ header: "Name", accessorKey: "name", size: 240 },
-			{ header: "Code", accessorKey: "code", size: 180 },
+			{ header: t("sys.page.systemStorage.columns.name"), accessorKey: "name", size: 160 },
+			{ header: t("sys.page.systemStorage.columns.code"), accessorKey: "code", size: 120 },
 			{
-				header: "Type",
+				header: t("sys.page.systemStorage.columns.type"),
 				accessorKey: "type",
-				size: 140,
+				size: 120,
 				cell: ({ row }) => (Number(row.original.type) === 2 ? "OSS/MinIO" : "本地"),
 			},
 			{
-				header: "Default",
-				accessorKey: "isDefault",
-				size: 100,
+				header: t("sys.page.systemStorage.columns.isDefault"),
+				id: "isDefault",
+				accessorFn: (row) => {
+					const r: any = row as any;
+					return r.isDefault ?? r.is_default ?? false;
+				},
+				size: 90,
 				meta: { align: "center" },
-				cell: ({ row }) => (row.original.isDefault ? "Yes" : "No"),
+				cell: ({ row }) => {
+					const r: any = row.original as any;
+					return r.isDefault ?? r.is_default ? "Yes" : "No";
+				},
 			},
 			{
-				header: "Status",
+				header: t("sys.page.systemStorage.columns.status"),
 				accessorKey: "status",
-				size: 160,
+				size: 140,
 				cell: ({ row }) => {
 					const record = row.original;
+					const isDefault = Boolean((record as any).isDefault ?? (record as any).is_default);
 					return (
 						<div className="flex items-center gap-2">
 							<Switch
 								checked={Number(record.status) === BasicStatus.ENABLE}
-								disabled={!can("system:storage:updateStatus") || record.isDefault || statusMutation.isPending}
+								disabled={!can("system:storage:updateStatus") || isDefault || statusMutation.isPending}
 								onCheckedChange={async (checked) => {
 									try {
 										await statusMutation.mutateAsync({
@@ -121,24 +132,35 @@ export default function StoragePage() {
 								}}
 							/>
 							<span className="text-xs text-muted-foreground">
-								{Number(record.status) === BasicStatus.ENABLE ? "启用" : "禁用"}
+								{Number(record.status) === BasicStatus.ENABLE ? t("sys.page.systemStorage.status.enable") : t("sys.page.systemStorage.status.disable")}
 							</span>
 						</div>
 					);
 				},
 			},
-			{ header: "Endpoint", accessorKey: "endpoint", size: 240 },
-			{ header: "Bucket", accessorKey: "bucketName", size: 180 },
-			{ header: "Domain", accessorKey: "domain", size: 240 },
-			{ header: "Desc", accessorKey: "description", size: 280 },
-			{ header: "Updated", accessorKey: "updateTime", size: 180 },
+			{ header: t("sys.page.systemStorage.columns.endpoint"), accessorKey: "endpoint", size: 220 },
 			{
-				header: "操作",
+				header: t("sys.page.systemStorage.columns.bucketName"),
+				id: "bucketName",
+				accessorFn: (row) => (row as any).bucketName ?? (row as any).bucket_name ?? "",
+				size: 140,
+			},
+			{
+				header: t("sys.page.systemStorage.columns.domain"),
+				id: "domain",
+				accessorFn: (row) => (row as any).domain ?? "",
+				size: 220,
+			},
+			{ header: t("sys.page.systemStorage.columns.description"), accessorKey: "description", size: 200 },
+			{ header: t("sys.page.systemStorage.columns.updateTime"), accessorKey: "updateTime", size: 170 },
+			{
+				header: t("sys.page.systemStorage.columns.actions"),
 				id: "actions",
-				size: 280,
+				size: 180,
 				meta: { align: "center" },
 				cell: ({ row }) => {
 					const record = row.original;
+					const isDefault = Boolean((record as any).isDefault ?? (record as any).is_default);
 					return (
 						<div className="flex items-center gap-2">
 							<Button
@@ -156,7 +178,7 @@ export default function StoragePage() {
 							<Button
 								size="sm"
 								variant="secondary"
-								disabled={!can("system:storage:setDefault") || record.isDefault || defaultMutation.isPending}
+								disabled={!can("system:storage:setDefault") || isDefault || defaultMutation.isPending}
 								onClick={async () => {
 									try {
 										await defaultMutation.mutateAsync(Number(record.id));
@@ -171,11 +193,11 @@ export default function StoragePage() {
 							<Button
 								size="sm"
 								variant="destructive"
-								disabled={!can("system:storage:delete") || record.isDefault || deleteMutation.isPending}
+								disabled={!can("system:storage:delete") || isDefault || deleteMutation.isPending}
 								onClick={async () => {
 									const ok = await confirm({
 										title: "确认删除？",
-										description: record.isDefault ? "默认存储不允许删除" : `存储：${record.name}`,
+										description: isDefault ? "默认存储不允许删除" : `存储：${record.name}`,
 										confirmText: "删除",
 										destructive: true,
 									});
@@ -204,6 +226,7 @@ export default function StoragePage() {
 			deleteMutation.mutateAsync,
 			statusMutation.isPending,
 			statusMutation.mutateAsync,
+			t,
 			updateMutation.isPending,
 		],
 	);
@@ -212,7 +235,7 @@ export default function StoragePage() {
 		<Card>
 			<CardContent>
 				<DataTable<SysStorageRow>
-					title="Storage"
+					title={t("sys.page.systemStorage.title")}
 					actions={
 						can("system:storage:create") ? (
 							<Button
@@ -231,18 +254,22 @@ export default function StoragePage() {
 							<Input
 								value={description}
 								onChange={(e) => setDescription(e.target.value)}
-								placeholder="Keyword"
+								placeholder={t("sys.page.systemStorage.searchPlaceholder")}
 								className="w-[220px]"
 							/>
-							<Input
-								value={type}
-								onChange={(e) => setType(e.target.value)}
-								placeholder="Type(1/2)"
-								className="w-[110px]"
-							/>
+							<Select value={type} onValueChange={(v) => setType(v as any)}>
+								<SelectTrigger className="w-[140px]">
+									<SelectValue placeholder={t("sys.page.systemStorage.typePlaceholder")} />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">{t("sys.page.systemStorage.type.all")}</SelectItem>
+									<SelectItem value="1">{t("sys.page.systemStorage.type.local")}</SelectItem>
+									<SelectItem value="2">{t("sys.page.systemStorage.type.oss")}</SelectItem>
+								</SelectContent>
+							</Select>
 							<Button
 								onClick={() => {
-									const t = Number(type.trim());
+									const t = type === "all" ? NaN : Number(type);
 									setQuery({
 										description: description.trim() || undefined,
 										type: Number.isFinite(t) && t > 0 ? t : undefined,
@@ -255,7 +282,7 @@ export default function StoragePage() {
 								variant="secondary"
 								onClick={() => {
 									setDescription("");
-									setType("");
+									setType("all");
 									setQuery({});
 								}}
 							>

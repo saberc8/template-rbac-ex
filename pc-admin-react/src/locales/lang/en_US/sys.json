@@ -158,6 +158,33 @@
 					"actions": "Actions"
 				}
 			},
+			"systemStorage": {
+				"title": "Storage",
+				"searchPlaceholder": "Keyword (name/code/description)",
+				"typePlaceholder": "Type",
+				"type": {
+					"all": "All",
+					"local": "Local",
+					"oss": "OSS/MinIO"
+				},
+				"status": {
+					"enable": "Enable",
+					"disable": "Disable"
+				},
+				"columns": {
+					"name": "Name",
+					"code": "Code",
+					"type": "Type",
+					"isDefault": "Default",
+					"status": "Status",
+					"endpoint": "Endpoint",
+					"bucketName": "Bucket",
+					"domain": "Domain",
+					"description": "Description",
+					"updateTime": "Updated At",
+					"actions": "Actions"
+				}
+			},
 			"systemPermission": {
 				"searchPlaceholder": "Search title/path/permission/component",
 				"columns": {

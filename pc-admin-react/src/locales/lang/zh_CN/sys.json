@@ -172,6 +172,33 @@
 					"actions": "操作"
 				}
 			},
+			"systemStorage": {
+				"title": "存储配置",
+				"searchPlaceholder": "关键字（名称/编码/描述）",
+				"typePlaceholder": "类型",
+				"type": {
+					"all": "全部",
+					"local": "本地",
+					"oss": "OSS/MinIO"
+				},
+				"status": {
+					"enable": "启用",
+					"disable": "禁用"
+				},
+				"columns": {
+					"name": "名称",
+					"code": "编码",
+					"type": "类型",
+					"isDefault": "默认",
+					"status": "状态",
+					"endpoint": "Endpoint",
+					"bucketName": "Bucket",
+					"domain": "Domain",
+					"description": "描述",
+					"updateTime": "更新时间",
+					"actions": "操作"
+				}
+			},
 			"systemPermission": {
 				"searchPlaceholder": "搜索 标题/路径/权限标识/组件",
 				"columns": {
