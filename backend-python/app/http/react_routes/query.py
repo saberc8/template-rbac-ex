@@ -4,21 +4,14 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from sqlalchemy import distinct, func, inspect, select
+from sqlalchemy import distinct, func, select
 from sqlalchemy.orm import Session
 
 from app.db.models.sys_menu import SysMenu
 from app.db.models.sys_role import SysRole
 from app.db.models.sys_role_menu import SysRoleMenu
 from app.db.models.sys_user_role import SysUserRole
-
-
-def _has_frontend_column(db: Session) -> bool:
-    try:
-        cols = inspect(db.get_bind()).get_columns("sys_menu")
-    except Exception:
-        return False
-    return any(str(c.get("name") or "") == "frontend" for c in cols)
+from app.http.frontend import has_frontend_column as _has_frontend_column
 
 
 def has_frontend_column(db: Session) -> bool:
@@ -46,7 +39,7 @@ def list_user_roles(db: Session, user_id: int) -> tuple[list[dict], list[int]]:
 
 def list_user_permissions(db: Session, user_id: int) -> list[dict]:
     # 未升级到支持 frontend 字段时，无法与 Vue3 菜单集隔离，避免返回错误菜单权限。
-    if not _has_frontend_column(db):
+    if not has_frontend_column(db):
         return []
 
     stmt = (
@@ -71,7 +64,7 @@ def list_user_permissions(db: Session, user_id: int) -> list[dict]:
 
 def list_menu_tree(db: Session, role_ids: Optional[list[int]] = None) -> list[dict]:
     # 未升级到支持 frontend 字段时，无法与 Vue3 菜单集隔离，直接返回空列表（提示用户执行迁移）。
-    if not _has_frontend_column(db):
+    if not has_frontend_column(db):
         return []
 
     stmt = (

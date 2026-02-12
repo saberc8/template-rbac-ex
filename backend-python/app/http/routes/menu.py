@@ -6,17 +6,17 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, Request
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, aliased
 
-from app.core.id import next_id
 from app.db.models.sys_menu import SysMenu
-from app.db.models.sys_role_menu import SysRoleMenu
 from app.db.models.sys_user import SysUser
 from app.http.deps import get_db, require_user_id
 from app.http.frontend import active_frontend, has_frontend_column
 from app.http.response import fail, ok
 from app.http.utils import format_time
+from app.http.validators import parse_positive_int_list, require_dict_body
+from app.services import menu_service
 
 router = APIRouter()
 
@@ -39,67 +39,6 @@ def _active_frontend(db: Session, request: Request | None = None) -> Optional[st
     """
 
     return active_frontend(db, request)
-
-
-def _build_menu_for_save(menu_id: int, body: dict) -> tuple[Optional[dict], Optional[tuple[str, str]]]:
-    typ = int(body.get("type") or 0)
-    if typ == 0:
-        typ = 1
-
-    title = str(body.get("title") or "").strip()
-    if title == "":
-        return None, ("400", "菜单标题不能为空")
-
-    is_external = bool(body.get("isExternal")) if body.get("isExternal") is not None else False
-    is_cache = bool(body.get("isCache")) if body.get("isCache") is not None else False
-    is_hidden = bool(body.get("isHidden")) if body.get("isHidden") is not None else False
-
-    path = str(body.get("path") or "").strip()
-    name = str(body.get("name") or "").strip()
-    component = str(body.get("component") or "").strip()
-
-    if is_external:
-        if path and not (path.startswith("http://") or path.startswith("https://")):
-            return None, ("400", "路由地址格式不正确，请以 http:// 或 https:// 开头")
-    else:
-        if path.startswith("http://") or path.startswith("https://"):
-            return None, ("400", "路由地址格式不正确")
-        if path != "" and not path.startswith("/"):
-            path = "/" + path
-        name = name.lstrip("/")
-        component = component.lstrip("/")
-
-    sort_val = int(body.get("sort") or 0)
-    if sort_val <= 0:
-        sort_val = 999
-
-    status = int(body.get("status") or 0)
-    if status == 0:
-        status = 1
-
-    if menu_id < 0:
-        return None, ("400", "ID 参数不正确")
-
-    return (
-        {
-            "id": menu_id,
-            "parent_id": int(body.get("parentId") or 0),
-            "type": typ,
-            "title": title,
-            "path": path or None,
-            "name": name or None,
-            "component": component or None,
-            "redirect": str(body.get("redirect") or "").strip() or None,
-            "icon": str(body.get("icon") or "").strip() or None,
-            "is_external": is_external,
-            "is_cache": is_cache,
-            "is_hidden": is_hidden,
-            "permission": str(body.get("permission") or "").strip() or None,
-            "sort": sort_val,
-            "status": status,
-        },
-        None,
-    )
 
 
 def _to_menu_resp(row: dict) -> dict:
@@ -308,53 +247,12 @@ def create_menu(
     db: Session = Depends(get_db),
     user_id: int = Depends(require_user_id),
 ):
-    if not isinstance(body, dict):
-        return fail("400", "请求参数不正确")
-
-    payload, err = _build_menu_for_save(0, body)
+    body, err = require_dict_body(body)
     if err is not None:
-        return fail(err[0], err[1])
-
-    mid = next_id()
-    if mid <= 0:
-        return fail("500", "新增菜单失败")
-
-    now = datetime.now()
-    try:
-        frontend = _active_frontend(db, request)
-        menu_kwargs = {
-            "id": mid,
-            "title": payload["title"],
-            "parent_id": payload["parent_id"],
-            "type": payload["type"],
-            "path": payload["path"],
-            "name": payload["name"],
-            "component": payload["component"],
-            "redirect": payload["redirect"],
-            "icon": payload["icon"],
-            "is_external": payload["is_external"],
-            "is_cache": payload["is_cache"],
-            "is_hidden": payload["is_hidden"],
-            "permission": payload["permission"],
-            "sort": payload["sort"],
-            "status": payload["status"],
-            "create_user": int(user_id),
-            "create_time": now,
-        }
-        if frontend is not None:
-            menu_kwargs["frontend"] = frontend
-        db.add(
-            SysMenu(**menu_kwargs)
-        )
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "新增菜单失败")
+        return err
 
     frontend = _active_frontend(db, request)
-    if frontend == "react":
-        return ok({"id": str(mid)})
-    return ok({"id": mid})
+    return menu_service.create_menu(db=db, user_id=user_id, body=body, frontend=frontend)
 
 
 @router.put("/system/menu/{id}")
@@ -367,48 +265,13 @@ def update_menu(
 ):
     if id <= 0:
         return fail("400", "ID 参数不正确")
-    if not isinstance(body, dict):
-        return fail("400", "请求参数不正确")
 
-    payload, err = _build_menu_for_save(int(id), body)
+    body, err = require_dict_body(body)
     if err is not None:
-        return fail(err[0], err[1])
+        return err
 
-    now = datetime.now()
-    try:
-        stmt = update(SysMenu).where(SysMenu.id == int(id))
-        frontend = _active_frontend(db, request)
-        if frontend is not None:
-            stmt = stmt.where(SysMenu.frontend == frontend)
-        res = db.execute(
-            stmt.values(
-                parent_id=payload["parent_id"],
-                type=payload["type"],
-                title=payload["title"],
-                path=payload["path"],
-                name=payload["name"],
-                component=payload["component"],
-                redirect=payload["redirect"],
-                icon=payload["icon"],
-                is_external=payload["is_external"],
-                is_cache=payload["is_cache"],
-                is_hidden=payload["is_hidden"],
-                permission=payload["permission"],
-                sort=payload["sort"],
-                status=payload["status"],
-                update_user=int(user_id),
-                update_time=now,
-            )
-        )
-        if int(getattr(res, "rowcount", 0) or 0) <= 0:
-            db.rollback()
-            return fail("404", "菜单不存在")
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "修改菜单失败")
-
-    return ok(True)
+    frontend = _active_frontend(db, request)
+    return menu_service.update_menu(db=db, user_id=user_id, menu_id=int(id), body=body, frontend=frontend)
 
 
 @router.delete("/system/menu")
@@ -420,65 +283,12 @@ def delete_menu(
 ):
     if not isinstance(body, dict):
         return fail("400", "ID 列表不能为空")
-    ids = body.get("ids")
-    if not isinstance(ids, list) or len(ids) == 0:
-        return fail("400", "ID 列表不能为空")
-    seed_ids = []
-    for v in ids:
-        try:
-            iv = int(v)
-            if iv > 0:
-                seed_ids.append(iv)
-        except Exception:
-            continue
-    if not seed_ids:
-        return fail("400", "ID 列表不能为空")
+    ids, err = parse_positive_int_list(body.get("ids"), "ID 列表不能为空")
+    if err is not None:
+        return err
 
-    stmt = select(SysMenu.id, SysMenu.parent_id)
     frontend = _active_frontend(db, request)
-    if frontend is not None:
-        stmt = stmt.where(SysMenu.frontend == frontend)
-    rows = db.execute(stmt).all()
-    children_of: dict[int, list[int]] = {}
-    allowed_ids: set[int] = set()
-    for r in rows:
-        pid = int(r.parent_id or 0)
-        mid = int(r.id)
-        allowed_ids.add(mid)
-        children_of.setdefault(pid, []).append(mid)
-
-    seed_ids = [mid for mid in seed_ids if mid in allowed_ids]
-    if not seed_ids:
-        return ok(True)
-
-    seen: set[int] = set()
-
-    def collect(mid: int) -> None:
-        if mid in seen:
-            return
-        seen.add(mid)
-        for ch in children_of.get(mid, []):
-            collect(ch)
-
-    for mid in seed_ids:
-        collect(mid)
-
-    all_ids = sorted(seen)
-    if not all_ids:
-        return ok(True)
-
-    try:
-        db.execute(delete(SysRoleMenu).where(SysRoleMenu.menu_id.in_(all_ids)))
-        stmt = delete(SysMenu).where(SysMenu.id.in_(all_ids))
-        if frontend is not None:
-            stmt = stmt.where(SysMenu.frontend == frontend)
-        db.execute(stmt)
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "删除菜单失败")
-
-    return ok(True)
+    return menu_service.delete_menu_tree(db=db, ids=ids, frontend=frontend)
 
 
 @router.delete("/system/menu/cache")

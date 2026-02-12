@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from starlette.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from app.http.response import fail
 from app.runtime import token_service
@@ -39,10 +39,7 @@ class AuthContextMiddleware(BaseHTTPMiddleware):
             return True
 
         # 兼容可能存在的注册/刷新端点（当前实现可能未启用）
-        if path in {"/auth/signup", "/auth/register", "/auth/refresh"}:
-            return True
-
-        return False
+        return path in {"/auth/signup", "/auth/register", "/auth/refresh"}
 
     async def dispatch(self, request: Request, call_next):
         authz = (request.headers.get("Authorization") or "").strip()

@@ -139,10 +139,7 @@ def _seed_react_menu(conn: Connection, *, force: bool) -> None:
         pid = _pid(item.get("parentId") or "")
         title = str(item.get("name") or "").strip() or sid
         code = str(item.get("code") or "").strip() or sid
-        if "type" in item and item.get("type") is not None:
-            typ = int(item.get("type"))
-        else:
-            typ = 2
+        typ = int(item.get("type")) if "type" in item and item.get("type") is not None else 2
 
         path = str(item.get("path") or "").strip() or None
         component = str(item.get("component") or "").strip() or None

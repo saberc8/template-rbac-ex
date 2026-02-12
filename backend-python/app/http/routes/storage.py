@@ -6,15 +6,16 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, Request
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, aliased
 
-from app.core.id import next_id
 from app.db.models.sys_storage import SysStorage
 from app.db.models.sys_user import SysUser
 from app.http.deps import get_db, require_user_id
 from app.http.response import fail, ok
 from app.http.utils import format_time
+from app.http.validators import parse_int, parse_positive_int_list, require_dict_body, require_non_empty_str
+from app.services import storage_service
 
 router = APIRouter()
 
@@ -197,21 +198,26 @@ def create_storage(
     db: Session = Depends(get_db),
     user_id: int = Depends(require_user_id),
 ):
-    if not isinstance(body, dict):
-        return fail("400", "请求参数不正确")
+    body, err = require_dict_body(body)
+    if err is not None:
+        return err
 
-    name = str(body.get("name") or "").strip()
-    code = str(body.get("code") or "").strip()
-    if name == "" or code == "":
-        return fail("400", "名称和编码不能为空")
+    name, err = require_non_empty_str(body.get("name"), "名称和编码不能为空")
+    if err is not None:
+        return err
+    code, err = require_non_empty_str(body.get("code"), "名称和编码不能为空")
+    if err is not None:
+        return err
 
-    typ = int(body.get("type") or 0) or 1
-    sort_val = int(body.get("sort") or 0)
-    if sort_val <= 0:
-        sort_val = 999
-    status = int(body.get("status") or 0)
-    if status == 0:
-        status = 1
+    typ, err = parse_int(body.get("type"), "请求参数不正确", default=1)
+    if err is not None:
+        return err
+    sort_val, err = parse_int(body.get("sort"), "请求参数不正确", default=0)
+    if err is not None:
+        return err
+    status, err = parse_int(body.get("status"), "请求参数不正确", default=0)
+    if err is not None:
+        return err
 
     access_key = str(body.get("accessKey") or "").strip()
     secret_key = str(body.get("secretKey") or "").strip()
@@ -222,47 +228,23 @@ def create_storage(
     description = str(body.get("description") or "").strip()
     is_default = bool(body.get("isDefault")) if body.get("isDefault") is not None else False
 
-    if typ == 2 and len(secret_key) > 255:
-        return fail("400", "私有密钥长度不能超过 255 个字符")
-
-    if typ == 2 and secret_key == "":
-        return fail("400", "私有密钥不能为空")
-
-    exists = db.execute(select(SysStorage.id).where(SysStorage.code == code).limit(1)).first()
-    if exists is not None:
-        return fail("400", "新增失败，编码已存在")
-
-    sid = next_id()
-    if sid == 0:
-        return fail("500", "生成存储配置 ID 失败")
-    now = datetime.now()
-    try:
-        db.add(
-            SysStorage(
-                id=sid,
-                name=name,
-                code=code,
-                type=typ,
-                access_key=access_key,
-                secret_key=secret_key,
-                endpoint=endpoint,
-                region=region,
-                bucket_name=bucket_name,
-                domain=domain,
-                description=description,
-                is_default=is_default,
-                sort=sort_val,
-                status=status,
-                create_user=int(user_id),
-                create_time=now,
-            )
-        )
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "新增存储配置失败")
-
-    return ok({"id": sid})
+    return storage_service.create_storage(
+        db=db,
+        operator_user_id=int(user_id),
+        name=name or "",
+        code=code or "",
+        typ=int(typ or 0),
+        sort_val=int(sort_val or 0),
+        status=int(status or 0),
+        access_key=access_key,
+        secret_key=secret_key,
+        endpoint=endpoint,
+        region=region,
+        bucket_name=bucket_name,
+        domain=domain,
+        description=description,
+        is_default=is_default,
+    )
 
 
 @router.put("/system/storage/{id}")
@@ -274,23 +256,26 @@ def update_storage(
 ):
     if id <= 0:
         return fail("400", "ID 参数不正确")
-    if not isinstance(body, dict):
-        return fail("400", "请求参数不正确")
+    body, err = require_dict_body(body)
+    if err is not None:
+        return err
 
-    name = str(body.get("name") or "").strip()
-    if name == "":
-        return fail("400", "名称不能为空")
-    code = str(body.get("code") or "").strip()
-    if code == "":
-        return fail("400", "名称和编码不能为空")
+    name, err = require_non_empty_str(body.get("name"), "名称不能为空")
+    if err is not None:
+        return err
+    code, err = require_non_empty_str(body.get("code"), "名称和编码不能为空")
+    if err is not None:
+        return err
 
-    typ = int(body.get("type") or 0) or 1
-    sort_val = int(body.get("sort") or 0)
-    if sort_val <= 0:
-        sort_val = 999
-    status = int(body.get("status") or 0)
-    if status == 0:
-        status = 1
+    typ, err = parse_int(body.get("type"), "请求参数不正确", default=1)
+    if err is not None:
+        return err
+    sort_val, err = parse_int(body.get("sort"), "请求参数不正确", default=0)
+    if err is not None:
+        return err
+    status, err = parse_int(body.get("status"), "请求参数不正确", default=0)
+    if err is not None:
+        return err
 
     access_key = str(body.get("accessKey") or "").strip()
     endpoint = str(body.get("endpoint") or "").strip()
@@ -301,54 +286,29 @@ def update_storage(
 
     secret_key_present = "secretKey" in body
     secret_key_val = str(body.get("secretKey") or "").strip() if secret_key_present else None
-    if secret_key_present and typ == 2 and secret_key_val is not None and len(secret_key_val) > 255:
-        return fail("400", "私有密钥长度不能超过 255 个字符")
+    is_default_present = "isDefault" in body
+    is_default = bool(body.get("isDefault")) if is_default_present else False
 
-    exclude = int(id)
-    exists = db.execute(
-        select(SysStorage.id).where(SysStorage.code == code).where(SysStorage.id != exclude).limit(1)
-    ).first()
-    if exists is not None:
-        return fail("400", "修改失败，编码已存在")
-
-    old = db.execute(select(SysStorage).where(SysStorage.id == int(id)).limit(1)).scalar_one_or_none()
-    if old is None:
-        return fail("404", "存储配置不存在")
-
-    secret_final = old.secret_key or ""
-    if secret_key_present and secret_key_val is not None:
-        secret_final = secret_key_val
-
-    if typ == 2 and str(secret_final).strip() == "":
-        return fail("400", "私有密钥不能为空")
-
-    now = datetime.now()
-    values = {
-        "name": name,
-        "code": code,
-        "type": typ,
-        "access_key": access_key,
-        "secret_key": secret_final,
-        "endpoint": endpoint,
-        "region": region,
-        "bucket_name": bucket_name,
-        "domain": domain,
-        "description": description,
-        "sort": sort_val,
-        "status": status,
-        "update_user": int(user_id),
-        "update_time": now,
-    }
-    if "isDefault" in body:
-        values["is_default"] = bool(body.get("isDefault"))
-
-    try:
-        db.execute(update(SysStorage).where(SysStorage.id == int(id)).values(**values))
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "修改存储配置失败")
-    return ok(True)
+    return storage_service.update_storage(
+        db=db,
+        operator_user_id=int(user_id),
+        storage_id=int(id),
+        name=name or "",
+        code=code or "",
+        typ=int(typ or 0),
+        sort_val=int(sort_val or 0),
+        status=int(status or 0),
+        access_key=access_key,
+        endpoint=endpoint,
+        region=region,
+        bucket_name=bucket_name,
+        domain=domain,
+        description=description,
+        secret_key_present=secret_key_present,
+        secret_key_val=secret_key_val,
+        is_default_present=is_default_present,
+        is_default=is_default,
+    )
 
 
 @router.delete("/system/storage")
@@ -357,33 +317,15 @@ def delete_storage(
     db: Session = Depends(get_db),
     _user_id: int = Depends(require_user_id),
 ):
-    if not isinstance(body, dict) or not isinstance(body.get("ids"), list) or len(body["ids"]) == 0:
-        return fail("400", "ID 列表不能为空")
-    ids = []
-    for v in body["ids"]:
-        try:
-            iv = int(v)
-            if iv > 0:
-                ids.append(iv)
-        except Exception:
-            continue
-    ids = list(dict.fromkeys(ids))
-    if not ids:
-        return fail("400", "ID 列表不能为空")
+    body, err = require_dict_body(body)
+    if err is not None:
+        return err
 
-    default_hit = db.execute(
-        select(SysStorage.id).where(SysStorage.id.in_(ids)).where(SysStorage.is_default.is_(True)).limit(1)
-    ).first()
-    if default_hit is not None:
-        return fail("400", "不允许删除默认存储")
+    ids, err = parse_positive_int_list(body.get("ids"), "ID 列表不能为空")
+    if err is not None:
+        return err
 
-    try:
-        db.execute(delete(SysStorage).where(SysStorage.id.in_(ids)))
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "删除存储配置失败")
-    return ok(True)
+    return storage_service.delete_storage(db=db, ids=ids)
 
 
 @router.put("/system/storage/{id}/status")
@@ -395,30 +337,20 @@ def update_storage_status(
 ):
     if id <= 0:
         return fail("400", "ID 参数不正确")
-    if not isinstance(body, dict):
-        return fail("400", "请求参数不正确")
-    status = int(body.get("status") or 0)
-    if status not in (1, 2):
-        return fail("400", "状态参数不正确")
+    body, err = require_dict_body(body)
+    if err is not None:
+        return err
 
-    item = db.execute(select(SysStorage.is_default).where(SysStorage.id == int(id)).limit(1)).first()
-    if item is None:
-        return fail("404", "存储配置不存在")
-    if bool(item[0]) and status != 1:
-        return fail("400", "不允许禁用默认存储")
+    status, err = parse_int(body.get("status"), "请求参数不正确", default=0)
+    if err is not None:
+        return err
 
-    now = datetime.now()
-    try:
-        db.execute(
-            update(SysStorage)
-            .where(SysStorage.id == int(id))
-            .values(status=status, update_user=int(user_id), update_time=now)
-        )
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "修改存储状态失败")
-    return ok(True)
+    return storage_service.update_storage_status(
+        db=db,
+        operator_user_id=int(user_id),
+        storage_id=int(id),
+        status=int(status or 0),
+    )
 
 
 @router.put("/system/storage/{id}/default")
@@ -427,23 +359,4 @@ def set_default_storage(
     db: Session = Depends(get_db),
     user_id: int = Depends(require_user_id),
 ):
-    if id <= 0:
-        return fail("400", "ID 参数不正确")
-
-    exists = db.execute(select(SysStorage.id).where(SysStorage.id == int(id)).limit(1)).first()
-    if exists is None:
-        return fail("404", "存储配置不存在")
-
-    now = datetime.now()
-    try:
-        db.execute(update(SysStorage).values(is_default=False))
-        db.execute(
-            update(SysStorage)
-            .where(SysStorage.id == int(id))
-            .values(is_default=True, update_user=int(user_id), update_time=now)
-        )
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "设置默认存储失败")
-    return ok(True)
+    return storage_service.set_default_storage(db=db, operator_user_id=int(user_id), storage_id=int(id))

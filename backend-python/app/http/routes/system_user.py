@@ -8,10 +8,9 @@ from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, File, Request, UploadFile
 from fastapi.responses import Response
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, aliased
 
-from app.core.id import next_id
 from app.db.models.sys_dept import SysDept
 from app.db.models.sys_role import SysRole
 from app.db.models.sys_user import SysUser
@@ -19,22 +18,23 @@ from app.db.models.sys_user_role import SysUserRole
 from app.http.deps import get_db, require_user_id
 from app.http.response import fail, ok
 from app.http.utils import format_time
-from app.security.password import hash_password
+from app.http.validators import parse_int, parse_positive_int_list, require_dict_body, require_non_empty_str
+from app.services import system_user_service
 
 router = APIRouter()
 
 
-def _validate_password(raw_pwd: str) -> tuple[Optional[str], Optional[tuple[str, str]]]:
-    raw_pwd = (raw_pwd or "").strip()
-    if raw_pwd == "":
-        return None, ("400", "密码不能为空")
-    if len(raw_pwd) < 8 or len(raw_pwd) > 32:
-        return None, ("400", "密码长度为 8-32 个字符，至少包含字母和数字")
-    has_letter = any(("a" <= ch <= "z") or ("A" <= ch <= "Z") for ch in raw_pwd)
-    has_digit = any("0" <= ch <= "9" for ch in raw_pwd)
-    if not has_letter or not has_digit:
-        return None, ("400", "密码长度为 8-32 个字符，至少包含字母和数字")
-    return raw_pwd, None
+def _parse_role_ids(v: object) -> list[int]:
+    raw = v if isinstance(v, list) else []
+    ids: list[int] = []
+    for item in raw:
+        try:
+            iv = int(item)
+        except Exception:
+            continue
+        if iv > 0:
+            ids.append(iv)
+    return list(dict.fromkeys(ids))
 
 
 def _role_map_for_users(db: Session, user_ids: list[int]) -> dict[int, tuple[list[int], list[str]]]:
@@ -370,82 +370,51 @@ def create_user(
     db: Session = Depends(get_db),
     user_id: int = Depends(require_user_id),
 ):
-    if not isinstance(body, dict):
-        return fail("400", "请求参数不正确")
-
-    username = str(body.get("username") or "").strip()
-    nickname = str(body.get("nickname") or "").strip()
-    password = str(body.get("password") or "").strip()
-    gender = int(body.get("gender") or 0)
-    status = int(body.get("status") or 0)
-    dept_id = int(body.get("deptId") or 0)
-    role_ids_raw = body.get("roleIds") if isinstance(body.get("roleIds"), list) else []
-    role_ids = []
-    for v in role_ids_raw:
-        try:
-            iv = int(v)
-            if iv > 0:
-                role_ids.append(iv)
-        except Exception:
-            continue
-    role_ids = list(dict.fromkeys(role_ids))
-
-    if username == "" or nickname == "":
-        return fail("400", "用户名和昵称不能为空")
-    if dept_id == 0:
-        return fail("400", "所属部门不能为空")
-    if status == 0:
-        status = 1
-    if password == "":
-        return fail("400", "密码不能为空")
-
-    raw_pwd, err = _validate_password(password)
+    body, err = require_dict_body(body)
     if err is not None:
-        return fail(err[0], err[1])
+        return err
 
-    try:
-        encoded_pwd = hash_password(raw_pwd or "")
-    except Exception:
-        return fail("500", "密码加密失败")
+    username, err = require_non_empty_str(body.get("username"), "用户名和昵称不能为空")
+    if err is not None:
+        return err
+    nickname, err = require_non_empty_str(body.get("nickname"), "用户名和昵称不能为空")
+    if err is not None:
+        return err
+    password, err = require_non_empty_str(body.get("password"), "密码不能为空")
+    if err is not None:
+        return err
 
-    uid = next_id()
-    if uid <= 0:
-        return fail("500", "新增用户失败")
+    gender, err = parse_int(body.get("gender"), "请求参数不正确", default=0)
+    if err is not None:
+        return err
+    status, err = parse_int(body.get("status"), "请求参数不正确", default=0)
+    if err is not None:
+        return err
+    dept_id, err = parse_int(body.get("deptId"), "请求参数不正确", default=0)
+    if err is not None:
+        return err
 
-    now = datetime.now()
+    role_ids = _parse_role_ids(body.get("roleIds"))
     email = str(body.get("email") or "").strip()
     phone = str(body.get("phone") or "").strip()
     avatar = str(body.get("avatar") or "").strip()
     description = str(body.get("description") or "").strip()
 
-    try:
-        db.add(
-            SysUser(
-                id=uid,
-                username=username,
-                nickname=nickname,
-                password=encoded_pwd,
-                gender=gender,
-                email=email or None,
-                phone=phone or None,
-                avatar=avatar or None,
-                description=description or None,
-                status=status,
-                is_system=False,
-                pwd_reset_time=now,
-                dept_id=dept_id,
-                create_user=int(user_id),
-                create_time=now,
-            )
-        )
-        for rid in role_ids:
-            db.add(SysUserRole(id=next_id(), user_id=uid, role_id=rid))
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "新增用户失败")
-
-    return ok({"id": uid})
+    return system_user_service.create_user(
+        db=db,
+        operator_user_id=int(user_id),
+        username=username or "",
+        nickname=nickname or "",
+        password=password or "",
+        gender=int(gender or 0),
+        status=int(status or 0),
+        dept_id=int(dept_id or 0),
+        role_ids=role_ids,
+        email=email,
+        phone=phone,
+        avatar=avatar,
+        description=description,
+    )
 
 
 @router.put("/system/user/{id}")
@@ -457,65 +426,49 @@ def update_user(
 ):
     if id <= 0:
         return fail("400", "ID 参数不正确")
-    if not isinstance(body, dict):
-        return fail("400", "请求参数不正确")
 
-    username = str(body.get("username") or "").strip()
-    nickname = str(body.get("nickname") or "").strip()
-    gender = int(body.get("gender") or 0)
-    status = int(body.get("status") or 0)
-    dept_id = int(body.get("deptId") or 0)
-    role_ids_raw = body.get("roleIds") if isinstance(body.get("roleIds"), list) else []
-    role_ids = []
-    for v in role_ids_raw:
-        try:
-            iv = int(v)
-            if iv > 0:
-                role_ids.append(iv)
-        except Exception:
-            continue
-    role_ids = list(dict.fromkeys(role_ids))
+    body, err = require_dict_body(body)
+    if err is not None:
+        return err
 
-    if username == "" or nickname == "":
-        return fail("400", "用户名和昵称不能为空")
-    if dept_id == 0:
-        return fail("400", "所属部门不能为空")
-    if status == 0:
-        status = 1
+    username, err = require_non_empty_str(body.get("username"), "用户名和昵称不能为空")
+    if err is not None:
+        return err
+    nickname, err = require_non_empty_str(body.get("nickname"), "用户名和昵称不能为空")
+    if err is not None:
+        return err
 
+    gender, err = parse_int(body.get("gender"), "请求参数不正确", default=0)
+    if err is not None:
+        return err
+    status, err = parse_int(body.get("status"), "请求参数不正确", default=0)
+    if err is not None:
+        return err
+    dept_id, err = parse_int(body.get("deptId"), "请求参数不正确", default=0)
+    if err is not None:
+        return err
+
+    role_ids = _parse_role_ids(body.get("roleIds"))
     email = str(body.get("email") or "").strip()
     phone = str(body.get("phone") or "").strip()
     avatar = str(body.get("avatar") or "").strip()
     description = str(body.get("description") or "").strip()
 
-    now = datetime.now()
-    try:
-        db.execute(
-            update(SysUser)
-            .where(SysUser.id == int(id))
-            .values(
-                username=username,
-                nickname=nickname,
-                gender=gender,
-                email=email or None,
-                phone=phone or None,
-                avatar=avatar or None,
-                description=description or None,
-                status=status,
-                dept_id=dept_id,
-                update_user=int(user_id),
-                update_time=now,
-            )
-        )
-        db.execute(delete(SysUserRole).where(SysUserRole.user_id == int(id)))
-        for rid in role_ids:
-            db.add(SysUserRole(id=next_id(), user_id=int(id), role_id=rid))
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "修改用户失败")
-
-    return ok(True)
+    return system_user_service.update_user(
+        db=db,
+        operator_user_id=int(user_id),
+        user_id=int(id),
+        username=username or "",
+        nickname=nickname or "",
+        gender=int(gender or 0),
+        status=int(status or 0),
+        dept_id=int(dept_id or 0),
+        role_ids=role_ids,
+        email=email,
+        phone=phone,
+        avatar=avatar,
+        description=description,
+    )
 
 
 @router.delete("/system/user")
@@ -524,34 +477,15 @@ def delete_user(
     db: Session = Depends(get_db),
     _user_id: int = Depends(require_user_id),
 ):
-    if not isinstance(body, dict) or not isinstance(body.get("ids"), list) or len(body["ids"]) == 0:
-        return fail("400", "ID 列表不能为空")
-    ids = []
-    for v in body["ids"]:
-        try:
-            iv = int(v)
-            if iv > 0:
-                ids.append(iv)
-        except Exception:
-            continue
-    ids = list(dict.fromkeys(ids))
-    if not ids:
-        return fail("400", "ID 列表不能为空")
+    body, err = require_dict_body(body)
+    if err is not None:
+        return err
 
-    try:
-        for uid in ids:
-            meta = db.execute(select(SysUser.is_system).where(SysUser.id == uid).limit(1)).first()
-            if meta is None:
-                continue
-            if bool(meta[0]):
-                continue
-            db.execute(delete(SysUserRole).where(SysUserRole.user_id == uid))
-            db.execute(delete(SysUser).where(SysUser.id == uid))
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "删除用户失败")
-    return ok(True)
+    ids, err = parse_positive_int_list(body.get("ids"), "ID 列表不能为空")
+    if err is not None:
+        return err
+
+    return system_user_service.delete_users(db=db, ids=ids)
 
 
 @router.patch("/system/user/{id}/password")
@@ -563,30 +497,21 @@ def reset_password(
 ):
     if id <= 0:
         return fail("400", "ID 参数不正确")
-    if not isinstance(body, dict):
-        return fail("400", "请求参数不正确")
 
-    new_password = str(body.get("newPassword") or "").strip()
-    raw_pwd, err = _validate_password(new_password)
+    body, err = require_dict_body(body)
     if err is not None:
-        return fail(err[0], err[1])
-    try:
-        encoded = hash_password(raw_pwd or "")
-    except Exception:
-        return fail("500", "密码加密失败")
+        return err
 
-    now = datetime.now()
-    try:
-        db.execute(
-            update(SysUser)
-            .where(SysUser.id == int(id))
-            .values(password=encoded, pwd_reset_time=now, update_user=int(user_id), update_time=now)
-        )
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "重置密码失败")
-    return ok(True)
+    new_password, err = require_non_empty_str(body.get("newPassword"), "密码不能为空")
+    if err is not None:
+        return err
+
+    return system_user_service.reset_password(
+        db=db,
+        operator_user_id=int(user_id),
+        user_id=int(id),
+        new_password=new_password or "",
+    )
 
 
 @router.patch("/system/user/{id}/role")
@@ -598,28 +523,12 @@ def update_user_role(
 ):
     if id <= 0:
         return fail("400", "ID 参数不正确")
-    if not isinstance(body, dict):
-        return fail("400", "请求参数不正确")
-    role_ids_raw = body.get("roleIds") if isinstance(body.get("roleIds"), list) else []
-    role_ids = []
-    for v in role_ids_raw:
-        try:
-            iv = int(v)
-            if iv > 0:
-                role_ids.append(iv)
-        except Exception:
-            continue
-    role_ids = list(dict.fromkeys(role_ids))
+    body, err = require_dict_body(body)
+    if err is not None:
+        return err
 
-    try:
-        db.execute(delete(SysUserRole).where(SysUserRole.user_id == int(id)))
-        for rid in role_ids:
-            db.add(SysUserRole(id=next_id(), user_id=int(id), role_id=rid))
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "分配角色失败")
-    return ok(True)
+    role_ids = _parse_role_ids(body.get("roleIds"))
+    return system_user_service.update_user_role(db=db, user_id=int(id), role_ids=role_ids)
 
 
 @router.get("/system/user/export")
@@ -667,7 +576,8 @@ def parse_import_user(file: Optional[UploadFile] = File(default=None)):
 
 @router.post("/system/user/import")
 def import_user(body: Optional[dict] = Body(default=None)):
-    if not isinstance(body, dict):
-        return fail("400", "请求参数不正确")
+    body, err = require_dict_body(body)
+    if err is not None:
+        return err
     _ = body
     return ok({"totalRows": 0, "insertRows": 0, "updateRows": 0})

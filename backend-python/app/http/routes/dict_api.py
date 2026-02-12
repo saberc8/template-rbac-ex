@@ -6,16 +6,17 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, Request
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, aliased
 
-from app.core.id import next_id
 from app.db.models.sys_dict import SysDict
 from app.db.models.sys_dict_item import SysDictItem
 from app.db.models.sys_user import SysUser
 from app.http.deps import get_db, require_user_id
 from app.http.response import fail, ok
 from app.http.utils import format_time
+from app.http.validators import parse_int, parse_positive_int_list, require_dict_body, require_non_empty_str
+from app.services import dict_service
 
 router = APIRouter()
 
@@ -112,42 +113,19 @@ def create_dict(
     db: Session = Depends(get_db),
     user_id: int = Depends(require_user_id),
 ):
-    if not isinstance(body, dict):
-        return fail("400", "请求参数不正确")
-    name = str(body.get("name") or "").strip()
-    code = str(body.get("code") or "").strip()
+    body, err = require_dict_body(body)
+    if err is not None:
+        return err
+    name, err = require_non_empty_str(body.get("name"), "名称和编码不能为空")
+    if err is not None:
+        return err
+    code, err = require_non_empty_str(body.get("code"), "名称和编码不能为空")
+    if err is not None:
+        return err
     description = str(body.get("description") or "").strip()
-    if name == "" or code == "":
-        return fail("400", "名称和编码不能为空")
-
-    exists = db.execute(select(SysDict.id).where(SysDict.name == name).limit(1)).first()
-    if exists is not None:
-        return fail("400", f"新增失败，[{name}] 已存在")
-    exists = db.execute(select(SysDict.id).where(SysDict.code == code).limit(1)).first()
-    if exists is not None:
-        return fail("400", f"新增失败，[{code}] 已存在")
-
-    did = next_id()
-    if did <= 0:
-        return fail("500", "新增字典失败")
-    now = datetime.now()
-    try:
-        db.add(
-            SysDict(
-                id=did,
-                name=name,
-                code=code,
-                description=description,
-                is_system=False,
-                create_user=int(user_id),
-                create_time=now,
-            )
-        )
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "新增字典失败")
-    return ok({"id": did})
+    return dict_service.create_dict(
+        db=db, user_id=int(user_id), name=name or "", code=code or "", description=description
+    )
 
 
 @router.delete("/system/dict")
@@ -156,27 +134,13 @@ def delete_dict(
     db: Session = Depends(get_db),
     _user_id: int = Depends(require_user_id),
 ):
-    if not isinstance(body, dict) or not isinstance(body.get("ids"), list) or len(body["ids"]) == 0:
-        return fail("400", "ID 列表不能为空")
-    ids = []
-    for v in body["ids"]:
-        try:
-            iv = int(v)
-            if iv > 0:
-                ids.append(iv)
-        except Exception:
-            continue
-    if not ids:
-        return fail("400", "ID 列表不能为空")
-
-    try:
-        db.execute(delete(SysDictItem).where(SysDictItem.dict_id.in_(ids)))
-        db.execute(delete(SysDict).where(SysDict.id.in_(ids)))
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "删除字典失败")
-    return ok(True)
+    body, err = require_dict_body(body)
+    if err is not None:
+        return err
+    ids, err = parse_positive_int_list(body.get("ids"), "ID 列表不能为空")
+    if err is not None:
+        return err
+    return dict_service.delete_dicts(db=db, ids=ids)
 
 
 @router.delete("/system/dict/cache/{code}")
@@ -349,48 +313,36 @@ def create_dict_item(
     db: Session = Depends(get_db),
     user_id: int = Depends(require_user_id),
 ):
-    if not isinstance(body, dict):
-        return fail("400", "请求参数不正确")
+    body, err = require_dict_body(body)
+    if err is not None:
+        return err
 
     label = str(body.get("label") or "").strip()
     value = str(body.get("value") or "").strip()
     color = str(body.get("color") or "").strip()
     description = str(body.get("description") or "").strip()
-    sort_val = int(body.get("sort") or 0)
-    status = int(body.get("status") or 0)
-    dict_id = int(body.get("dictId") or 0)
 
-    if label == "" or value == "" or dict_id == 0:
-        return fail("400", "标签、值和字典 ID 不能为空")
-    if sort_val <= 0:
-        sort_val = 999
-    if status == 0:
-        status = 1
+    sort_val, err = parse_int(body.get("sort"), "请求参数不正确", default=0)
+    if err is not None:
+        return err
+    status, err = parse_int(body.get("status"), "请求参数不正确", default=0)
+    if err is not None:
+        return err
+    dict_id, err = parse_int(body.get("dictId"), "请求参数不正确", default=0)
+    if err is not None:
+        return err
 
-    iid = next_id()
-    if iid <= 0:
-        return fail("500", "新增字典项失败")
-    now = datetime.now()
-    try:
-        db.add(
-            SysDictItem(
-                id=iid,
-                label=label,
-                value=value,
-                color=color or None,
-                sort=sort_val,
-                description=description,
-                status=status,
-                dict_id=dict_id,
-                create_user=int(user_id),
-                create_time=now,
-            )
-        )
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "新增字典项失败")
-    return ok({"id": iid})
+    return dict_service.create_dict_item(
+        db=db,
+        user_id=int(user_id),
+        label=label,
+        value=value,
+        color=color,
+        description=description,
+        sort_val=int(sort_val or 0),
+        status=int(status or 0),
+        dict_id=int(dict_id or 0),
+    )
 
 
 @router.put("/system/dict/item/{id}")
@@ -400,45 +352,35 @@ def update_dict_item(
     db: Session = Depends(get_db),
     user_id: int = Depends(require_user_id),
 ):
+    body, err = require_dict_body(body)
+    if err is not None:
+        return err
     if id <= 0:
         return fail("400", "ID 参数不正确")
-    if not isinstance(body, dict):
-        return fail("400", "请求参数不正确")
 
     label = str(body.get("label") or "").strip()
     value = str(body.get("value") or "").strip()
     color = str(body.get("color") or "").strip()
     description = str(body.get("description") or "").strip()
-    sort_val = int(body.get("sort") or 0)
-    status = int(body.get("status") or 0)
-    if label == "" or value == "":
-        return fail("400", "标签和值不能为空")
-    if sort_val <= 0:
-        sort_val = 999
-    if status == 0:
-        status = 1
 
-    now = datetime.now()
-    try:
-        db.execute(
-            update(SysDictItem)
-            .where(SysDictItem.id == int(id))
-            .values(
-                label=label,
-                value=value,
-                color=color,
-                sort=sort_val,
-                description=description,
-                status=status,
-                update_user=int(user_id),
-                update_time=now,
-            )
-        )
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "修改字典项失败")
-    return ok(True)
+    sort_val, err = parse_int(body.get("sort"), "请求参数不正确", default=0)
+    if err is not None:
+        return err
+    status, err = parse_int(body.get("status"), "请求参数不正确", default=0)
+    if err is not None:
+        return err
+
+    return dict_service.update_dict_item(
+        db=db,
+        user_id=int(user_id),
+        item_id=int(id),
+        label=label,
+        value=value,
+        color=color,
+        description=description,
+        sort_val=int(sort_val or 0),
+        status=int(status or 0),
+    )
 
 
 @router.delete("/system/dict/item")
@@ -447,26 +389,13 @@ def delete_dict_item(
     db: Session = Depends(get_db),
     _user_id: int = Depends(require_user_id),
 ):
-    if not isinstance(body, dict) or not isinstance(body.get("ids"), list) or len(body["ids"]) == 0:
-        return fail("400", "ID 列表不能为空")
-    ids: list[int] = []
-    for v in body["ids"]:
-        try:
-            iv = int(v)
-            if iv > 0:
-                ids.append(iv)
-        except Exception:
-            continue
-    if not ids:
-        return fail("400", "ID 列表不能为空")
-
-    try:
-        db.execute(delete(SysDictItem).where(SysDictItem.id.in_(ids)))
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "删除字典项失败")
-    return ok(True)
+    body, err = require_dict_body(body)
+    if err is not None:
+        return err
+    ids, err = parse_positive_int_list(body.get("ids"), "ID 列表不能为空")
+    if err is not None:
+        return err
+    return dict_service.delete_dict_items(db=db, ids=ids)
 
 
 @router.get("/system/dict/{id}")
@@ -522,22 +451,17 @@ def update_dict(
 ):
     if id <= 0:
         return fail("400", "ID 参数不正确")
-    if not isinstance(body, dict):
-        return fail("400", "请求参数不正确")
-    name = str(body.get("name") or "").strip()
+    body, err = require_dict_body(body)
+    if err is not None:
+        return err
+    name, err = require_non_empty_str(body.get("name"), "名称不能为空")
+    if err is not None:
+        return err
     description = str(body.get("description") or "").strip()
-    if name == "":
-        return fail("400", "名称不能为空")
-
-    now = datetime.now()
-    try:
-        db.execute(
-            update(SysDict)
-            .where(SysDict.id == int(id))
-            .values(name=name, description=description, update_user=int(user_id), update_time=now)
-        )
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "修改字典失败")
-    return ok(True)
+    return dict_service.update_dict(
+        db=db,
+        user_id=int(user_id),
+        dict_id=int(id),
+        name=name or "",
+        description=description,
+    )

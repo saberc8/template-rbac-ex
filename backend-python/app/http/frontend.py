@@ -43,4 +43,3 @@ def active_frontend(db: Session, request: Request | None = None) -> Optional[str
         return by_header
     v = str(runtime_settings.admin_frontend_type or "vue3").strip().lower()
     return v if v in {"vue3", "react"} else "vue3"
-

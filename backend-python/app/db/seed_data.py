@@ -853,57 +853,57 @@ WHERE NOT EXISTS (SELECT 1 FROM sys_option WHERE id = 27);
     """,
     """
 
-	INSERT INTO sys_storage (
-	    id, name, code, type, access_key, secret_key, endpoint,
-	    bucket_name, domain, description, is_default, sort, status,
-	    create_user, create_time
-	)
-	SELECT 1,
-	       '开发环境',
-	       'local_dev',
-	       1,
-	       NULL,
-	       NULL,
-	       NULL,
-	       './data/file/',
-	       '/file/',
-	       '本地存储',
-	       TRUE,
-	       1,
-	       1,
-	       1,
-	       NOW()
-	WHERE NOT EXISTS (SELECT 1 FROM sys_storage WHERE id = 1);
-	    """,
-	    """
+    INSERT INTO sys_storage (
+        id, name, code, type, access_key, secret_key, endpoint,
+        bucket_name, domain, description, is_default, sort, status,
+        create_user, create_time
+    )
+    SELECT 1,
+           '开发环境',
+           'local_dev',
+           1,
+           NULL,
+           NULL,
+           NULL,
+           './data/file/',
+           '/file/',
+           '本地存储',
+           TRUE,
+           1,
+           1,
+           1,
+           NOW()
+    WHERE NOT EXISTS (SELECT 1 FROM sys_storage WHERE id = 1);
+        """,
+    """
 
-	INSERT INTO sys_storage (
-	    id, name, code, type, access_key, secret_key, endpoint,
-	    bucket_name, domain, description, is_default, sort, status,
-	    create_user, create_time
-	)
-	SELECT 1768650694031,
-	       'minio',
-	       'minio',
-	       2,
-	       NULL,
-	       NULL,
-	       'http://127.0.0.1:9000',
-	       'aicut',
-	       'http://127.0.0.1:9000/aicut',
-	       'MinIO（示例，默认禁用；请自行填写 access_key/secret_key）',
-	       FALSE,
-	       999,
-	       0,
-	       1,
-	       NOW()
-	WHERE NOT EXISTS (SELECT 1 FROM sys_storage WHERE code = 'minio');
-	    """,
-	    """
+    INSERT INTO sys_storage (
+        id, name, code, type, access_key, secret_key, endpoint,
+        bucket_name, domain, description, is_default, sort, status,
+        create_user, create_time
+    )
+    SELECT 1768650694031,
+           'minio',
+           'minio',
+           2,
+           NULL,
+           NULL,
+           'http://127.0.0.1:9000',
+           'aicut',
+           'http://127.0.0.1:9000/aicut',
+           'MinIO（示例，默认禁用；请自行填写 access_key/secret_key）',
+           FALSE,
+           999,
+           0,
+           1,
+           NOW()
+    WHERE NOT EXISTS (SELECT 1 FROM sys_storage WHERE code = 'minio');
+        """,
+    """
 
-	INSERT INTO sys_client (
-	    id, client_id, client_type, auth_type,
-	    active_timeout, timeout, status,
+    INSERT INTO sys_client (
+        id, client_id, client_type, auth_type,
+        active_timeout, timeout, status,
     create_user, create_time
 )
 SELECT 1,

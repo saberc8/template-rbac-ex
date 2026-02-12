@@ -2,159 +2,50 @@
 
 from __future__ import annotations
 
-import hashlib
-import os
-from datetime import datetime
-from pathlib import Path
 from typing import Optional
-from urllib.parse import urlparse
 
 from fastapi import APIRouter, Body, Depends, File, Form, Request, UploadFile
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, aliased
 
-from app.core.id import next_id
 from app.db.models.sys_file import SysFile
 from app.db.models.sys_storage import SysStorage
 from app.db.models.sys_user import SysUser
+from app.files.storage import (
+    delete_physical as _delete_physical,
+)  # noqa: F401
+from app.files.storage import (
+    join_full_path as _join_full_path,
+)
+from app.files.storage import (
+    local_root_dir as _local_root_dir,
+)
+from app.files.storage import (
+    put_to_minio as _put_to_minio,
+)
+from app.files.storage import (
+    save_to_local as _save_to_local,
+)
 from app.http.deps import get_db, require_user_id
 from app.http.response import fail, ok
 from app.http.utils import (
     build_storage_file_url,
-    detect_file_type,
-    extension_from_filename,
     format_time,
     normalize_parent_path,
 )
+from app.http.validators import parse_positive_int_list, require_dict_body, require_non_empty_str
+from app.services import file_service
 
 router = APIRouter()
 
-
-def _local_root_dir(storage: Optional[SysStorage]) -> str:
-    if storage is not None and str(storage.bucket_name or "").strip():
-        return str(storage.bucket_name).strip()
-    v = (os.getenv("FILE_STORAGE_DIR") or "").strip()
-    if v:
-        return v
-    return "./data/file"
-
-
-def _join_full_path(parent_path: str, stored_name: str) -> str:
-    if parent_path == "/":
-        return "/" + stored_name
-    return parent_path + "/" + stored_name
-
-
-def _save_to_local(upload: UploadFile, root_dir: str, full_path: str) -> tuple[str, int, str]:
-    relative = full_path.lstrip("/")
-    dst = Path(root_dir) / Path(relative)
-    dst.parent.mkdir(parents=True, exist_ok=True)
-
-    h = hashlib.sha256()
-    size = 0
-    content_type = (upload.content_type or "").strip()
-
-    upload.file.seek(0)
-    with dst.open("wb") as f:
-        while True:
-            chunk = upload.file.read(1024 * 1024)
-            if not chunk:
-                break
-            f.write(chunk)
-            h.update(chunk)
-            size += len(chunk)
-    return h.hexdigest(), size, content_type
-
-
-def _minio_client(storage: SysStorage):
-    from minio import Minio
-
-    endpoint = str(storage.endpoint or "").strip()
-    access_key = str(storage.access_key or "").strip()
-    secret_key = str(storage.secret_key or "").strip()
-    if endpoint == "" or access_key == "" or secret_key == "":
-        raise ValueError("对象存储配置不完整")
-
-    secure = False
-    if endpoint.startswith("http://") or endpoint.startswith("https://"):
-        u = urlparse(endpoint)
-        secure = u.scheme == "https"
-        endpoint = u.netloc
-
-    region = str(storage.region or "").strip() or None
-    return Minio(endpoint, access_key=access_key, secret_key=secret_key, secure=secure, region=region)
-
-
-class _HashingReader:
-    def __init__(self, fp, hasher):
-        self._fp = fp
-        self._hasher = hasher
-
-    def read(self, n: int = -1) -> bytes:
-        b = self._fp.read(n)
-        if b:
-            self._hasher.update(b)
-        return b
-
-
-def _put_to_minio(upload: UploadFile, storage: SysStorage, full_path: str) -> tuple[str, int, str]:
-    client = _minio_client(storage)
-    bucket = str(storage.bucket_name or "").strip()
-    if bucket == "":
-        raise ValueError("对象存储配置不完整")
-
-    content_type = (upload.content_type or "").strip()
-    object_name = full_path.lstrip("/")
-
-    upload.file.seek(0, os.SEEK_END)
-    size = int(upload.file.tell() or 0)
-    upload.file.seek(0)
-
-    if not client.bucket_exists(bucket):
-        region = str(storage.region or "").strip()
-        if region:
-            client.make_bucket(bucket, location=region)
-        else:
-            client.make_bucket(bucket)
-
-    h = hashlib.sha256()
-    reader = _HashingReader(upload.file, h)
-    client.put_object(bucket, object_name, reader, length=size, content_type=content_type or None)
-
-    return h.hexdigest(), size, content_type
-
-
-def _delete_from_local(storage: Optional[SysStorage], full_path: str) -> None:
-    full_path = (full_path or "").strip()
-    if full_path == "":
-        return
-    root_dir = _local_root_dir(storage)
-    relative = full_path.lstrip("/")
-    abs_path = Path(root_dir) / Path(relative)
-    import contextlib
-
-    with contextlib.suppress(Exception):
-        abs_path.unlink()
-
-
-def _delete_from_minio(storage: SysStorage, full_path: str) -> None:
-    full_path = (full_path or "").strip()
-    if full_path == "":
-        return
-    try:
-        client = _minio_client(storage)
-        bucket = str(storage.bucket_name or "").strip()
-        if bucket:
-            client.remove_object(bucket, full_path.lstrip("/"))
-    except Exception:
-        pass
-
-
-def _delete_physical(storage: Optional[SysStorage], full_path: str) -> None:
-    if storage is not None and int(storage.type or 0) == 2:
-        _delete_from_minio(storage, full_path)
-        return
-    _delete_from_local(storage, full_path)
+# 兼容旧调用点：允许其它模块继续通过 `app.http.routes.file_api` 访问存储底座函数。
+__all__ = [
+    "_delete_physical",
+    "_join_full_path",
+    "_local_root_dir",
+    "_put_to_minio",
+    "_save_to_local",
+]
 
 
 def _get_default_storage(db: Session) -> Optional[SysStorage]:
@@ -213,59 +104,7 @@ def upload_file(
 ):
     if file is None:
         return fail("400", "文件不能为空")
-
-    parent_path_norm = normalize_parent_path(parentPath or "/")
-    storage = _get_default_storage(db)
-    if storage is None:
-        return fail("500", "获取存储配置失败")
-
-    ext = extension_from_filename(file.filename or "")
-    file_id = next_id()
-    if file_id <= 0:
-        return fail("500", "生成文件 ID 失败")
-    stored_name = f"{file_id}.{ext}" if ext else str(file_id)
-    full_path = _join_full_path(parent_path_norm, stored_name)
-
-    try:
-        if int(storage.type or 0) == 2:
-            sha, size, content_type = _put_to_minio(file, storage, full_path)
-        else:
-            sha, size, content_type = _save_to_local(file, _local_root_dir(storage), full_path)
-    except Exception:
-        return fail("500", "保存文件失败")
-
-    now = datetime.now()
-    ftype = detect_file_type(ext, content_type)
-    try:
-        db.add(
-            SysFile(
-                id=file_id,
-                name=stored_name,
-                original_name=file.filename or stored_name,
-                size=size,
-                parent_path=parent_path_norm,
-                path=full_path,
-                extension=ext,
-                content_type=content_type,
-                type=ftype,
-                sha256=sha,
-                metadata_="",
-                thumbnail_name="",
-                thumbnail_size=None,
-                thumbnail_metadata="",
-                storage_id=int(storage.id),
-                create_user=int(user_id),
-                create_time=now,
-            )
-        )
-        db.commit()
-    except Exception:
-        db.rollback()
-        _delete_physical(storage, full_path)
-        return fail("500", "保存文件记录失败")
-
-    url = build_storage_file_url(storage, full_path)
-    return ok({"id": str(file_id), "url": url, "thUrl": url, "metadata": {}})
+    return file_service.upload_file(db=db, user_id=int(user_id), file=file, parent_path=parentPath or "/")
 
 
 @router.get("/system/file")
@@ -396,60 +235,19 @@ def create_dir(
     db: Session = Depends(get_db),
     user_id: int = Depends(require_user_id),
 ):
-    if not isinstance(body, dict):
-        return fail("400", "请求参数不正确")
+    body, err = require_dict_body(body)
+    if err is not None:
+        return err
     parent_path = normalize_parent_path(body.get("parentPath") or "/")
-    original_name = str(body.get("originalName") or "").strip()
-    if original_name == "":
-        return fail("400", "名称不能为空")
-
-    exists = db.execute(
-        select(SysFile.id)
-        .where(SysFile.parent_path == parent_path)
-        .where(SysFile.name == original_name)
-        .where(SysFile.type == 0)
-        .limit(1)
-    ).first()
-    if exists is not None:
-        return fail("400", "文件夹已存在")
-
-    storage = _get_default_storage(db)
-    if storage is None:
-        return fail("500", "获取存储配置失败")
-
-    did = next_id()
-    if did <= 0:
-        return fail("500", "生成文件 ID 失败")
-
-    path = _join_full_path(parent_path, original_name)
-    now = datetime.now()
-    try:
-        db.add(
-            SysFile(
-                id=did,
-                name=original_name,
-                original_name=original_name,
-                size=None,
-                parent_path=parent_path,
-                path=path,
-                extension=None,
-                content_type=None,
-                type=0,
-                sha256="",
-                metadata_="",
-                thumbnail_name="",
-                thumbnail_size=None,
-                thumbnail_metadata="",
-                storage_id=int(storage.id),
-                create_user=int(user_id),
-                create_time=now,
-            )
-        )
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "创建文件夹失败")
-    return ok(True)
+    original_name, err = require_non_empty_str(body.get("originalName"), "名称不能为空")
+    if err is not None:
+        return err
+    return file_service.create_dir(
+        db=db,
+        user_id=int(user_id),
+        parent_path=parent_path,
+        original_name=original_name or "",
+    )
 
 
 @router.get("/system/file/dir/{id}/size")
@@ -575,24 +373,18 @@ def update_file(
 ):
     if id <= 0:
         return fail("400", "ID 参数不正确")
-    if not isinstance(body, dict):
-        return fail("400", "请求参数不正确")
-    original_name = str(body.get("originalName") or "").strip()
-    if original_name == "":
-        return fail("400", "名称不能为空")
-
-    now = datetime.now()
-    try:
-        db.execute(
-            update(SysFile)
-            .where(SysFile.id == int(id))
-            .values(original_name=original_name, update_user=int(user_id), update_time=now)
-        )
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "重命名失败")
-    return ok(True)
+    body, err = require_dict_body(body)
+    if err is not None:
+        return err
+    original_name, err = require_non_empty_str(body.get("originalName"), "名称不能为空")
+    if err is not None:
+        return err
+    return file_service.rename_file(
+        db=db,
+        user_id=int(user_id),
+        file_id=int(id),
+        original_name=original_name or "",
+    )
 
 
 @router.delete("/system/file")
@@ -601,54 +393,10 @@ def delete_file(
     db: Session = Depends(get_db),
     _user_id: int = Depends(require_user_id),
 ):
-    if not isinstance(body, dict) or not isinstance(body.get("ids"), list) or len(body["ids"]) == 0:
-        return fail("400", "ID 列表不能为空")
-    ids = []
-    for v in body["ids"]:
-        try:
-            iv = int(v)
-            if iv > 0:
-                ids.append(iv)
-        except Exception:
-            continue
-    ids = list(dict.fromkeys(ids))
-    if not ids:
-        return fail("400", "ID 列表不能为空")
-
-    targets: list[tuple[str, int]] = []
-    for fid in ids:
-        row = db.execute(
-            select(SysFile.id, SysFile.name, SysFile.path, SysFile.type, SysFile.storage_id).where(SysFile.id == fid)
-        ).first()
-        if row is None:
-            continue
-        file_type = int(row[3] or 0)
-        name = str(row[1] or "")
-        path = str(row[2] or "")
-        storage_id = int(row[4] or 0)
-
-        if file_type == 0:
-            child = db.execute(select(SysFile.id).where(SysFile.parent_path == path).limit(1)).first()
-            if child is not None:
-                return fail("400", f"文件夹 [{name}] 不为空，请先删除文件夹下的内容")
-            continue
-        targets.append((path, storage_id))
-
-    try:
-        db.execute(delete(SysFile).where(SysFile.id.in_(ids)))
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "删除文件失败")
-
-    storage_ids = sorted({sid for _, sid in targets if sid > 0})
-    storage_map: dict[int, SysStorage] = {}
-    if storage_ids:
-        storages = db.execute(select(SysStorage).where(SysStorage.id.in_(storage_ids))).scalars().all()
-        storage_map = {int(s.id): s for s in storages}
-
-    for path, sid in targets:
-        storage_cfg = storage_map.get(sid)
-        _delete_physical(storage_cfg, path)
-
-    return ok(True)
+    body, err = require_dict_body(body)
+    if err is not None:
+        return err
+    ids, err = parse_positive_int_list(body.get("ids"), "ID 列表不能为空")
+    if err is not None:
+        return err
+    return file_service.delete_files(db=db, ids=ids)

@@ -82,3 +82,8 @@ def test_react_menu_requires_auth(react_client: TestClient) -> None:
     assert data["status"] == 401
     assert isinstance(data.get("data"), list)
     assert data["data"] == []
+
+
+def test_react_user_token_expired_endpoint_contract(react_client: TestClient) -> None:
+    resp = react_client.post("/user/tokenExpired")
+    assert resp.status_code == 401

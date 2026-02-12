@@ -6,10 +6,9 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, Request
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, aliased
 
-from app.core.id import next_id
 from app.db.models.sys_dept import SysDept
 from app.db.models.sys_menu import SysMenu
 from app.db.models.sys_role import SysRole
@@ -21,6 +20,8 @@ from app.http.deps import get_db, require_user_id
 from app.http.frontend import active_frontend, has_frontend_column
 from app.http.response import fail, ok
 from app.http.utils import format_time
+from app.http.validators import parse_positive_int_list, require_dict_body, require_list
+from app.services import role_service
 
 router = APIRouter()
 
@@ -156,7 +157,9 @@ def get_role(id: int, request: Request, db: Session = Depends(get_db)):
             ).all()
         ]
     else:
-        menu_ids = [int(r[0]) for r in db.execute(select(SysRoleMenu.menu_id).where(SysRoleMenu.role_id == int(id))).all()]
+        menu_ids = [
+            int(r[0]) for r in db.execute(select(SysRoleMenu.menu_id).where(SysRoleMenu.role_id == int(id))).all()
+        ]
     dept_ids = [int(r[0]) for r in db.execute(select(SysRoleDept.dept_id).where(SysRoleDept.role_id == int(id))).all()]
 
     resp = dict(base)
@@ -177,63 +180,10 @@ def create_role(
     db: Session = Depends(get_db),
     user_id: int = Depends(require_user_id),
 ):
-    if not isinstance(body, dict):
-        return fail("400", "请求参数不正确")
-
-    name = str(body.get("name") or "").strip()
-    code = str(body.get("code") or "").strip()
-    if name == "" or code == "":
-        return fail("400", "名称和编码不能为空")
-
-    sort_val = int(body.get("sort") or 0)
-    if sort_val <= 0:
-        sort_val = 999
-    data_scope = int(body.get("dataScope") or 0)
-    if data_scope == 0:
-        data_scope = 4
-
-    dept_ids_raw = body.get("deptIds") if isinstance(body.get("deptIds"), list) else []
-    dept_ids = []
-    for v in dept_ids_raw:
-        try:
-            iv = int(v)
-            if iv > 0:
-                dept_ids.append(iv)
-        except Exception:
-            continue
-    dept_ids = list(dict.fromkeys(dept_ids))
-
-    dept_check_strict = bool(body.get("deptCheckStrictly") or False)
-
-    rid = next_id()
-    if rid <= 0:
-        return fail("500", "新增角色失败")
-    now = datetime.now()
-
-    try:
-        db.add(
-            SysRole(
-                id=rid,
-                name=name,
-                code=code,
-                data_scope=data_scope,
-                description=str(body.get("description") or "").strip() or None,
-                sort=sort_val,
-                is_system=False,
-                menu_check_strictly=True,
-                dept_check_strictly=dept_check_strict,
-                create_user=int(user_id),
-                create_time=now,
-            )
-        )
-        for did in dept_ids:
-            db.add(SysRoleDept(role_id=rid, dept_id=did))
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "新增角色失败")
-
-    return ok({"id": rid})
+    body, err = require_dict_body(body)
+    if err is not None:
+        return err
+    return role_service.create_role(db=db, user_id=user_id, body=body)
 
 
 @router.put("/system/role/{id}")
@@ -245,57 +195,10 @@ def update_role(
 ):
     if id <= 0:
         return fail("400", "ID 参数不正确")
-    if not isinstance(body, dict):
-        return fail("400", "请求参数不正确")
-
-    name = str(body.get("name") or "").strip()
-    if name == "":
-        return fail("400", "名称不能为空")
-
-    sort_val = int(body.get("sort") or 0)
-    if sort_val <= 0:
-        sort_val = 999
-    data_scope = int(body.get("dataScope") or 0)
-    if data_scope == 0:
-        data_scope = 4
-
-    dept_ids_raw = body.get("deptIds") if isinstance(body.get("deptIds"), list) else []
-    dept_ids = []
-    for v in dept_ids_raw:
-        try:
-            iv = int(v)
-            if iv > 0:
-                dept_ids.append(iv)
-        except Exception:
-            continue
-    dept_ids = list(dict.fromkeys(dept_ids))
-
-    dept_check_strict = bool(body.get("deptCheckStrictly") or False)
-    now = datetime.now()
-
-    try:
-        db.execute(
-            update(SysRole)
-            .where(SysRole.id == int(id))
-            .values(
-                name=name,
-                description=str(body.get("description") or "").strip(),
-                sort=sort_val,
-                data_scope=data_scope,
-                dept_check_strictly=dept_check_strict,
-                update_user=int(user_id),
-                update_time=now,
-            )
-        )
-        db.execute(delete(SysRoleDept).where(SysRoleDept.role_id == int(id)))
-        for did in dept_ids:
-            db.add(SysRoleDept(role_id=int(id), dept_id=did))
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "修改角色失败")
-
-    return ok(True)
+    body, err = require_dict_body(body)
+    if err is not None:
+        return err
+    return role_service.update_role(db=db, user_id=user_id, role_id=int(id), body=body)
 
 
 @router.delete("/system/role")
@@ -306,31 +209,10 @@ def delete_role(
 ):
     if not isinstance(body, dict):
         return fail("400", "ID 列表不能为空")
-    ids = body.get("ids")
-    if not isinstance(ids, list) or len(ids) == 0:
-        return fail("400", "ID 列表不能为空")
-
-    role_ids: list[int] = []
-    for v in ids:
-        try:
-            iv = int(v)
-            if iv > 0:
-                role_ids.append(iv)
-        except Exception:
-            continue
-    if not role_ids:
-        return fail("400", "ID 列表不能为空")
-
-    try:
-        db.execute(delete(SysUserRole).where(SysUserRole.role_id.in_(role_ids)))
-        db.execute(delete(SysRoleMenu).where(SysRoleMenu.role_id.in_(role_ids)))
-        db.execute(delete(SysRoleDept).where(SysRoleDept.role_id.in_(role_ids)))
-        db.execute(delete(SysRole).where(SysRole.id.in_(role_ids)))
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "删除角色失败")
-    return ok(True)
+    role_ids, err = parse_positive_int_list(body.get("ids"), "ID 列表不能为空")
+    if err is not None:
+        return err
+    return role_service.delete_roles(db=db, ids=role_ids)
 
 
 @router.put("/system/role/{id}/permission")
@@ -343,58 +225,13 @@ def update_role_permission(
 ):
     if id <= 0:
         return fail("400", "ID 参数不正确")
-    if not isinstance(body, dict):
-        return fail("400", "请求参数不正确")
 
-    menu_ids_raw = body.get("menuIds") if isinstance(body.get("menuIds"), list) else []
-    menu_ids: list[int] = []
-    for v in menu_ids_raw:
-        try:
-            iv = int(v)
-            if iv > 0:
-                menu_ids.append(iv)
-        except Exception:
-            continue
-    menu_ids = list(dict.fromkeys(menu_ids))
-
-    menu_check_strict = bool(body.get("menuCheckStrictly") or False)
-    now = datetime.now()
+    body, err = require_dict_body(body)
+    if err is not None:
+        return err
 
     frontend = active_frontend(db, request)
-    if frontend is not None:
-        # 仅允许保存当前前端数据集下的 menu_id，避免跨数据集误绑定/覆盖。
-        allowed = (
-            db.execute(select(SysMenu.id).where(SysMenu.id.in_(menu_ids)).where(SysMenu.frontend == frontend)).scalars().all()
-            if menu_ids
-            else []
-        )
-        allowed_ids = [int(x) for x in allowed if int(x) > 0]
-        menu_ids = list(dict.fromkeys(allowed_ids))
-
-    try:
-        if frontend is None:
-            db.execute(delete(SysRoleMenu).where(SysRoleMenu.role_id == int(id)))
-        else:
-            # 仅清理当前前端数据集下的 role-menu 关联，避免另一个前端权限被覆盖。
-            db.execute(
-                delete(SysRoleMenu)
-                .where(SysRoleMenu.role_id == int(id))
-                .where(SysRoleMenu.menu_id.in_(select(SysMenu.id).where(SysMenu.frontend == frontend)))
-            )
-
-        for mid in menu_ids:
-            db.add(SysRoleMenu(role_id=int(id), menu_id=mid))
-        db.execute(
-            update(SysRole)
-            .where(SysRole.id == int(id))
-            .values(menu_check_strictly=menu_check_strict, update_user=int(user_id), update_time=now)
-        )
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "保存角色菜单失败")
-
-    return ok(True)
+    return role_service.update_role_permission(db=db, user_id=user_id, role_id=int(id), frontend=frontend, body=body)
 
 
 @router.get("/system/role/{id}/user")
@@ -517,38 +354,10 @@ def assign_to_users(
     db: Session = Depends(get_db),
     _user_id: int = Depends(require_user_id),
 ):
-    if id <= 0:
-        return fail("400", "ID 参数不正确")
-    if not isinstance(body, list) or len(body) == 0:
-        return fail("400", "用户ID列表不能为空")
-
-    user_ids: list[int] = []
-    for v in body:
-        try:
-            iv = int(v)
-            if iv > 0:
-                user_ids.append(iv)
-        except Exception:
-            continue
-    user_ids = list(dict.fromkeys(user_ids))
-    if not user_ids:
-        return ok(True)
-
-    try:
-        existing = db.execute(
-            select(SysUserRole.user_id).where(SysUserRole.role_id == int(id)).where(SysUserRole.user_id.in_(user_ids))
-        ).all()
-        existing_set = {int(r[0]) for r in existing}
-        for uid in user_ids:
-            if uid in existing_set:
-                continue
-            db.add(SysUserRole(id=next_id(), user_id=uid, role_id=int(id)))
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "分配用户失败")
-
-    return ok(True)
+    body_list, err = require_list(body, "用户ID列表不能为空")
+    if err is not None:
+        return err
+    return role_service.assign_to_users(db=db, role_id=int(id), body=body_list)
 
 
 @router.delete("/system/role/user")
@@ -557,27 +366,10 @@ def unassign_from_users(
     db: Session = Depends(get_db),
     _user_id: int = Depends(require_user_id),
 ):
-    if not isinstance(body, list) or len(body) == 0:
-        return fail("400", "用户角色ID列表不能为空")
-
-    ids: list[int] = []
-    for v in body:
-        try:
-            iv = int(v)
-            if iv > 0:
-                ids.append(iv)
-        except Exception:
-            continue
-    if not ids:
-        return fail("400", "用户角色ID列表不能为空")
-
-    try:
-        db.execute(delete(SysUserRole).where(SysUserRole.id.in_(ids)))
-        db.commit()
-    except Exception:
-        db.rollback()
-        return fail("500", "取消分配失败")
-    return ok(True)
+    body_list, err = require_list(body, "用户角色ID列表不能为空")
+    if err is not None:
+        return err
+    return role_service.unassign_from_users(db=db, body=body_list)
 
 
 @router.get("/system/role/{id}/user/id")
