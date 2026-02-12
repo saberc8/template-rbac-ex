@@ -269,7 +269,7 @@ export default function UserPage() {
 	}, [deptTree]);
 
 	return (
-		<div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[280px_1fr]">
+		<div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[240px_1fr]">
 			<SystemSideCard
 				title="部门"
 				extra={undefined}

@@ -12,7 +12,7 @@ export default function FilePage() {
 
 	return (
 		<SplitLayout
-			leftWidth={280}
+			leftWidth={240}
 			className="h-full min-h-0"
 			left={
 				<div className="min-h-0">

@@ -14,7 +14,6 @@ import { useUserPermissions } from "@/store/userStore";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader } from "@/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/ui/dropdown-menu";
-import { Input } from "@/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/ui/tabs";
 import SystemSideCard from "../components/system-side-card";
 import SystemSideList from "../components/system-side-list";
@@ -30,8 +29,6 @@ export default function RolePage() {
 	const can = useCallback((code: string) => permissionCodeSet.has(code), [permissionCodeSet]);
 	const canAny = useCallback((codes: string[]) => codes.some((c) => permissionCodeSet.has(c)), [permissionCodeSet]);
 
-	const [keyword, setKeyword] = useState("");
-	const [queryKeyword, setQueryKeyword] = useState("");
 	const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
 	const [activeTab, setActiveTab] = useState<"permission" | "users">("permission");
 
@@ -112,16 +109,7 @@ export default function RolePage() {
 		}
 	};
 
-	const filteredRoles = useMemo(() => {
-		const list = data || [];
-		const q = (queryKeyword || "").trim().toLowerCase();
-		if (!q) return list;
-		return list.filter((r) => {
-			const name = String(r.name || "").toLowerCase();
-			const code = String(r.code || "").toLowerCase();
-			return name.includes(q) || code.includes(q);
-		});
-	}, [data, queryKeyword]);
+	const roles = useMemo(() => data || [], [data]);
 
 	const openCreate = useCallback(() => {
 		setFormMode("create");
@@ -170,7 +158,7 @@ export default function RolePage() {
 
 	const listItems = useMemo(() => {
 		const canShowAction = canAny(["system:role:update", "system:role:delete"]);
-		return (filteredRoles || []).map((r) => {
+		return roles.map((r) => {
 			const roleId = Number(r.id);
 			const canUpdate = can("system:role:update") && !r.disabled;
 			const canDelete = can("system:role:delete") && !r.disabled;
@@ -208,34 +196,14 @@ export default function RolePage() {
 				) : null,
 			};
 		});
-	}, [can, canAny, confirmDelete, filteredRoles, openEdit]);
+	}, [can, canAny, confirmDelete, openEdit, roles]);
 
 	return (
 		<div className="flex flex-col gap-4">
-			<div className="grid grid-cols-1 gap-4 lg:grid-cols-[280px_1fr]">
+			<div className="grid grid-cols-1 gap-4 lg:grid-cols-[240px_1fr]">
 				<SystemSideCard
 					title="角色列表"
 					extra={can("system:role:create") ? <Button onClick={openCreate}>新增</Button> : null}
-					toolbar={
-						<>
-							<Input
-								value={keyword}
-								onChange={(e) => setKeyword(e.target.value)}
-								placeholder="搜索名称/编码"
-								className="w-[240px]"
-							/>
-							<Button onClick={() => setQueryKeyword(keyword.trim())}>查询</Button>
-							<Button
-								variant="secondary"
-								onClick={() => {
-									setKeyword("");
-									setQueryKeyword("");
-								}}
-							>
-								重置
-							</Button>
-						</>
-					}
 					contentClassName="pt-0"
 				>
 					{isFetching && <div className="text-sm text-muted-foreground">Loading...</div>}

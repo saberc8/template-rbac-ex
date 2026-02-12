@@ -160,6 +160,18 @@
 			}
 		},
 		"page": {
+			"systemDictItem": {
+				"columns": {
+					"label": "标签",
+					"value": "值",
+					"color": "颜色",
+					"sort": "排序",
+					"status": "状态",
+					"description": "描述",
+					"updateTime": "更新时间",
+					"actions": "操作"
+				}
+			},
 			"systemPermission": {
 				"searchPlaceholder": "搜索 标题/路径/权限标识/组件",
 				"columns": {

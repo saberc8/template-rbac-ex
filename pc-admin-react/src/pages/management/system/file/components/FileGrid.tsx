@@ -47,7 +47,7 @@ export default function FileGrid({
 	}
 
 	return (
-		<div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+		<div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2">
 			{cards.map((it) => {
 				const isDir = Number(it.type) === 0;
 				const url = (it.url || "").trim();
@@ -107,19 +107,21 @@ export default function FileGrid({
 							</Dropdown>
 						</div>
 
-						<div className="h-32 bg-muted flex items-center justify-center overflow-hidden">
+						<div className="h-24 bg-muted flex items-center justify-center overflow-hidden">
 							{isDir ? (
-								<Icon icon="solar:folder-with-files-bold-duotone" size={42} />
+								<Icon icon="solar:folder-with-files-bold-duotone" size={36} />
 							) : kind === "image" && url ? (
 								<img src={url} alt={it.originalName} className="w-full h-full object-cover" />
 							) : kind === "video" ? (
-								<Icon icon="solar:video-frame-bold-duotone" size={42} />
+								<Icon icon="solar:video-frame-bold-duotone" size={36} />
 							) : kind === "audio" ? (
-								<Icon icon="solar:music-notes-bold-duotone" size={42} />
+								<Icon icon="solar:music-notes-bold-duotone" size={36} />
 							) : kind === "pdf" ? (
-								<Icon icon="solar:file-text-bold-duotone" size={42} />
+								<Icon icon="solar:file-text-bold-duotone" size={36} />
+							) : kind === "text" ? (
+								<Icon icon="solar:document-text-bold-duotone" size={36} />
 							) : (
-								<Icon icon="solar:file-bold-duotone" size={42} />
+								<Icon icon="solar:file-bold-duotone" size={36} />
 							)}
 						</div>
 

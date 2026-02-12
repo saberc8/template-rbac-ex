@@ -709,7 +709,7 @@ export default function OptionPage() {
 				<div className="text-sm text-muted-foreground">暂无可用配置项，请检查权限。</div>
 			) : isDesktop ? (
 				<SplitLayout
-					leftWidth={280}
+					leftWidth={240}
 					left={
 						<SystemSideCard title="系统配置" contentClassName="pt-0">
 							<SystemSideList

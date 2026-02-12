@@ -146,6 +146,18 @@
 			"workbench": "Workbench"
 		},
 		"page": {
+			"systemDictItem": {
+				"columns": {
+					"label": "Label",
+					"value": "Value",
+					"color": "Color",
+					"sort": "Sort",
+					"status": "Status",
+					"description": "Description",
+					"updateTime": "Updated At",
+					"actions": "Actions"
+				}
+			},
 			"systemPermission": {
 				"searchPlaceholder": "Search title/path/permission/component",
 				"columns": {

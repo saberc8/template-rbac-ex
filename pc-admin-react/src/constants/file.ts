@@ -48,14 +48,41 @@ export const buildBreadcrumbList = (parentPath: string) => {
 	}));
 };
 
-export const guessPreviewKind = (extension?: string, contentType?: string) => {
-	const ext = (extension || "").toLowerCase();
-	const ct = (contentType || "").toLowerCase();
+export type PreviewKind = "image" | "video" | "audio" | "pdf" | "text" | "other";
 
-	if (ImageTypes.includes(ext) || ct.startsWith("image/")) return "image";
+// 仅将“浏览器可稳定内嵌预览”的图片视为 image，避免 psd 等被误判为可预览图片。
+const BrowserImageExtensions = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "avif", "ico"];
+const BrowserImageContentTypes = [
+	"image/jpeg",
+	"image/png",
+	"image/gif",
+	"image/webp",
+	"image/bmp",
+	"image/svg+xml",
+	"image/avif",
+	"image/x-icon",
+];
+
+const TextExtensions = ["txt", "md", "json", "yml", "yaml", "xml", "csv", "log", "ini", "conf"];
+const TextContentTypes = [
+	"application/json",
+	"application/xml",
+	"application/yaml",
+	"application/x-yaml",
+	"application/x-www-form-urlencoded",
+];
+
+const normalizeExtension = (extension?: string) => String(extension || "").trim().replace(/^\./, "").toLowerCase();
+const normalizeContentType = (contentType?: string) => String(contentType || "").trim().toLowerCase();
+
+export const guessPreviewKind = (extension?: string, contentType?: string): PreviewKind => {
+	const ext = normalizeExtension(extension);
+	const ct = normalizeContentType(contentType);
+
+	if (BrowserImageExtensions.includes(ext) || BrowserImageContentTypes.includes(ct)) return "image";
 	if (VideoTypes.includes(ext) || ct.startsWith("video/")) return "video";
 	if (AudioTypes.includes(ext) || ct.startsWith("audio/")) return "audio";
 	if (PdfTypes.includes(ext) || ct === "application/pdf") return "pdf";
+	if (TextExtensions.includes(ext) || ct.startsWith("text/") || TextContentTypes.includes(ct)) return "text";
 	return "other";
 };
-

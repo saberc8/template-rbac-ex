@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { BasicStatus } from "#/enum";
 import {
@@ -31,14 +32,13 @@ import DictFormDialog from "./dict-form-dialog";
 import DictItemFormDialog from "./dict-item-form-dialog";
 
 export default function DictPage() {
+	const { t } = useTranslation();
 	const queryClient = useQueryClient();
 	const permissions = useUserPermissions();
 	const permissionCodes = useMemo(() => permissions.map((p) => p.code), [permissions]);
 	const permissionCodeSet = useMemo(() => new Set(permissionCodes), [permissionCodes]);
 	const can = useCallback((code: string) => permissionCodeSet.has(code), [permissionCodeSet]);
 
-	const [keyword, setKeyword] = useState("");
-	const [queryKeyword, setQueryKeyword] = useState("");
 	const [selectedDict, setSelectedDict] = useState<SysDict | null>(null);
 	const [dictFormOpen, setDictFormOpen] = useState(false);
 	const [dictFormMode, setDictFormMode] = useState<"create" | "update">("create");
@@ -55,10 +55,28 @@ export default function DictPage() {
 	const { confirm, ConfirmDialog } = useConfirmDialog();
 
 	const { data, isFetching } = useQuery({
-		queryKey: ["systemDict.list", queryKeyword],
-		queryFn: () => systemDictService.list(queryKeyword || undefined),
+		queryKey: ["systemDict.list"],
+		queryFn: () => systemDictService.list(),
 	});
 
+	useEffect(() => {
+		if (data == null) return;
+		if (!data.length) {
+			setSelectedDict(null);
+			return;
+		}
+
+		if (!selectedDict?.id) {
+			setSelectedDict(data[0]);
+			setItemPage(1);
+			return;
+		}
+
+		if (!data.some((d) => Number(d.id) === Number(selectedDict.id))) {
+			setSelectedDict(data[0]);
+			setItemPage(1);
+		}
+	}, [data, selectedDict?.id]);
 	const createDictMutation = useMutation({
 		mutationFn: (payload: SysDictCreateReq) => systemDictService.create(payload),
 		onSuccess: () => {
@@ -94,22 +112,7 @@ export default function DictPage() {
 	};
 
 	const dictListItems = useMemo(() => {
-		const term = queryKeyword.trim().toLowerCase();
-		const list = (data || []).filter((d) => {
-			if (!term) return true;
-			return (
-				String(d.name || "")
-					.toLowerCase()
-					.includes(term) ||
-				String(d.code || "")
-					.toLowerCase()
-					.includes(term) ||
-				String(d.description || "")
-					.toLowerCase()
-					.includes(term)
-			);
-		});
-		return list.map((d) => {
+		return (data || []).map((d) => {
 			const canUpdate = can("system:dict:update") && !d.isSystem;
 			const canDelete = can("system:dict:delete") && !d.isSystem;
 			return {
@@ -168,7 +171,7 @@ export default function DictPage() {
 					) : null,
 			};
 		});
-	}, [can, confirm, data, deleteDictMutation.mutateAsync, queryKeyword]);
+	}, [can, confirm, data, deleteDictMutation.mutateAsync]);
 
 	const { data: itemData, isFetching: isItemFetching } = useQuery({
 		queryKey: ["systemDictItem.page", selectedDict?.id || 0, itemPage, itemPageSize, itemQuery],
@@ -241,27 +244,27 @@ export default function DictPage() {
 	const itemColumns: Array<ColumnDef<SysDictItemRow>> = useMemo(
 		() => [
 			{
-				header: "Label",
+				header: t("sys.page.systemDictItem.columns.label"),
 				accessorKey: "label",
-				size: 220,
+				size: 160,
 				cell: ({ row }) => renderLabel(row.original),
 			},
-			{ header: "Value", accessorKey: "value", size: 220 },
-			{ header: "Color", accessorKey: "color", size: 120, meta: { align: "center" } },
-			{ header: "Order", accessorKey: "sort", size: 90, meta: { align: "right" } },
+			{ header: t("sys.page.systemDictItem.columns.value"), accessorKey: "value", size: 160 },
+			{ header: t("sys.page.systemDictItem.columns.color"), accessorKey: "color", size: 90, meta: { align: "center" } },
+			{ header: t("sys.page.systemDictItem.columns.sort"), accessorKey: "sort", size: 80, meta: { align: "right" } },
 			{
-				header: "Status",
+				header: t("sys.page.systemDictItem.columns.status"),
 				accessorKey: "status",
-				size: 110,
+				size: 90,
 				meta: { align: "center" },
 				cell: ({ row }) => (Number(row.original.status) === BasicStatus.DISABLE ? "禁用" : "启用"),
 			},
-			{ header: "Desc", accessorKey: "description", size: 280 },
-			{ header: "Updated", accessorKey: "updateTime", size: 180 },
+			{ header: t("sys.page.systemDictItem.columns.description"), accessorKey: "description", size: 240 },
+			{ header: t("sys.page.systemDictItem.columns.updateTime"), accessorKey: "updateTime", size: 170 },
 			{
-				header: "操作",
+				header: t("sys.page.systemDictItem.columns.actions"),
 				id: "actions",
-				size: 180,
+				size: 160,
 				meta: { align: "center" },
 				cell: ({ row }) => {
 					const record = row.original;
@@ -312,6 +315,7 @@ export default function DictPage() {
 			deleteItemMutation.isPending,
 			deleteItemMutation.mutateAsync,
 			renderLabel,
+			t,
 			updateItemMutation.isPending,
 		],
 	);
@@ -319,7 +323,7 @@ export default function DictPage() {
 	return (
 		<>
 			<SplitLayout
-				leftWidth={280}
+				leftWidth={240}
 				left={
 					<SystemSideCard
 						title="字典"
@@ -336,29 +340,6 @@ export default function DictPage() {
 									新增
 								</Button>
 							) : null
-						}
-						toolbar={
-							<>
-								<Input
-									value={keyword}
-									onChange={(e) => setKeyword(e.target.value)}
-									placeholder="Search description"
-									className="w-[240px]"
-								/>
-								<Button size="sm" onClick={() => setQueryKeyword(keyword.trim())}>
-									查询
-								</Button>
-								<Button
-									size="sm"
-									variant="secondary"
-									onClick={() => {
-										setKeyword("");
-										setQueryKeyword("");
-									}}
-								>
-									重置
-								</Button>
-							</>
 						}
 						contentClassName="pt-0"
 					>
