@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from starlette.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
-from app.http.response import AppError
+from app.http.response import fail
 from app.runtime import token_service
 
 
@@ -56,6 +57,8 @@ class AuthContextMiddleware(BaseHTTPMiddleware):
         if not self._is_public(request):
             uid = getattr(request.state, "user_id", None)
             if uid is None:
-                raise AppError("401", "未授权，请重新登录")
+                # 注意：这里不要抛异常（会导致 Starlette BaseHTTPMiddleware 输出 ExceptionGroup 错误日志）。
+                # 对齐后端统一响应：HTTP 仍返回 200，业务码在 code 字段。
+                return JSONResponse(status_code=200, content=fail("401", "未授权，请重新登录"))
 
         return await call_next(request)
