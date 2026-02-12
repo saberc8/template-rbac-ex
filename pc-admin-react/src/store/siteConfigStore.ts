@@ -75,3 +75,5 @@ export const useSiteConfigStore = create<SiteConfigStore>((set, get) => ({
 export const useSiteTitle = () => useSiteConfigStore((s) => (s.SITE_TITLE || "").trim() || GLOBAL_CONFIG.appName);
 export const useSiteFavicon = () => useSiteConfigStore((s) => (s.SITE_FAVICON || "").trim());
 export const useSiteLogo = () => useSiteConfigStore((s) => (s.SITE_LOGO || "").trim());
+export const useSiteCopyright = () => useSiteConfigStore((s) => (s.SITE_COPYRIGHT || "").trim());
+export const useSiteBeian = () => useSiteConfigStore((s) => (s.SITE_BEIAN || "").trim());

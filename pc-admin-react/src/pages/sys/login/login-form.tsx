@@ -1,5 +1,4 @@
 import { captchaService } from "@/api/services/captchaService";
-import { Icon } from "@/components/icon";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { useSignIn } from "@/store/userStore";
 import { Button } from "@/ui/button";
@@ -136,24 +135,24 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 							<FormField
 								control={form.control}
 								name="captcha"
-								rules={{ required: "Captcha is required" }}
+								rules={{ required: t("sys.login.captchaPlaceholder") }}
 								render={({ field }) => (
 									<FormItem>
-										<FormLabel>Captcha</FormLabel>
+										<FormLabel>{t("sys.login.captcha")}</FormLabel>
 										<div className="flex items-center gap-2">
 											<FormControl>
-												<Input placeholder="请输入验证码" autoComplete="off" {...field} />
+												<Input placeholder={t("sys.login.captchaPlaceholder")} autoComplete="off" {...field} />
 											</FormControl>
 											<button
 												type="button"
 												className="h-10 w-[140px] overflow-hidden rounded-md border bg-white"
 												onClick={loadCaptcha}
-												aria-label="Refresh captcha"
+												aria-label={t("sys.login.refreshCaptcha")}
 											>
 												{captchaImg ? (
 													<img src={captchaImg} alt="captcha" className="h-full w-full object-contain" />
 												) : (
-													<span className="text-xs text-gray-500">点击刷新</span>
+													<span className="text-xs text-gray-500">{t("sys.login.refreshCaptcha")}</span>
 												)}
 											</button>
 										</div>
@@ -191,16 +190,6 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 					</Button>
 
 					{/* 手机登录/二维码登录 */}
-					<div className="grid gap-4 sm:grid-cols-2">
-						<Button variant="outline" className="w-full" onClick={() => setLoginState(LoginStateEnum.MOBILE)}>
-							<Icon icon="uil:mobile-android" size={20} />
-							{t("sys.login.mobileSignInFormTitle")}
-						</Button>
-						<Button variant="outline" className="w-full" onClick={() => setLoginState(LoginStateEnum.QR_CODE)}>
-							<Icon icon="uil:qrcode-scan" size={20} />
-							{t("sys.login.qrSignInFormTitle")}
-						</Button>
-					</div>
 					<div className="text-center text-sm text-muted-foreground">如需账号请联系管理员开通</div>
 				</form>
 			</Form>
