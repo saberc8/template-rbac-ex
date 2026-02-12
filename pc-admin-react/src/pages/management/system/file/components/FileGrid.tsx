@@ -6,6 +6,7 @@ import { Skeleton, Dropdown } from "antd";
 import { useMemo } from "react";
 import { Icon } from "@/components/icon";
 import { Button } from "@/ui/button";
+import { resolveAssetUrl } from "@/utils/asset-url";
 
 const isSelected = (ids: number[], id: number) => ids.includes(id);
 
@@ -50,7 +51,7 @@ export default function FileGrid({
 		<div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2">
 			{cards.map((it) => {
 				const isDir = Number(it.type) === 0;
-				const url = (it.url || "").trim();
+				const url = resolveAssetUrl((it.url || "").trim());
 				const kind = guessPreviewKind(it.extension, it.contentType);
 
 				const onCardClick = () => {

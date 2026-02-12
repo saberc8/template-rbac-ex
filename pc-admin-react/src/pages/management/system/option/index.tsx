@@ -3,11 +3,11 @@ import type { TabsProps } from "antd";
 import { Tabs } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { systemFileService } from "@/api/services/systemFileService";
 import { type SysOption, type SysOptionUpdateReq, systemOptionService } from "@/api/services/systemOptionService";
 import { useConfirmDialog } from "@/components/confirm/use-confirm-dialog";
 import Icon from "@/components/icon/icon";
 import SplitLayout from "@/components/layout/split-layout";
-import { GLOBAL_CONFIG } from "@/global-config";
 import { usePathname, useRouter, useSearchParams } from "@/routes/hooks";
 import { useUserPermissions } from "@/store/userStore";
 import { Button } from "@/ui/button";
@@ -16,18 +16,11 @@ import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
 import { Switch } from "@/ui/switch";
 import { Textarea } from "@/ui/textarea";
+import { resolveAssetUrl } from "@/utils/asset-url";
 import ClientPage from "../client";
 import SystemSideCard from "../components/system-side-card";
 import SystemSideList from "../components/system-side-list";
 import StoragePage from "../storage";
-
-const fileToBase64 = (file: File): Promise<string> =>
-	new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onload = () => resolve(String(reader.result || ""));
-		reader.onerror = () => reject(new Error("file read failed"));
-		reader.readAsDataURL(file);
-	});
 
 const guessImageMimeFromBase64 = (raw: string): string | null => {
 	const v = (raw || "").trim();
@@ -193,38 +186,22 @@ function SiteConfigPanel({ canUpdate }: { canUpdate: boolean }) {
 		}
 	};
 
+	const uploadSiteAsset = async (file: File) => {
+		// 统一走文件管理上传能力：保存的是 URL，而不是 base64，避免后端/数据库长度限制（尤其 MySQL TEXT 64KB）。
+		const parentPath = "/site";
+		const resp = await systemFileService.upload(file, parentPath);
+		return String(resp?.url || "");
+	};
+
 	const SiteImagePreview = ({ value }: { value: string }) => {
 		const preview = toPreviewUrl(value);
-		const candidates = useMemo(() => {
-			if (!preview) return [] as string[];
-			if (preview.startsWith("http://") || preview.startsWith("https://") || preview.startsWith("data:")) return [preview];
-			if (!preview.startsWith("/")) return [preview];
-
-			const out = [preview];
-			const apiBase = String(GLOBAL_CONFIG.apiBaseUrl || "").trim();
-			if (apiBase && apiBase !== "/" && !preview.startsWith(apiBase)) {
-				out.push(`${apiBase}${preview}`);
-			}
-			return out;
-		}, [preview]);
-
-		const [idx, setIdx] = useState(0);
-
-		useEffect(() => {
-			setIdx(0);
-		}, [preview]);
-
-		const src = candidates[idx] || null;
+		const src = preview ? resolveAssetUrl(preview) : "";
 		if (!src) return null;
 		return (
 			<img
-				key={src}
 				src={src}
 				alt="preview"
 				className="h-12 w-12 rounded border object-contain bg-muted"
-				onError={() => {
-					if (idx + 1 < candidates.length) setIdx(idx + 1);
-				}}
 			/>
 		);
 	};
@@ -242,15 +219,16 @@ function SiteConfigPanel({ canUpdate }: { canUpdate: boolean }) {
 						onChange={async (e) => {
 							const f = e.target.files?.[0];
 							if (!f) return;
-							if (f.size > 1024 * 1024) {
-								toast.warning("图片较大（>1MB），可能影响保存速度", { position: "top-center" });
-							}
 							try {
-								const b64 = await fileToBase64(f);
-								setDraft((p) => ({ ...p, [code]: b64 }));
-								toast.success("已读取图片并写入配置值", { position: "top-center" });
+								const url = await uploadSiteAsset(f);
+								if (!url) {
+									toast.error("上传成功但未返回 URL", { position: "top-center" });
+									return;
+								}
+								setDraft((p) => ({ ...p, [code]: url }));
+								toast.success("上传成功", { position: "top-center" });
 							} catch {
-								toast.error("读取图片失败", { position: "top-center" });
+								toast.error("上传图片失败", { position: "top-center" });
 							} finally {
 								e.target.value = "";
 							}
@@ -261,7 +239,7 @@ function SiteConfigPanel({ canUpdate }: { canUpdate: boolean }) {
 					value={val}
 					disabled={!isUpdate || !canUpdate || busy}
 					onChange={(e) => setDraft((p) => ({ ...p, [code]: e.target.value }))}
-					placeholder="图片 URL / 相对路径 / base64(data:image/*)"
+					placeholder="图片 URL / 相对路径 / base64(data:image/* 或纯 base64)"
 				/>
 			</div>
 		);

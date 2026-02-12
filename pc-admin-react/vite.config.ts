@@ -42,6 +42,11 @@ export default defineConfig(({ mode }) => {
 					rewrite: (path) => path.replace(/^\/api/, ""),
 					secure: false,
 				},
+				"/file": {
+					target: apiProxyTarget,
+					changeOrigin: true,
+					secure: false,
+				},
 			},
 		},
 

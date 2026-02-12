@@ -8,6 +8,7 @@ import type { UploadProps } from "antd";
 import { useMutation } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { resolveAssetUrl } from "@/utils/asset-url";
 
 import AvatarCropModal from "./avatar-crop-modal";
 import BasicInfoUpdateModal from "./basic-info-update-modal";
@@ -21,7 +22,7 @@ export default function BasicInfoCard() {
 	const [cropSrc, setCropSrc] = useState("");
 	const [cropFileName, setCropFileName] = useState("avatar.png");
 
-	const avatarSrc = userInfo.avatar || "";
+	const avatarSrc = useMemo(() => resolveAssetUrl(userInfo.avatar || ""), [userInfo.avatar]);
 	const displayName = userInfo.nickname || userInfo.username || "";
 	const gender = userInfo.gender ?? 0;
 	const genderIcon = useMemo(() => {
@@ -123,4 +124,3 @@ export default function BasicInfoCard() {
 		</Card>
 	);
 }
-

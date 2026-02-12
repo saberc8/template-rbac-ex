@@ -4,6 +4,7 @@ import type { SysFileRow } from "@/api/services/systemFileService";
 import { guessPreviewKind } from "@/constants/file";
 import { Modal } from "antd";
 import { useEffect, useMemo, useState } from "react";
+import { resolveAssetUrl } from "@/utils/asset-url";
 
 export default function FilePreviewModal({
 	open,
@@ -14,7 +15,7 @@ export default function FilePreviewModal({
 	item: SysFileRow | null;
 	onOpenChange: (open: boolean) => void;
 }) {
-	const url = (item?.url || "").trim();
+	const url = useMemo(() => resolveAssetUrl((item?.url || "").trim()), [item?.url]);
 	const kind = useMemo(() => guessPreviewKind(item?.extension, item?.contentType), [item?.extension, item?.contentType]);
 
 	const [textPreview, setTextPreview] = useState<{

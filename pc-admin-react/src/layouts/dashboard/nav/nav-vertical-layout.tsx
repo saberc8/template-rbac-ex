@@ -2,8 +2,8 @@ import { Icon } from "@/components/icon";
 import Logo from "@/components/logo";
 import { NavMini, NavVertical } from "@/components/nav";
 import type { NavProps } from "@/components/nav/types";
-import { GLOBAL_CONFIG } from "@/global-config";
 import { useSettingActions, useSettings } from "@/store/settingStore";
+import { useSiteTitle } from "@/store/siteConfigStore";
 import { ThemeLayout } from "@/types/enum";
 import { Button } from "@/ui/button";
 import { ScrollArea } from "@/ui/scroll-area";
@@ -18,6 +18,7 @@ export function NavVerticalLayout({ data, className }: Props) {
 	const settings = useSettings();
 	const { themeLayout } = settings;
 	const { setSettings } = useSettingActions();
+	const siteTitle = useSiteTitle();
 
 	const navWidth = themeLayout === ThemeLayout.Vertical ? "var(--layout-nav-width)" : "var(--layout-nav-width-mini)";
 	const handleToggle = () => {
@@ -50,7 +51,7 @@ export function NavVerticalLayout({ data, className }: Props) {
 							marginLeft: themeLayout === ThemeLayout.Mini ? 0 : "8px",
 						}}
 					>
-						{GLOBAL_CONFIG.appName}
+						{siteTitle}
 					</span>
 				</div>
 

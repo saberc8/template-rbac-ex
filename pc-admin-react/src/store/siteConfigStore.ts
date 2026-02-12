@@ -2,6 +2,7 @@ import { create } from "zustand";
 
 import { siteOptionService } from "@/api/services/siteOptionService";
 import { GLOBAL_CONFIG } from "@/global-config";
+import { resolveAssetUrl } from "@/utils/asset-url";
 
 type SiteConfigStore = {
 	loaded: boolean;
@@ -20,7 +21,7 @@ type SiteConfigStore = {
 
 const setFavicon = (href: string) => {
 	if (typeof document === "undefined") return;
-	const url = href?.trim() || "/favicon.ico";
+	const url = resolveAssetUrl(href?.trim() || "/favicon.ico");
 
 	// 尽量复用现有节点，避免重复插入。
 	const selectors = ['link[rel="icon"]', 'link[rel="shortcut icon"]'];
@@ -73,4 +74,4 @@ export const useSiteConfigStore = create<SiteConfigStore>((set, get) => ({
 
 export const useSiteTitle = () => useSiteConfigStore((s) => (s.SITE_TITLE || "").trim() || GLOBAL_CONFIG.appName);
 export const useSiteFavicon = () => useSiteConfigStore((s) => (s.SITE_FAVICON || "").trim());
-
+export const useSiteLogo = () => useSiteConfigStore((s) => (s.SITE_LOGO || "").trim());
