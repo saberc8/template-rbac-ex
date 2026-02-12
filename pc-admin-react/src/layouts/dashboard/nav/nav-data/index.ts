@@ -1,11 +1,9 @@
 import type { NavItemDataProps } from "@/components/nav/types";
-import { GLOBAL_CONFIG } from "@/global-config";
 import { useMenuStore } from "@/store/menuStore";
 import { useUserPermissions } from "@/store/userStore";
 import { checkAny } from "@/utils";
 import { useMemo } from "react";
 import { buildBackendNavData } from "./nav-data-backend";
-import { frontendNavData } from "./nav-data-frontend";
 
 /**
  * 递归处理导航数据，过滤掉没有权限的项目
@@ -38,7 +36,7 @@ const filterItems = (items: NavItemDataProps[], permissions: string[]): NavItemD
  * @returns 过滤后的导航数据
  */
 const filterNavData = (menuTree: ReturnType<typeof useMenuStore.getState>["backendMenuTree"], permissions: string[]) => {
-	const rawNavData = GLOBAL_CONFIG.routerMode === "backend" ? buildBackendNavData(menuTree) : frontendNavData;
+	const rawNavData = buildBackendNavData(menuTree);
 
 	return rawNavData
 		.map((group) => {

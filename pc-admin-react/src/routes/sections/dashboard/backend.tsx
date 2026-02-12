@@ -1,8 +1,6 @@
 import type { MenuMetaInfo, MenuTree } from "@/types/entity";
 import { PermissionType } from "@/types/enum";
-import { MENU_SNAPSHOT } from "@/fixtures/menuSnapshot";
 import { getBackendMenuTreeSnapshot } from "@/store/menuStore";
-import { convertFlatToTree } from "@/utils/tree";
 import type { RouteObject } from "react-router";
 import { Navigate } from "react-router";
 import { Component } from "./utils";
@@ -94,8 +92,7 @@ const convertToRoute = (items: MenuTree[], parent?: MenuTree): RouteObject[] => 
 
 export function getBackendDashboardRoutes() {
 	const tree = getBackendMenuTreeSnapshot();
-	const menuTree = tree && tree.length > 0 ? tree : convertFlatToTree(MENU_SNAPSHOT);
-	const routes = convertToRoute(menuTree);
+	const routes = convertToRoute(tree || []);
 
 	// 详情页等“非菜单直达”路由在 backend 路由模式下可能不存在于菜单树中，
 	// 这里补充静态路由，避免从列表页跳转后命中 404。

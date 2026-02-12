@@ -1,9 +1,7 @@
 import { Icon } from "@/components/icon";
 import type { NavItemDataProps, NavProps } from "@/components/nav";
-import { MENU_SNAPSHOT } from "@/fixtures/menuSnapshot";
 import type { MenuTree } from "@/types/entity";
 import { Badge } from "@/ui/badge";
-import { convertFlatToTree } from "@/utils/tree";
 
 const isBlank = (v?: string | null) => !v || String(v).trim() === "";
 
@@ -41,8 +39,7 @@ const convertToNavItem = (node: MenuTree): NavItemDataProps | null => {
 };
 
 export const buildBackendNavData = (menuTree: MenuTree[]): NavProps["data"] => {
-	const tree = menuTree && menuTree.length > 0 ? menuTree : convertFlatToTree(MENU_SNAPSHOT);
-	const roots = normalizeBackendRoots(tree);
+	const roots = normalizeBackendRoots(menuTree || []);
 	const items = roots.map(convertToNavItem).filter((x): x is NavItemDataProps => x !== null);
 
 	// React 侧边栏支持“无分组标题”的单组渲染；用于移除 Pages 分组后的导航结构。

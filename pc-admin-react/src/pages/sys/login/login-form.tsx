@@ -71,9 +71,9 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				uuid: captchaEnabled ? captchaUuid : undefined,
 			});
 
-			// backend 路由模式依赖“启动时已拿到菜单树”来生成动态路由。
+			// 路由依赖“启动时已拿到菜单树”来生成动态路由。
 			// 登录成功后强制刷新一次，确保 main.tsx 能在有 token 的情况下预拉取 /menu 并构建路由。
-			if (GLOBAL_CONFIG.routerMode === "backend" && typeof window !== "undefined") {
+			if (typeof window !== "undefined") {
 				const base = (GLOBAL_CONFIG.publicPath || "/").replace(/\/$/, "");
 				const target = `${base}${GLOBAL_CONFIG.defaultRoute}`;
 				window.location.replace(target);

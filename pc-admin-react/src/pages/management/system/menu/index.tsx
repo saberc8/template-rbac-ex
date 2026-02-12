@@ -9,7 +9,6 @@ import { type SysMenuNode, type SysMenuSaveReq, systemMenuService } from "@/api/
 import { Icon } from "@/components/icon";
 import { useConfirmDialog } from "@/components/confirm/use-confirm-dialog";
 import DataTable from "@/components/data-table/data-table";
-import { GLOBAL_CONFIG } from "@/global-config";
 import { useMenuStore } from "@/store/menuStore";
 import { useUserPermissions } from "@/store/userStore";
 import { Badge } from "@/ui/badge";
@@ -336,12 +335,10 @@ export default function MenuPage() {
 											if (!ok) return;
 											try {
 												await deleteMutation.mutateAsync([id]);
-												if (GLOBAL_CONFIG.routerMode === "backend") {
-													try {
-														await useMenuStore.getState().actions.initBackendMenuTree();
-													} catch {
-														// best-effort
-													}
+												try {
+													await useMenuStore.getState().actions.initBackendMenuTree();
+												} catch {
+													// best-effort
 												}
 												toast.success("删除成功", { position: "top-center" });
 											} catch {
@@ -369,12 +366,10 @@ export default function MenuPage() {
 				await updateMutation.mutateAsync({ id: String(editing.id), payload });
 				toast.success("保存成功", { position: "top-center" });
 			}
-			if (GLOBAL_CONFIG.routerMode === "backend") {
-				try {
-					await useMenuStore.getState().actions.initBackendMenuTree();
-				} catch {
-					// best-effort: /menu 刷新失败不阻断菜单管理保存
-				}
+			try {
+				await useMenuStore.getState().actions.initBackendMenuTree();
+			} catch {
+				// best-effort: /menu 刷新失败不阻断菜单管理保存
 			}
 			setDialogOpen(false);
 		} catch {
