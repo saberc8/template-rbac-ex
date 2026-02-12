@@ -114,7 +114,7 @@ REACT_MENU_FLAT: list[dict] = [
         "parentId": "",
         "name": "sys.nav.monitor.index",
         "code": "management:monitor",
-        "icon": None,
+        "icon": "solar:monitor-smartphone-bold-duotone",
         "type": 1,
         "path": "/monitor",
         "component": "",

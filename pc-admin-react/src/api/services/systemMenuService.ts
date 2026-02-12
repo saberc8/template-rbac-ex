@@ -1,4 +1,5 @@
 import apiClient from "../apiClient";
+import { GLOBAL_CONFIG } from "@/global-config";
 
 export type SysMenuNode = {
 	id: string | number;
@@ -37,10 +38,37 @@ export type SysMenuSaveReq = {
 };
 
 export const systemMenuService = {
-	tree: () => apiClient.get<SysMenuNode[]>({ url: "/system/menu/tree" }),
-	get: (id: string | number) => apiClient.get<SysMenuNode>({ url: `/system/menu/${id}` }),
-	create: (data: SysMenuSaveReq) => apiClient.post<{ id: number }>({ url: "/system/menu", data }),
-	update: (id: string | number, data: SysMenuSaveReq) => apiClient.put<boolean>({ url: `/system/menu/${id}`, data }),
-	delete: (ids: Array<string | number>) => apiClient.delete<boolean>({ url: "/system/menu", data: { ids } }),
-	clearCache: () => apiClient.delete<boolean>({ url: "/system/menu/cache" }),
+	tree: () =>
+		apiClient.get<SysMenuNode[]>({
+			url: "/system/menu/tree",
+			headers: { "X-Admin-Frontend": GLOBAL_CONFIG.adminFrontendType },
+		}),
+	get: (id: string | number) =>
+		apiClient.get<SysMenuNode>({
+			url: `/system/menu/${id}`,
+			headers: { "X-Admin-Frontend": GLOBAL_CONFIG.adminFrontendType },
+		}),
+	create: (data: SysMenuSaveReq) =>
+		apiClient.post<{ id: number }>({
+			url: "/system/menu",
+			data,
+			headers: { "X-Admin-Frontend": GLOBAL_CONFIG.adminFrontendType },
+		}),
+	update: (id: string | number, data: SysMenuSaveReq) =>
+		apiClient.put<boolean>({
+			url: `/system/menu/${id}`,
+			data,
+			headers: { "X-Admin-Frontend": GLOBAL_CONFIG.adminFrontendType },
+		}),
+	delete: (ids: Array<string | number>) =>
+		apiClient.delete<boolean>({
+			url: "/system/menu",
+			data: { ids },
+			headers: { "X-Admin-Frontend": GLOBAL_CONFIG.adminFrontendType },
+		}),
+	clearCache: () =>
+		apiClient.delete<boolean>({
+			url: "/system/menu/cache",
+			headers: { "X-Admin-Frontend": GLOBAL_CONFIG.adminFrontendType },
+		}),
 };
