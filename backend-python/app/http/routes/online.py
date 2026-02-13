@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Request
 from app.http.deps import require_user_id
 from app.http.response import fail, ok
 from app.http.utils import get_query_list, parse_time_ymdhms
+from app.http.validators import parse_page_size
 from app.runtime import online_store
 
 router = APIRouter()
@@ -14,14 +15,14 @@ router = APIRouter()
 
 @router.get("/monitor/online")
 def page_online_user(request: Request):
-    try:
-        page = int(request.query_params.get("page") or "1")
-    except Exception:
-        page = 1
-    try:
-        size = int(request.query_params.get("size") or "10")
-    except Exception:
-        size = 10
+    page, size = parse_page_size(
+        request.query_params.get("page"),
+        request.query_params.get("size"),
+        default_page=1,
+        default_size=10,
+        min_page=1,
+        min_size=1,
+    )
 
     nickname = (request.query_params.get("nickname") or "").strip()
     time_range = get_query_list(request, "loginTime")

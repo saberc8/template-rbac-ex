@@ -20,7 +20,7 @@ from app.http.deps import get_db, require_user_id
 from app.http.frontend import active_frontend, has_frontend_column
 from app.http.response import fail, ok
 from app.http.utils import format_time
-from app.http.validators import parse_positive_int_list, require_dict_body, require_list
+from app.http.validators import parse_page_size, parse_positive_int_list, require_dict_body, require_list
 from app.services import role_service
 
 router = APIRouter()
@@ -243,18 +243,14 @@ def page_role_user(
     if id <= 0:
         return fail("400", "ID 参数不正确")
 
-    try:
-        page = int(request.query_params.get("page") or "1")
-    except Exception:
-        page = 1
-    try:
-        size = int(request.query_params.get("size") or "10")
-    except Exception:
-        size = 10
-    if page <= 0:
-        page = 1
-    if size <= 0:
-        size = 10
+    page, size = parse_page_size(
+        request.query_params.get("page"),
+        request.query_params.get("size"),
+        default_page=1,
+        default_size=10,
+        min_page=1,
+        min_size=1,
+    )
 
     desc_filter = (request.query_params.get("description") or "").strip()
 

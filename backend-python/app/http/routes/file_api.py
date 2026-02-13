@@ -33,7 +33,13 @@ from app.http.utils import (
     format_time,
     normalize_parent_path,
 )
-from app.http.validators import parse_positive_int_list, require_dict_body, require_non_empty_str
+from app.http.validators import (
+    parse_int_or_default,
+    parse_page_size,
+    parse_positive_int_list,
+    require_dict_body,
+    require_non_empty_str,
+)
 from app.services import file_service
 
 router = APIRouter()
@@ -113,27 +119,17 @@ def list_file(request: Request, db: Session = Depends(get_db)):
     type_str = (request.query_params.get("type") or "").strip()
     parent_path = (request.query_params.get("parentPath") or "").strip()
 
-    try:
-        page = int(request.query_params.get("page") or "1")
-    except Exception:
-        page = 1
-    try:
-        size = int(request.query_params.get("size") or "30")
-    except Exception:
-        size = 30
-    if page <= 0:
-        page = 1
-    if size <= 0:
-        size = 30
+    page, size = parse_page_size(
+        request.query_params.get("page"),
+        request.query_params.get("size"),
+        default_page=1,
+        default_size=30,
+        min_page=1,
+        min_size=1,
+    )
 
-    file_type = 0
-    if type_str and type_str != "0":
-        try:
-            t = int(type_str)
-            if t > 0:
-                file_type = t
-        except Exception:
-            file_type = 0
+    t = parse_int_or_default(type_str, 0)
+    file_type = int(t) if int(t) > 0 else 0
 
     pp = normalize_parent_path(parent_path) if parent_path else ""
 

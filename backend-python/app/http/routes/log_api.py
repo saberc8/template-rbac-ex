@@ -14,6 +14,7 @@ from app.db.models.sys_user import SysUser
 from app.http.deps import get_db
 from app.http.response import fail, ok
 from app.http.utils import escape_csv, format_time, get_query_list, parse_time_ymdhms
+from app.http.validators import parse_int_or_default, parse_page_size
 
 router = APIRouter()
 
@@ -24,12 +25,7 @@ def _build_filters(request: Request) -> dict:
     ip = (request.query_params.get("ip") or "").strip()
     create_user = (request.query_params.get("createUserString") or "").strip()
     status_str = (request.query_params.get("status") or "").strip()
-    status = 0
-    if status_str:
-        try:
-            status = int(status_str)
-        except Exception:
-            status = 0
+    status = parse_int_or_default(status_str, 0)
 
     time_range = get_query_list(request, "createTime")
     start_time = parse_time_ymdhms(time_range[0]) if len(time_range) == 2 else None
@@ -88,18 +84,14 @@ def _apply_filters(stmt, filters: dict, user_alias) -> object:
 
 @router.get("/system/log")
 def page_log(request: Request, db: Session = Depends(get_db)):
-    try:
-        page = int(request.query_params.get("page") or "1")
-    except Exception:
-        page = 1
-    try:
-        size = int(request.query_params.get("size") or "10")
-    except Exception:
-        size = 10
-    if page <= 0:
-        page = 1
-    if size <= 0:
-        size = 10
+    page, size = parse_page_size(
+        request.query_params.get("page"),
+        request.query_params.get("size"),
+        default_page=1,
+        default_size=10,
+        min_page=1,
+        min_size=1,
+    )
 
     filters = _build_filters(request)
     u = aliased(SysUser)

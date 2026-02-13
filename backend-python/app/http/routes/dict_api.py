@@ -15,7 +15,13 @@ from app.db.models.sys_user import SysUser
 from app.http.deps import get_db, require_user_id
 from app.http.response import fail, ok
 from app.http.utils import format_time
-from app.http.validators import parse_int, parse_positive_int_list, require_dict_body, require_non_empty_str
+from app.http.validators import (
+    parse_int,
+    parse_page_size,
+    parse_positive_int_list,
+    require_dict_body,
+    require_non_empty_str,
+)
 from app.services import dict_service
 
 router = APIRouter()
@@ -152,8 +158,6 @@ def clear_dict_cache(code: str):
 @router.get("/system/dict/item")
 def list_dict_item(request: Request, db: Session = Depends(get_db)):
     dict_id_str = (request.query_params.get("dictId") or "").strip()
-    page_str = (request.query_params.get("page") or "").strip()
-    size_str = (request.query_params.get("size") or "").strip()
     description = (request.query_params.get("description") or "").strip()
     status_str = (request.query_params.get("status") or "").strip()
 
@@ -167,22 +171,14 @@ def list_dict_item(request: Request, db: Session = Depends(get_db)):
         except Exception:
             return fail("400", "字典 ID 不正确")
 
-    page = 1
-    size = 10
-    try:
-        if page_str:
-            page = int(page_str)
-    except Exception:
-        page = 1
-    try:
-        if size_str:
-            size = int(size_str)
-    except Exception:
-        size = 10
-    if page <= 0:
-        page = 1
-    if size <= 0:
-        size = 10
+    page, size = parse_page_size(
+        request.query_params.get("page"),
+        request.query_params.get("size"),
+        default_page=1,
+        default_size=10,
+        min_page=1,
+        min_size=1,
+    )
 
     status: Optional[int] = None
     if status_str:

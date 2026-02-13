@@ -15,21 +15,7 @@ from app.db.models.sys_role_dept import SysRoleDept
 from app.db.models.sys_role_menu import SysRoleMenu
 from app.db.models.sys_user_role import SysUserRole
 from app.http.response import APIResponse, fail, ok
-
-
-def _parse_positive_int_list_allow_empty(v: Any) -> list[int]:
-    if not isinstance(v, list) or len(v) == 0:
-        return []
-
-    ids: list[int] = []
-    for item in v:
-        try:
-            iv = int(item)
-        except Exception:
-            continue
-        if iv > 0:
-            ids.append(iv)
-    return list(dict.fromkeys(ids))
+from app.http.validators import parse_positive_int_list_allow_empty
 
 
 def create_role(*, db: Session, user_id: int, body: dict[str, Any]) -> APIResponse:
@@ -52,7 +38,7 @@ def create_role(*, db: Session, user_id: int, body: dict[str, Any]) -> APIRespon
     if data_scope == 0:
         data_scope = 4
 
-    dept_ids = _parse_positive_int_list_allow_empty(body.get("deptIds"))
+    dept_ids = parse_positive_int_list_allow_empty(body.get("deptIds"))
     dept_check_strict = bool(body.get("deptCheckStrictly") or False)
 
     rid = next_id()
@@ -108,7 +94,7 @@ def update_role(*, db: Session, user_id: int, role_id: int, body: dict[str, Any]
     if data_scope == 0:
         data_scope = 4
 
-    dept_ids = _parse_positive_int_list_allow_empty(body.get("deptIds"))
+    dept_ids = parse_positive_int_list_allow_empty(body.get("deptIds"))
     dept_check_strict = bool(body.get("deptCheckStrictly") or False)
     now = datetime.now()
 
@@ -164,7 +150,7 @@ def update_role_permission(
     if role_id <= 0:
         return fail("400", "ID 参数不正确")
 
-    menu_ids = _parse_positive_int_list_allow_empty(body.get("menuIds"))
+    menu_ids = parse_positive_int_list_allow_empty(body.get("menuIds"))
     menu_check_strict = bool(body.get("menuCheckStrictly") or False)
     now = datetime.now()
 
@@ -210,7 +196,7 @@ def assign_to_users(*, db: Session, role_id: int, body: list[Any]) -> APIRespons
     if role_id <= 0:
         return fail("400", "ID 参数不正确")
 
-    user_ids = _parse_positive_int_list_allow_empty(body)
+    user_ids = parse_positive_int_list_allow_empty(body)
     if not user_ids:
         return ok(True)
 
@@ -234,7 +220,7 @@ def assign_to_users(*, db: Session, role_id: int, body: list[Any]) -> APIRespons
 
 
 def unassign_from_users(*, db: Session, body: list[Any]) -> APIResponse:
-    ids = _parse_positive_int_list_allow_empty(body)
+    ids = parse_positive_int_list_allow_empty(body)
     if not ids:
         return fail("400", "用户角色ID列表不能为空")
 

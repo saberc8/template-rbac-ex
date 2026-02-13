@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, inspect, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.models.sys_dept import SysDept
@@ -16,17 +16,10 @@ from app.db.models.sys_option import SysOption
 from app.db.models.sys_role import SysRole
 from app.db.models.sys_user import SysUser
 from app.http.deps import get_db
+from app.http.frontend import has_frontend_column
 from app.http.response import ok
 
 router = APIRouter()
-
-
-def _has_frontend_column(db: Session) -> bool:
-    try:
-        cols = inspect(db.get_bind()).get_columns("sys_menu")
-    except Exception:
-        return False
-    return any(str(c.get("name") or "") == "frontend" for c in cols)
 
 
 @router.get("/common/dict/option/site")
@@ -45,7 +38,7 @@ def list_menu_tree(db: Session = Depends(get_db)):
     stmt = select(SysMenu.id, SysMenu.title, SysMenu.parent_id, SysMenu.status, SysMenu.type).order_by(
         SysMenu.sort.asc(), SysMenu.id.asc()
     )
-    if _has_frontend_column(db):
+    if has_frontend_column(db):
         stmt = stmt.where(SysMenu.frontend == "vue3")
     rows = db.execute(stmt).all()
 

@@ -18,23 +18,22 @@ from app.db.models.sys_user_role import SysUserRole
 from app.http.deps import get_db, require_user_id
 from app.http.response import fail, ok
 from app.http.utils import format_time
-from app.http.validators import parse_int, parse_positive_int_list, require_dict_body, require_non_empty_str
+from app.http.validators import (
+    parse_int,
+    parse_int_or_default,
+    parse_page_size,
+    parse_positive_int_list,
+    parse_positive_int_list_allow_empty,
+    require_dict_body,
+    require_non_empty_str,
+)
 from app.services import system_user_service
 
 router = APIRouter()
 
 
 def _parse_role_ids(v: object) -> list[int]:
-    raw = v if isinstance(v, list) else []
-    ids: list[int] = []
-    for item in raw:
-        try:
-            iv = int(item)
-        except Exception:
-            continue
-        if iv > 0:
-            ids.append(iv)
-    return list(dict.fromkeys(ids))
+    return parse_positive_int_list_allow_empty(v)
 
 
 def _role_map_for_users(db: Session, user_ids: list[int]) -> dict[int, tuple[list[int], list[str]]]:
@@ -83,17 +82,16 @@ def _to_user_resp(row: dict, role_ids: list[int], role_names: list[str]) -> dict
     }
 
 
-def _query_user_page(db: Session, q: dict) -> tuple[list[dict], int]:
-    page = int(q.get("page") or 1)
-    size = int(q.get("size") or 10)
-    if page <= 0:
-        page = 1
-    if size <= 0:
-        size = 10
-
-    desc = (q.get("description") or "").strip()
-    status_filter = q.get("status")
-    dept_id = q.get("dept_id")
+def _query_user_page(
+    db: Session,
+    *,
+    page: int,
+    size: int,
+    description: str,
+    status_filter: Optional[int],
+    dept_id: Optional[int],
+) -> tuple[list[dict], int]:
+    desc = (description or "").strip()
 
     dept = aliased(SysDept)
     cu = aliased(SysUser)
@@ -169,45 +167,32 @@ def _query_user_page(db: Session, q: dict) -> tuple[list[dict], int]:
 
 @router.get("/system/user")
 def list_user_page(request: Request, db: Session = Depends(get_db)):
-    try:
-        page = int(request.query_params.get("page") or "1")
-    except Exception:
-        page = 1
-    try:
-        size = int(request.query_params.get("size") or "10")
-    except Exception:
-        size = 10
-    if page <= 0:
-        page = 1
-    if size <= 0:
-        size = 10
+    page, size = parse_page_size(
+        request.query_params.get("page"),
+        request.query_params.get("size"),
+        default_page=1,
+        default_size=10,
+        min_page=1,
+        min_size=1,
+    )
 
     desc = (request.query_params.get("description") or "").strip()
     status_str = (request.query_params.get("status") or "").strip()
     dept_str = (request.query_params.get("deptId") or "").strip()
 
-    status_filter = None
-    dept_id = None
-    if status_str:
-        try:
-            status_filter = int(status_str)
-        except Exception:
-            status_filter = None
-    if dept_str:
-        try:
-            dept_id = int(dept_str)
-        except Exception:
-            dept_id = None
+    status_filter_n = parse_int_or_default(status_str, 0)
+    status_filter = int(status_filter_n) if int(status_filter_n) != 0 else None
+
+    dept_id_n = parse_int_or_default(dept_str, 0)
+    dept_id = int(dept_id_n) if int(dept_id_n) != 0 else None
 
     rows, total = _query_user_page(
         db,
-        {
-            "page": page,
-            "size": size,
-            "description": desc,
-            "status": status_filter,
-            "dept_id": dept_id,
-        },
+        page=page,
+        size=size,
+        description=desc,
+        status_filter=status_filter,
+        dept_id=dept_id,
     )
     if total == 0:
         return ok({"list": [], "total": 0})
