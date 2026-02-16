@@ -17,6 +17,7 @@ from app.http.response import fail, ok
 from app.http.utils import format_time
 from app.http.validators import (
     parse_int,
+    parse_int_or_default,
     parse_page_size,
     parse_positive_int_list,
     require_dict_body,
@@ -181,13 +182,9 @@ def list_dict_item(request: Request, db: Session = Depends(get_db)):
     )
 
     status: Optional[int] = None
-    if status_str:
-        try:
-            v = int(status_str)
-            if v != 0:
-                status = v
-        except Exception:
-            status = None
+    v = parse_int_or_default(status_str, 0)
+    if int(v) != 0:
+        status = int(v)
 
     cu = aliased(SysUser)
     uu = aliased(SysUser)

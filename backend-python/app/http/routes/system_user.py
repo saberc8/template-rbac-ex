@@ -17,7 +17,7 @@ from app.db.models.sys_user import SysUser
 from app.db.models.sys_user_role import SysUserRole
 from app.http.deps import get_db, require_user_id
 from app.http.response import fail, ok
-from app.http.utils import format_time
+from app.http.utils import format_time, get_query_list
 from app.http.validators import (
     parse_int,
     parse_int_or_default,
@@ -209,16 +209,8 @@ def list_user_page(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/system/user/list")
 def list_all_user(request: Request, db: Session = Depends(get_db)):
-    raw_ids = request.query_params.getlist("userIds") if hasattr(request.query_params, "getlist") else []
-    ids: list[int] = []
-    for s in raw_ids:
-        try:
-            v = int(str(s))
-            if v > 0:
-                ids.append(v)
-        except Exception:
-            continue
-    ids = list(dict.fromkeys(ids))
+    raw_ids = get_query_list(request, "userIds")
+    ids = parse_positive_int_list_allow_empty(raw_ids)
 
     dept = aliased(SysDept)
     cu = aliased(SysUser)
